@@ -34,8 +34,7 @@ class Frame(object):
 class Payload(object):
     def __init__(self, raw):
         self.raw = raw
-        method = struct.unpack('!HH', raw[0:4])
-        self.method = Method(method)
+        self.method = Method(struct.unpack('!HH', raw[0:4]))
 
 
 class FrameType(enum.Enum):
