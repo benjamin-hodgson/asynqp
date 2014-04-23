@@ -1,0 +1,19 @@
+{
+	"build_systems":
+	[
+		{
+			"name": "asynqp Contexts tests",
+			"windows":{
+				"cmd": ["$project_path\\env\\scripts\\run-contexts"]
+			},
+			"working_dir": "$project_path"
+		}
+	],
+	"folders":
+	[
+		{
+			"follow_symlinks": true,
+			"path": "."
+		}
+	]
+}
