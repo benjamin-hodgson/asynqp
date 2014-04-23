@@ -6,6 +6,7 @@
 			"windows":{
 				"cmd": ["$project_path\\env\\scripts\\run-contexts"]
 			},
+			"cmd": "$project_path/env/bin/run-contexts",
 			"working_dir": "$project_path"
 		}
 	],

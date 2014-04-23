@@ -1,19 +1,25 @@
 import asyncio
 import struct
-from io import BytesIO
-from unittest import mock
 import asynqp
 
 
-class WhenOpeningAConnection:
-    def given_a_socket(self):
+class EventLoopContext:
+    def given_an_event_loop(self):
         self.loop = asyncio.get_event_loop()
-        self.reader, self.writer = self.loop.run_until_complete(asyncio.open_connection('localhost', 5672))
-        self.frame_reader = asynqp.AMQPFrameReader(self.reader)
 
+
+class StreamConnectionContext(EventLoopContext):
+    def given_a_socket(self):
+        self.reader, self.writer = self.loop.run_until_complete(asyncio.open_connection('localhost', 5672))
+
+    def cleanup_the_socket(self):
+        self.writer.close()
+
+
+class WhenOpeningAConnection(StreamConnectionContext):
     def when_we_write_the_protocol_header(self):
         asynqp.write_protocol_header(self.writer)
-        self.frame = self.loop.run_until_complete(self.frame_reader.read_frame())
+        self.frame = self.loop.run_until_complete(asynqp.read_frame(self.reader))
 
     def it_should_return_a_method_frame(self):
         assert self.frame.frame_type == asynqp.FrameType.method
@@ -22,41 +28,44 @@ class WhenOpeningAConnection:
         assert self.frame.channel_id == 0
 
     def it_should_be_a_start_method(self):
-        assert self.frame.payload.method == asynqp.Method.start
+        assert self.frame.payload.method_type == asynqp.MethodType.connection_start
 
 
-class WhenWritingStartOk:
-    def given_a_socket(self):
-        self.loop = asyncio.get_event_loop()
-        self.reader, self.writer = self.loop.run_until_complete(asyncio.open_connection('localhost', 5672))
+class WhenRespondingToConnectionStart(StreamConnectionContext):
+    def given_that_the_server_is_awaiting_start_ok(self):
+        asynqp.write_protocol_header(self.writer)
+        self.loop.run_until_complete(asynqp.read_frame(self.reader))
 
     def because_we_write_a_start_ok_frame(self):
-        # write the frame header
+        frame = self.make_start_ok_message()
+        self.writer.write(frame)
+        self.frame = self.loop.run_until_complete(asynqp.read_frame(self.reader))
 
-        self.writer.write(b'\x01')  # frame is a method
-        self.writer.write(b'\x00\x00')  # channel 0
-        self.writer.write(b'???')  # payload size in bytes
+    def it_should_return_a_method_frame(self):
+        assert self.frame.frame_type == asynqp.FrameType.method
 
-        # write the method
+    def it_should_be_communicating_on_the_default_channel(self):
+        assert self.frame.channel_id == 0
 
-        self.writer.write(b'\x00\x0A\x00\x0B')  # (10, 11) - start_ok
+    def it_should_be_a_tune_method(self):
+        assert self.frame.payload.method_type == asynqp.MethodType.connection_tune
 
-        # write the client-properties table
-        self.writer.write(b'???')  # length of the 'long string' containing the table as a 4-byte unsigned int
-        self.writer.write(b'???')  # the 'long string' containing the client-properties table
+    def make_start_ok_message(self):
+        builder = asynqp.FrameBuilder()
 
-        # write the security mechanism
-        self.writer.write(b'???')  # length of the 'short string' containing the security mechanism as a 1-byte unsigned int
-        self.writer.write(b'???')  # the 'short string' containing the security mechanism
+        method = struct.pack('!HH', 10, 11)  # start_ok
+        builder.add_bytes_to_payload(method)
 
-        # write the security response
-        self.writer.write(b'???')  # length of the 'long string' containing the response as a 4-byte unsigned int
-        self.writer.write(b'???')  # the 'long string' containing the security response
+        client_properties = {}
+        builder.add_table_to_payload(client_properties)
 
-        # write the locale
-        self.writer.write(b'???')  # length of the 'short string' containing the locale as a 1-byte unsigned int
-        self.writer.write(b'???')  # the 'short string' containing the locale
+        mechanism = b'AMQPLAIN'
+        builder.add_short_string_to_payload(mechanism)
 
-        # write the frame end byte
+        security_response = {b'LOGIN':b'guest', b'PASSWORD': b'guest'}
+        builder.add_table_to_payload(security_response)
 
-        self.writer.write(b'\xCE')  # frame_end
+        locale = b'en_US'
+        builder.add_short_string_to_payload(locale)
+
+        return builder.build()
