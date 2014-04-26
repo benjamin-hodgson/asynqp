@@ -1,0 +1,18 @@
+language: python
+
+services:
+  - rabbitmq
+
+before_install:
+  - sudo add-apt-repository ppa:fkrull/deadsnakes -y
+
+install:
+  - sudo apt-get install python3.4
+  - python3.4 --version
+  - python3.4 -m venv env
+  - source env/bin/activate
+  - pip3.4 install contexts colorama
+  - python3.4 setup.py install
+
+script:
+  - run-contexts -v
