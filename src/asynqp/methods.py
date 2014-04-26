@@ -131,6 +131,9 @@ class ConnectionOpenOK(IncomingMethod):
         serialisation.read_short_string(stream)  # reserved-1
         return cls()
 
+    def __eq__(self, other):
+        return type(self) is type(other)
+
 
 METHOD_TYPES = {
     (10,10): ConnectionStart,

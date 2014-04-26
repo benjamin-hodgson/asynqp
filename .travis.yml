@@ -5,6 +5,7 @@ services:
 
 before_install:
   - sudo add-apt-repository ppa:fkrull/deadsnakes -y
+  - sudo apt-get update
 
 install:
   - sudo apt-get install python3.4
