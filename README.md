@@ -1,4 +1,4 @@
 asynqp
 ======
 
-AMQP (aka RabbitMQ) client library for Python 3.4's new asyncio module
+AMQP (aka [RabbitMQ](rabbitmq.com)) client library for Python 3.4's new [asyncio](https://docs.python.org/3.4/library/asyncio.html) module.
