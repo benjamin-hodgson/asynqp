@@ -1,18 +1,15 @@
 from asynqp import methods
 
 
-class WhenDeserialisingAConnectionStartMethod:
+class WhenDeserialisingConnectionStart:
     def given_a_connection_start_method_I_copied_from_the_rabbitmq_server(self):
-        self.raw = b"\x00\t\x00\x00\x01%\x0ccapabilitiesF\x00\x00\x00X\x12publisher_confirmst\x01\x1aexchange_exchange_bindingst\x01\nbasic.nackt\x01\x16consumer_cancel_notifyt\x01\tcopyrightS\x00\x00\x00'Copyright (C) 2007-2013 GoPivotal, Inc.\x0binformationS\x00\x00\x005Licensed under the MPL.  See http://www.rabbitmq.com/\x08platformS\x00\x00\x00\nErlang/OTP\x07productS\x00\x00\x00\x08RabbitMQ\x07versionS\x00\x00\x00\x053.1.5\x00\x00\x00\x0eAMQPLAIN PLAIN\x00\x00\x00\x0Ben_US en_GB"
+        self.raw = b"\x00\x0A\x00\x0A\x00\t\x00\x00\x01%\x0ccapabilitiesF\x00\x00\x00X\x12publisher_confirmst\x01\x1aexchange_exchange_bindingst\x01\nbasic.nackt\x01\x16consumer_cancel_notifyt\x01\tcopyrightS\x00\x00\x00'Copyright (C) 2007-2013 GoPivotal, Inc.\x0binformationS\x00\x00\x005Licensed under the MPL.  See http://www.rabbitmq.com/\x08platformS\x00\x00\x00\nErlang/OTP\x07productS\x00\x00\x00\x08RabbitMQ\x07versionS\x00\x00\x00\x053.1.5\x00\x00\x00\x0eAMQPLAIN PLAIN\x00\x00\x00\x0Ben_US en_GB"
 
     def when_I_deserialise_the_method(self):
         self.result = methods.ConnectionStart.deserialise(self.raw)
 
-    def it_should_have_the_correct_major_version(self):
-        assert self.result.major_version == 0
-
-    def it_should_have_the_correct_minor_version(self):
-        assert self.result.minor_version == 9
+    def it_should_have_the_correct_version(self):
+        assert self.result.version == (0, 9)
 
     def it_should_have_the_expected_server_properties(self):
         assert self.result.server_properties == {
@@ -42,4 +39,9 @@ class WhenSerialisingConnectionStartOK:
         self.result = self.method.serialise()
 
     def it_should_return_the_correct_bytestring(self):
-        assert self.result == b'\x00\x00\x00\x3E\x00\x0A\x00\x0B\x00\x00\x00\x15\x08somecrapS\x00\x00\x00\x07aboutme\x08AMQPLAIN\x00\x00\x00\x0E\x04authS\x00\x00\x00\x04info\x05en_US'
+        assert self.result == b'\x00\x0A\x00\x0B\x00\x00\x00\x15\x08somecrapS\x00\x00\x00\x07aboutme\x08AMQPLAIN\x00\x00\x00\x0E\x04authS\x00\x00\x00\x04info\x05en_US'
+
+
+class WhenDeserialisingConnectionTune:
+    def given_a_connection_tune_method_I_copied_from_the_rabbitmq_server(self):
+        b'\x00\x00\x00\x02\x00\x00\x02X'

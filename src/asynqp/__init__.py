@@ -22,14 +22,14 @@ class Connection(object):
 
     def handle(self, frame):
         method_type = frame.payload.method_type
-        getattr(self, 'handle_' + method_type.name)(frame)
+        getattr(self, 'handle_' + type(frame.payload).__name__)(frame)
 
-    def handle_connection_start(self, frame):
+    def handle_ConnectionStart(self, frame):
         method = methods.ConnectionStartOK({}, 'AMQPLAIN', {'LOGIN': self.username, 'PASSWORD': self.password}, 'en_US')
         frame = Frame(FrameType.method, 0, method)
         self.write_frame(frame)
 
-    def handle_connection_tune(self, frame):
+    def handle_ConnectionTune(self, frame):
         builder = PayloadBuilder(methods.MethodType.connection_tune_ok)
         builder.add_short(1024)  # maximum channel number
         builder.add_long(0)  # no maximum frame size
@@ -75,7 +75,8 @@ class Frame(object):
         payload = self.payload.serialise()
         frame = serialisation.pack_octet(self.frame_type.value)
         frame += serialisation.pack_short(self.channel_id)
-        frame += self.payload.serialise()
+        body = self.payload.serialise()
+        frame += serialisation.pack_long(len(body)) + body
         frame += FRAME_END  # frame_end
         return frame
 
