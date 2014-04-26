@@ -3,14 +3,22 @@ from unittest import mock
 import contexts
 import asynqp
 
+#TODO: protocol-level exception handling
 
 class ProtocolContext:
     def establish_the_connection(self):
         self.transport = mock.Mock(spec=asyncio.Transport)
         self.connection = mock.Mock(spec=asynqp.Connection)
-        self.protocol = asynqp.AMQP(self.connection)
+        self.protocol = asynqp.AMQP(asynqp.Dispatcher(self.connection))
         self.protocol.connection_made(self.transport)
 
+
+class WhenInitiatingProceedings(ProtocolContext):
+    def when_i_send_the_protocol_header(self):
+        self.protocol.send_protocol_header()
+
+    def it_should_write_the_correct_header(self):
+        self.transport.write.assert_called_once_with(b'AMQP\x00\x00\x09\x01')
 
 
 class WhenAWholeFrameArrives(ProtocolContext):
@@ -32,6 +40,9 @@ class WhenAFrameDoesNotEndInFrameEnd(ProtocolContext):
 
     def because_the_bad_frame_arrives(self):
         self.exception = contexts.catch(self.protocol.data_received, self.raw)
+
+    def it_MUST_close_the_connection(self):
+        assert self.transport.close.called
 
     def it_should_raise_an_exception(self):
         assert isinstance(self.exception, asynqp.AMQPError)

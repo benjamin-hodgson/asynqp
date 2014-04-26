@@ -10,9 +10,12 @@ FRAME_END = b'\xCE'
 
 
 class AMQP(asyncio.Protocol):
-    def __init__(self, connection):
-        self.dispatcher = Dispatcher(connection)
+    def __init__(self, dispatcher):
+        self.dispatcher = dispatcher
         self.partial_frame = b''
+
+    def connection_made(self, transport):
+        self.transport = transport
 
     def data_received(self, data):
         data = self.partial_frame + data
@@ -33,6 +36,7 @@ class AMQP(asyncio.Protocol):
         frame_end = data[7+size:8+size]
 
         if frame_end != FRAME_END:
+            self.transport.close()
             raise AMQPError("Frame end byte was incorrect")
 
         frame = create_frame(frame_type, channel_id, raw_payload)
@@ -42,7 +46,10 @@ class AMQP(asyncio.Protocol):
         self.data_received(data[8+size:])
 
     def send_frame(self, frame):
-        pass
+        self.transport.write(frame.serialise())
+
+    def send_protocol_header(self):
+        self.transport.write(b'AMQP\x00\x00\x09\x01')
 
 
 class Dispatcher(object):
@@ -54,59 +61,35 @@ class Dispatcher(object):
 
 
 class Connection(object):
-    def __init__(self, protocol, reader, writer, username='guest', password='guest', virtual_host='/', *, loop=None):
+    def __init__(self, protocol, username='guest', password='guest', virtual_host='/', *, loop=None):
         self.protocol = protocol
-        self.reader = reader
-        self.writer = writer
         self.username = username
         self.password = password
         self.virtual_host = virtual_host
         self.is_open = asyncio.Future(loop=loop)
 
-    def write_protocol_header(self):
-        self.writer.write(b'AMQP\x00\x00\x09\x01')
-
-    def handle(self, frame):
-        getattr(self, 'handle_' + type(frame.payload).__name__)(frame)
-
     def handle_ConnectionStart(self, frame):
         method = methods.ConnectionStartOK({}, 'AMQPLAIN', {'LOGIN': self.username, 'PASSWORD': self.password}, 'en_US')
         frame = Frame(FrameType.method, 0, method)
-        self.write_frame(frame)
+        self.protocol.send_frame(frame)
 
     def handle_ConnectionTune(self, frame):
         method = methods.ConnectionTuneOK(1024, 0, 0)
         frame = Frame(FrameType.method, 0, method)
-        self.write_frame(frame)
         self.protocol.send_frame(frame)
 
         method = methods.ConnectionOpen(self.virtual_host)
         frame = Frame(FrameType.method, 0, method)
-        self.write_frame(frame)
         self.protocol.send_frame(frame)
 
     def handle_ConnectionOpenOK(self, frame):
         self.is_open.set_result(True)
-
-    def write_frame(self, frame):
-        self.writer.write(frame.serialise())
-
-    @asyncio.coroutine
-    def read_frame(self):
-        frame_header = yield from self.reader.read(7)
-        frame_type, channel_id, size = struct.unpack('!BHL', frame_header)
-        raw_payload = yield from self.reader.read(size)
-        frame_end = yield from self.reader.read(1)
-        if frame_end != FRAME_END:
-            raise AMQPError("Frame end byte was incorrect")
-        return create_frame(frame_type, channel_id, raw_payload)
 
 
 def create_frame(frame_type, channel_id, raw_payload):
     if frame_type == 1:
         payload = methods.deserialise_method(raw_payload)
     return Frame(FrameType(frame_type), channel_id, payload)
-
 
 
 class Frame(object):

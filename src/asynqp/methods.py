@@ -80,6 +80,12 @@ class ConnectionStartOK(OutgoingMethod):
         stream.write(serialisation.pack_table(self.security_response))
         stream.write(serialisation.pack_short_string(self.locale))
 
+    def __eq__(self, other):
+        return (self.client_properties == other.client_properties
+            and self.mechanism == other.mechanism
+            and self.security_response == other.security_response
+            and self.locale == other.locale)
+
 
 class ConnectionTune(IncomingMethod):
     method_type = (10, 30)

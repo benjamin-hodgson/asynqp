@@ -1,4 +1,14 @@
+import asyncio
+import asynqp
+from unittest import mock
 from asynqp import methods
+
+
+class OutgoingMethodContext:
+    def establish_the_connection(self):
+        self.transport = mock.Mock(spec=asyncio.Transport)
+        self.protocol = asynqp.AMQP(mock.Mock())
+        self.protocol.connection_made(self.transport)
 
 
 class WhenDeserialisingConnectionStart:
@@ -31,15 +41,16 @@ class WhenDeserialisingConnectionStart:
         assert self.result.locales == {'en_US', 'en_GB'}
 
 
-class WhenSerialisingConnectionStartOK:
+class WhenSendingConnectionStartOK(OutgoingMethodContext):
     def given_a_method_to_send(self):
-        self.method = methods.ConnectionStartOK({'somecrap': 'aboutme'}, 'AMQPLAIN', {'auth':'info'}, 'en_US')
+        method = methods.ConnectionStartOK({'somecrap': 'aboutme'}, 'AMQPLAIN', {'auth':'info'}, 'en_US')
+        self.frame = asynqp.Frame(asynqp.FrameType.method, 0, method)
 
-    def when_we_serialise_the_method(self):
-        self.result = self.method.serialise()
+    def when_we_send_the_method(self):
+        self.protocol.send_frame(self.frame)
 
-    def it_should_return_the_correct_bytestring(self):
-        assert self.result == b'\x00\x0A\x00\x0B\x00\x00\x00\x15\x08somecrapS\x00\x00\x00\x07aboutme\x08AMQPLAIN\x00\x00\x00\x0E\x04authS\x00\x00\x00\x04info\x05en_US'
+    def it_should_send_the_correct_bytestring(self):
+        self.transport.write.assert_called_once_with(b'\x01\x00\x00\x00\x00\x00\x3E\x00\x0A\x00\x0B\x00\x00\x00\x15\x08somecrapS\x00\x00\x00\x07aboutme\x08AMQPLAIN\x00\x00\x00\x0E\x04authS\x00\x00\x00\x04info\x05en_US\xCE')
 
 
 class WhenDeserialisingConnectionTune:
