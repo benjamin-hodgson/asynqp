@@ -17,6 +17,16 @@ def read_long_string(stream):
     return _read_long_string(stream)[0]
 
 
+@rethrow_as(struct.error, AMQPError('failed to read a short'))
+def read_short(stream):
+    return _read_short(stream)[0]
+
+
+@rethrow_as(struct.error, AMQPError('failed to read a long'))
+def read_long(stream):
+    return _read_long(stream)[0]
+
+
 def _read_table(stream):
     # TODO: more value types
     TABLE_VALUE_PARSERS = {
@@ -69,6 +79,11 @@ def _read_octet(stream):
 def _read_bool(stream):
     x, = struct.unpack('!?', stream.read(1))
     return x, 1
+
+
+def _read_short(stream):
+    x, = struct.unpack('!H', stream.read(2))
+    return x, 2
 
 
 def _read_long(stream):

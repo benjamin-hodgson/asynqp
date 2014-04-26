@@ -44,4 +44,16 @@ class WhenSerialisingConnectionStartOK:
 
 class WhenDeserialisingConnectionTune:
     def given_a_connection_tune_method_I_copied_from_the_rabbitmq_server(self):
-        b'\x00\x00\x00\x02\x00\x00\x02X'
+        self.raw = b'\x00\x0A\x00\x1E\x00\x00\x00\x02\x00\x00\x02\x58'
+
+    def when_I_deserialise_the_method(self):
+        self.result = methods.ConnectionTune.deserialise(self.raw)
+
+    def it_should_have_the_correct_max_channel(self):
+        assert self.result.max_channel == 0
+
+    def it_should_have_the_correct_max_frame_length(self):
+        assert self.result.max_frame_length == 131072
+
+    def it_shoud_have_the_correct_heartbeat(self):
+        assert self.result.heartbeat_interval == 600
