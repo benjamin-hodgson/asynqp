@@ -1,17 +1,11 @@
 import abc
-import enum
 import struct
 from io import BytesIO
 from . import serialisation
 from .exceptions import AMQPError
 
 
-class MethodType(enum.Enum):
-    connection_open = (10, 40)
-    connection_open_ok = (10, 41)
-
-
-def create_method(raw_payload):
+def deserialise_method(raw_payload):
     method_type_code = struct.unpack('!HH', raw_payload[0:4])
     return METHOD_TYPES[method_type_code].deserialise(raw_payload)
 
@@ -31,7 +25,9 @@ class IncomingMethod(abc.ABC):
     @classmethod
     @abc.abstractmethod
     def read(cls, stream):
-        pass
+        """
+        Read a method from a binary file-like object.
+        """
 
 
 class OutgoingMethod(abc.ABC):
@@ -46,8 +42,9 @@ class OutgoingMethod(abc.ABC):
 
     @abc.abstractmethod
     def write(self, stream):
-        pass
-
+        """
+        Write the method to a binary file-like object.
+        """
 
 
 class ConnectionStart(IncomingMethod):
@@ -114,24 +111,25 @@ class ConnectionTuneOK(OutgoingMethod):
         stream.write(serialisation.pack_short(self.heartbeat_interval))
 
 
-class ConnectionOpen(object):
-    method_type = MethodType.connection_open
+class ConnectionOpen(OutgoingMethod):
+    method_type = (10, 40)
 
-    def __init__(self, arguments):
-        self.arguments = arguments
+    def __init__(self, virtual_host):
+        self.virtual_host = virtual_host
 
-    def serialise(self):
-        return struct.pack('!HH', *self.method_type.value) + self.arguments
+    def write(self, stream):
+        stream.write(serialisation.pack_short_string(self.virtual_host))
+        stream.write(serialisation.pack_short_string(''))  # reserved-1
+        stream.write(b'\x00')  # reserved-2
 
 
-class ConnectionOpenOK(object):
-    def __init__(self, arguments):
-        self.method_type = MethodType.connection_open_ok
-        self.arguments = arguments
+class ConnectionOpenOK(IncomingMethod):
+    method_type = (10, 41)
 
     @classmethod
-    def deserialise(cls, arguments):
-        return cls(arguments)
+    def read(cls, stream):
+        serialisation.read_short_string(stream)  # reserved-1
+        return cls()
 
 
 METHOD_TYPES = {

@@ -6,7 +6,7 @@ class WhenDeserialisingConnectionStart:
         self.raw = b"\x00\x0A\x00\x0A\x00\t\x00\x00\x01%\x0ccapabilitiesF\x00\x00\x00X\x12publisher_confirmst\x01\x1aexchange_exchange_bindingst\x01\nbasic.nackt\x01\x16consumer_cancel_notifyt\x01\tcopyrightS\x00\x00\x00'Copyright (C) 2007-2013 GoPivotal, Inc.\x0binformationS\x00\x00\x005Licensed under the MPL.  See http://www.rabbitmq.com/\x08platformS\x00\x00\x00\nErlang/OTP\x07productS\x00\x00\x00\x08RabbitMQ\x07versionS\x00\x00\x00\x053.1.5\x00\x00\x00\x0eAMQPLAIN PLAIN\x00\x00\x00\x0Ben_US en_GB"
 
     def when_I_deserialise_the_method(self):
-        self.result = methods.ConnectionStart.deserialise(self.raw)
+        self.result = methods.deserialise_method(self.raw)
 
     def it_should_have_the_correct_version(self):
         assert self.result.version == (0, 9)
@@ -47,7 +47,7 @@ class WhenDeserialisingConnectionTune:
         self.raw = b'\x00\x0A\x00\x1E\x00\x00\x00\x02\x00\x00\x02\x58'
 
     def when_I_deserialise_the_method(self):
-        self.result = methods.ConnectionTune.deserialise(self.raw)
+        self.result = methods.deserialise_method(self.raw)
 
     def it_should_have_the_correct_max_channel(self):
         assert self.result.max_channel == 0
@@ -68,3 +68,25 @@ class WhenSerialisingConnectionTuneOK:
 
     def it_should_return_the_correct_bytestring(self):
         assert self.result == b'\x00\n\x00\x1F\x04\x00\x00\x02\x00\x00\x00\x0A'
+
+
+class WhenSerialisingConnectionOpen:
+    def given_a_method_to_send(self):
+        self.method = methods.ConnectionOpen('/')
+
+    def when_I_serialise_the_method(self):
+        self.result = self.method.serialise()
+
+    def it_should_return_the_correct_bytestring(self):
+        assert self.result == b'\x00\x0A\x00\x28\x01\x2F\x00\x00'
+
+
+class WhenDeserialisingConnectionOpenOK:
+    def given_a_connection_open_ok_method_I_copied_from_the_rabbitmq_server(self):
+        self.raw = b'\x00\x0A\x00\x29\x00'
+
+    def when_I_deserialise_the_method(self):
+        self.result = methods.deserialise_method(self.raw)
+
+    def it_should_be_a_ConnectionOpenOK(self):
+        assert isinstance(self.result, methods.ConnectionOpenOK)

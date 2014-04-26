@@ -13,6 +13,10 @@ def read_table(stream):
     return _read_table(stream)[0]
 
 
+def read_short_string(stream):
+    return _read_short_string(stream)[0]
+
+
 def read_long_string(stream):
     return _read_long_string(stream)[0]
 

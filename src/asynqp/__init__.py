@@ -34,11 +34,8 @@ class Connection(object):
         frame = Frame(FrameType.method, 0, method)
         self.write_frame(frame)
 
-        builder = PayloadBuilder(methods.MethodType.connection_open)
-        builder.add_short_string(self.virtual_host)
-        builder.add_short_string('')
-        builder.add_bit(False)
-        frame = Frame(FrameType.method, 0, builder.build())
+        method = methods.ConnectionOpen(self.virtual_host)
+        frame = Frame(FrameType.method, 0, method)
         self.write_frame(frame)
 
     def write_frame(self, frame):
@@ -57,7 +54,7 @@ class Connection(object):
 
 def create_frame(frame_type, channel_id, raw_payload):
     if frame_type == 1:
-        payload = methods.create_method(raw_payload)
+        payload = methods.deserialise_method(raw_payload)
     return Frame(FrameType(frame_type), channel_id, payload)
 
 
