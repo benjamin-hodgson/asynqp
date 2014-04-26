@@ -96,7 +96,6 @@ class ConnectionTune(IncomingMethod):
         heartbeat_interval = serialisation.read_short(stream)
         return cls(max_channel, max_frame_length, heartbeat_interval)
 
-
 class ConnectionTuneOK(OutgoingMethod):
     method_type = (10, 31)
 
@@ -110,6 +109,11 @@ class ConnectionTuneOK(OutgoingMethod):
         stream.write(serialisation.pack_long(self.max_frame_length))
         stream.write(serialisation.pack_short(self.heartbeat_interval))
 
+    def __eq__(self, other):
+        return (self.max_channel == other.max_channel
+            and self.max_frame_length == other.max_frame_length
+            and self.heartbeat_interval == other.heartbeat_interval)
+
 
 class ConnectionOpen(OutgoingMethod):
     method_type = (10, 40)
@@ -121,6 +125,9 @@ class ConnectionOpen(OutgoingMethod):
         stream.write(serialisation.pack_short_string(self.virtual_host))
         stream.write(serialisation.pack_short_string(''))  # reserved-1
         stream.write(b'\x00')  # reserved-2
+
+    def __eq__(self, other):
+        return self.virtual_host == other.virtual_host
 
 
 class ConnectionOpenOK(IncomingMethod):

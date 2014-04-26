@@ -1,17 +1,19 @@
 import asyncio
 import asynqp
 from io import BytesIO
+from unittest import mock
 
 
 class EventLoopContext:
     def given_an_event_loop(self):
         self.loop = asyncio.get_event_loop()
+        self.protocol = mock.Mock(spec=asynqp.AMQP)
 
 
 class StreamConnectionContext(EventLoopContext):
     def given_a_socket(self):
         self.reader, self.writer = self.loop.run_until_complete(asyncio.open_connection('localhost', 5672))
-        self.connection = asynqp.Connection(self.reader, self.writer, 'guest', 'guest')
+        self.connection = asynqp.Connection(self.protocol, self.reader, self.writer, 'guest', 'guest')
 
     def cleanup_the_socket(self):
         self.writer.close()
@@ -53,19 +55,12 @@ class WhenRespondingToConnectionStart(StreamConnectionContext):
 
 class WhenRespondingToConnectionTune(StreamConnectionContext):
     def given_a_tune_frame_from_the_server(self):
-        self.tune_frame = self.loop.run_until_complete(self.get_tune_frame())
+        self.tune_frame = asynqp.Frame(asynqp.FrameType.method, 0, asynqp.methods.ConnectionTune(0, 131072, 600))
+        self.tune_ok_frame = asynqp.Frame(asynqp.FrameType.method, 0, asynqp.methods.ConnectionTuneOK(1024, 0, 0))
+        self.open_frame = asynqp.Frame(asynqp.FrameType.method, 0, asynqp.methods.ConnectionOpen('/'))
 
     def when_the_tune_frame_arrives(self):
         self.connection.handle(self.tune_frame)
-        self.response = self.loop.run_until_complete(self.connection.read_frame())
 
-    def it_should_return_open_ok(self):
-        assert isinstance(self.response.payload, asynqp.methods.ConnectionOpenOK)
-
-    @asyncio.coroutine
-    def get_tune_frame(self):
-        self.connection.write_protocol_header()
-        start_frame = yield from self.connection.read_frame()
-        self.connection.handle(start_frame)
-        tune_frame = yield from self.connection.read_frame()
-        return tune_frame
+    def it_should_send_tune_ok_followed_by_open(self):
+        self.protocol.send_frame.assert_has_calls([mock.call(self.tune_ok_frame), mock.call(self.open_frame)])

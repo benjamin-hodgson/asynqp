@@ -41,6 +41,9 @@ class AMQP(asyncio.Protocol):
         # repeat if more than a whole frame was received
         self.data_received(data[8+size:])
 
+    def send_frame(self, frame):
+        pass
+
 
 class Dispatcher(object):
     def __init__(self, connection):
@@ -51,7 +54,8 @@ class Dispatcher(object):
 
 
 class Connection(object):
-    def __init__(self, reader, writer, username='guest', password='guest', virtual_host='/', *, loop=None):
+    def __init__(self, protocol, reader, writer, username='guest', password='guest', virtual_host='/', *, loop=None):
+        self.protocol = protocol
         self.reader = reader
         self.writer = writer
         self.username = username
@@ -74,10 +78,12 @@ class Connection(object):
         method = methods.ConnectionTuneOK(1024, 0, 0)
         frame = Frame(FrameType.method, 0, method)
         self.write_frame(frame)
+        self.protocol.send_frame(frame)
 
         method = methods.ConnectionOpen(self.virtual_host)
         frame = Frame(FrameType.method, 0, method)
         self.write_frame(frame)
+        self.protocol.send_frame(frame)
 
     def handle_ConnectionOpenOK(self, frame):
         self.is_open.set_result(True)
