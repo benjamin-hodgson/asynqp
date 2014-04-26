@@ -1,5 +1,6 @@
 import asyncio
 import asynqp
+from io import BytesIO
 
 
 class EventLoopContext:
@@ -19,16 +20,16 @@ class StreamConnectionContext(EventLoopContext):
 class WhenOpeningAConnection(StreamConnectionContext):
     def when_we_write_the_protocol_header(self):
         self.connection.write_protocol_header()
-        self.frame = self.loop.run_until_complete(self.connection.read_frame())
+        self.response = self.loop.run_until_complete(self.connection.read_frame())
 
     def it_should_return_a_method_frame(self):
-        assert self.frame.frame_type == asynqp.FrameType.method
+        assert self.response.frame_type == asynqp.FrameType.method
 
     def it_should_be_communicating_on_the_default_channel(self):
-        assert self.frame.channel_id == 0
+        assert self.response.channel_id == 0
 
     def it_should_be_a_start_method(self):
-        assert self.frame.payload.method_type == asynqp.MethodType.connection_start
+        assert isinstance(self.response.payload, asynqp.methods.ConnectionStart)
 
 
 class WhenRespondingToConnectionStart(StreamConnectionContext):
@@ -47,7 +48,7 @@ class WhenRespondingToConnectionStart(StreamConnectionContext):
         assert self.response.channel_id == 0
 
     def it_should_be_a_tune_method(self):
-        assert self.response.payload.method_type == asynqp.MethodType.connection_tune
+        assert isinstance(self.response.payload, asynqp.methods.ConnectionTune)
 
 
 class WhenRespondingToConnectionTune(StreamConnectionContext):
@@ -59,7 +60,7 @@ class WhenRespondingToConnectionTune(StreamConnectionContext):
         self.response = self.loop.run_until_complete(self.connection.read_frame())
 
     def it_should_return_open_ok(self):
-        assert self.response.payload.method_type == asynqp.MethodType.connection_open_ok
+        assert isinstance(self.response.payload, asynqp.methods.ConnectionOpenOK)
 
     @asyncio.coroutine
     def get_tune_frame(self):

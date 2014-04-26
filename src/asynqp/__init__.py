@@ -1,6 +1,9 @@
 import asyncio
 import enum
 import struct
+from .exceptions import AMQPError
+from . import methods
+from . import serialisation
 
 
 FRAME_END = b'\xCE'
@@ -22,7 +25,7 @@ class Connection(object):
         getattr(self, 'handle_' + method_type.name)(frame)
 
     def handle_connection_start(self, frame):
-        builder = PayloadBuilder(MethodType.connection_start_ok)
+        builder = PayloadBuilder(methods.MethodType.connection_start_ok)
         builder.add_table({})
         builder.add_short_string('AMQPLAIN')
         builder.add_table({'LOGIN': self.username, 'PASSWORD': self.password})
@@ -31,14 +34,14 @@ class Connection(object):
         self.write_frame(frame)
 
     def handle_connection_tune(self, frame):
-        builder = PayloadBuilder(MethodType.connection_tune_ok)
+        builder = PayloadBuilder(methods.MethodType.connection_tune_ok)
         builder.add_short(1024)  # maximum channel number
         builder.add_long(0)  # no maximum frame size
         builder.add_short(0)  # no heartbeat
         frame = Frame(FrameType.method, 0, builder.build())
         self.write_frame(frame)
 
-        builder = PayloadBuilder(MethodType.connection_open)
+        builder = PayloadBuilder(methods.MethodType.connection_open)
         builder.add_short_string(self.virtual_host)
         builder.add_short_string('')
         builder.add_bit(False)
@@ -50,16 +53,20 @@ class Connection(object):
 
     @asyncio.coroutine
     def read_frame(self):
-        bytes = yield from self.reader.read(7)
-        frame_type, channel_id, size = struct.unpack('!BHL', bytes)
+        frame_header = yield from self.reader.read(7)
+        frame_type, channel_id, size = struct.unpack('!BHL', frame_header)
         raw_payload = yield from self.reader.read(size)
         frame_end = yield from self.reader.read(1)
         if frame_end !=  b'\xCE':
             raise AMQPError("Frame end byte was incorrect")
+        return create_frame(frame_type, channel_id, raw_payload)
 
-        method_type = MethodType(struct.unpack('!HH', raw_payload[0:4]))
 
-        return Frame(FrameType(frame_type), channel_id, Payload(method_type, raw_payload[4:]))
+def create_frame(frame_type, channel_id, raw_payload):
+    if frame_type == 1:
+        payload = methods.create_method(raw_payload)
+    return Frame(FrameType(frame_type), channel_id, payload)
+
 
 
 class Frame(object):
@@ -70,37 +77,15 @@ class Frame(object):
 
     def serialise(self):
         payload = self.payload.serialise()
-        frame = pack_octet(self.frame_type.value)
-        frame += pack_short(self.channel_id)
+        frame = serialisation.pack_octet(self.frame_type.value)
+        frame += serialisation.pack_short(self.channel_id)
         frame += self.payload.serialise()
         frame += FRAME_END  # frame_end
         return frame
 
 
-class Payload(object):
-    def __init__(self, method_type, arguments):
-        self.method_type = method_type
-        self.arguments = arguments
-
-    def serialise(self):
-        body = struct.pack('!HH', *self.method_type.value) + self.arguments
-        return pack_long(len(body)) + body
-
-
 class FrameType(enum.Enum):
     method = 1
-
-
-class MethodType(enum.Enum):
-    connection_start = (10, 10)
-    connection_start_ok = (10, 11)
-    connection_tune = (10, 30)
-    connection_tune_ok = (10, 31)
-    connection_open = (10, 40)
-    connection_open_ok = (10, 41)
-
-class AMQPError(IOError):
-    pass
 
 
 class PayloadBuilder(object):
@@ -120,27 +105,27 @@ class PayloadBuilder(object):
 
     def add_octet(self, number):
         self._flush_bits()
-        self.body += pack_octet(number)
+        self.body += serialisation.pack_octet(number)
 
     def add_short(self, number):
         self._flush_bits()
-        self.body += pack_short(number)
+        self.body += serialisation.pack_short(number)
 
     def add_long(self, number):
         self._flush_bits()
-        self.body += pack_long(number)
+        self.body += serialisation.pack_long(number)
 
     def add_short_string(self, string):
         self._flush_bits()
-        self.body += short_string(string)
+        self.body += serialisation.short_string(string)
 
     def add_table(self, d):
         self._flush_bits()
-        self.body += table(d)
+        self.body += serialisation.pack_table(d)
 
     def build(self):
         self._flush_bits()
-        return Payload(self.method_type, self.body)
+        return methods.METHOD_TYPES[self.method_type.value](self.body)
 
     def _flush_bits(self):
         for b in self.bits:
@@ -148,28 +133,3 @@ class PayloadBuilder(object):
         self.bits = []
         self.bitcount = 0
 
-
-def short_string(string):
-    bytes = string.encode('utf-8')
-    return pack_octet(len(bytes)) + bytes
-
-def long_string(string):
-    bytes = string.encode('utf-8')
-    return pack_long(len(bytes)) + bytes
-
-def table(d):
-    bytes = b''
-    for key in d:
-        bytes += short_string(key)
-        bytes += b'S'
-        bytes += long_string(d[key])
-    return pack_long(len(bytes)) + bytes
-
-def pack_octet(number):
-    return struct.pack('!B', number)
-
-def pack_short(number):
-    return struct.pack('!H', number)
-
-def pack_long(number):
-    return struct.pack('!L', number)
