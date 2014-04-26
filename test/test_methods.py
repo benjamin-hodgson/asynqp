@@ -70,26 +70,28 @@ class WhenDeserialisingConnectionTune:
         assert self.result.heartbeat_interval == 600
 
 
-class WhenSerialisingConnectionTuneOK:
+class WhenSerialisingConnectionTuneOK(OutgoingMethodContext):
     def given_a_method_to_send(self):
-        self.method = methods.ConnectionTuneOK(1024, 131072, 10)
+        method = methods.ConnectionTuneOK(1024, 131072, 10)
+        self.frame = asynqp.Frame(asynqp.FrameType.method, 0, method)
 
     def when_I_serialise_the_method(self):
-        self.result = self.method.serialise()
+        self.protocol.send_frame(self.frame)
 
     def it_should_return_the_correct_bytestring(self):
-        assert self.result == b'\x00\n\x00\x1F\x04\x00\x00\x02\x00\x00\x00\x0A'
+        self.transport.write.assert_called_once_with(b'\x01\x00\x00\x00\x00\x00\x0C\x00\n\x00\x1F\x04\x00\x00\x02\x00\x00\x00\x0A\xCE')
 
 
-class WhenSerialisingConnectionOpen:
+class WhenSerialisingConnectionOpen(OutgoingMethodContext):
     def given_a_method_to_send(self):
-        self.method = methods.ConnectionOpen('/')
+        method = methods.ConnectionOpen('/')
+        self.frame = asynqp.Frame(asynqp.FrameType.method, 0, method)
 
     def when_I_serialise_the_method(self):
-        self.result = self.method.serialise()
+        self.protocol.send_frame(self.frame)
 
     def it_should_return_the_correct_bytestring(self):
-        assert self.result == b'\x00\x0A\x00\x28\x01\x2F\x00\x00'
+        self.transport.write.assert_called_once_with(b'\x01\x00\x00\x00\x00\x00\x08\x00\x0A\x00\x28\x01\x2F\x00\x00\xCE')
 
 
 class WhenDeserialisingConnectionOpenOK:
