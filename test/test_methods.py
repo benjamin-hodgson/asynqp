@@ -32,3 +32,14 @@ class WhenDeserialisingAConnectionStartMethod:
 
     def it_should_have_the_correct_locals(self):
         assert self.result.locales == {'en_US', 'en_GB'}
+
+
+class WhenSerialisingConnectionStartOK:
+    def given_a_method_to_send(self):
+        self.method = methods.ConnectionStartOK({'somecrap': 'aboutme'}, 'AMQPLAIN', {'auth':'info'}, 'en_US')
+
+    def when_we_serialise_the_method(self):
+        self.result = self.method.serialise()
+
+    def it_should_return_the_correct_bytestring(self):
+        assert self.result == b'\x00\x00\x00\x3E\x00\x0A\x00\x0B\x00\x00\x00\x15\x08somecrapS\x00\x00\x00\x07aboutme\x08AMQPLAIN\x00\x00\x00\x0E\x04authS\x00\x00\x00\x04info\x05en_US'

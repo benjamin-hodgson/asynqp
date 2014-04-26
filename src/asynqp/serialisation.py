@@ -1,17 +1,11 @@
 import struct
 from .exceptions import AMQPError
+from .util import rethrow_as
 
 
-def rethrow_as(expected_cls, to_throw):
-    def decorator(f):
-        def wrapper(*args, **kwargs):
-            try:
-                return f(*args, **kwargs)
-            except expected_cls as e:
-                raise to_throw from e
-        return wrapper
-    return decorator
-
+###########################################################
+#  Deserialisation
+###########################################################
 
 @rethrow_as(KeyError, AMQPError('bad table value type code'))
 @rethrow_as(struct.error, AMQPError('bad table'))
@@ -41,12 +35,13 @@ def _read_table(stream):
     while consumed < table_length + initial_long_size:
         key, x = _read_short_string(stream)
         consumed += x
+
         value_type_code = stream.read(1)
         consumed += 1
 
         value, x = TABLE_VALUE_PARSERS[value_type_code](stream)
-
         consumed += x
+
         table[key] = value
 
     return table, consumed
@@ -81,8 +76,11 @@ def _read_long(stream):
     return x, 4
 
 
+###########################################################
+#  Serialisation
+###########################################################
 
-def short_string(string):
+def pack_short_string(string):
     bytes = string.encode('utf-8')
     return pack_octet(len(bytes)) + bytes
 
@@ -97,7 +95,7 @@ def pack_table(d):
     for key in d:
         if not isinstance(d[key], str):
             raise NotImplementedError()
-        bytes += short_string(key)
+        bytes += pack_short_string(key)
         bytes += b'S'
         bytes += long_string(d[key])
     return pack_long(len(bytes)) + bytes

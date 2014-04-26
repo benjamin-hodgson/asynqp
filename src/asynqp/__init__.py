@@ -25,12 +25,8 @@ class Connection(object):
         getattr(self, 'handle_' + method_type.name)(frame)
 
     def handle_connection_start(self, frame):
-        builder = PayloadBuilder(methods.MethodType.connection_start_ok)
-        builder.add_table({})
-        builder.add_short_string('AMQPLAIN')
-        builder.add_table({'LOGIN': self.username, 'PASSWORD': self.password})
-        builder.add_short_string('en_US')
-        frame = Frame(FrameType.method, 0, builder.build())
+        method = methods.ConnectionStartOK({}, 'AMQPLAIN', {'LOGIN': self.username, 'PASSWORD': self.password}, 'en_US')
+        frame = Frame(FrameType.method, 0, method)
         self.write_frame(frame)
 
     def handle_connection_tune(self, frame):
@@ -117,7 +113,7 @@ class PayloadBuilder(object):
 
     def add_short_string(self, string):
         self._flush_bits()
-        self.body += serialisation.short_string(string)
+        self.body += serialisation.pack_short_string(string)
 
     def add_table(self, d):
         self._flush_bits()

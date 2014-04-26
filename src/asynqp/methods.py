@@ -29,12 +29,19 @@ class ConnectionStart(object):
 
 
 class ConnectionStartOK(object):
-    def __init__(self, arguments):
+    def __init__(self, client_properties, mechanism, security_response, locale):
         self.method_type = MethodType.connection_start_ok
-        self.arguments = arguments
+        self.client_properties = client_properties
+        self.mechanism = mechanism
+        self.security_response = security_response
+        self.locale = locale
 
     def serialise(self):
-        body = struct.pack('!HH', *self.method_type.value) + self.arguments
+        body = struct.pack('!HH', *self.method_type.value)
+        body += serialisation.pack_table(self.client_properties)
+        body += serialisation.pack_short_string(self.mechanism)
+        body += serialisation.pack_table(self.security_response)
+        body += serialisation.pack_short_string(self.locale)
         return serialisation.pack_long(len(body)) + body
 
 
