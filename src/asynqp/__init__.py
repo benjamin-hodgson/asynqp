@@ -6,64 +6,60 @@ import struct
 FRAME_END = b'\xCE'
 
 
-def write_protocol_header(writer):
-    writer.write(b'AMQP\x00\x00\x09\x01')
+class Connection(object):
+    def __init__(self, reader, writer, username='guest', password='guest', virtual_host='/'):
+        self.reader = reader
+        self.writer = writer
+        self.username = username
+        self.password = password
+        self.virtual_host = virtual_host
 
+    def write_protocol_header(self):
+        self.writer.write(b'AMQP\x00\x00\x09\x01')
 
-def handle_connection_start(writer, frame, username, password):
-    builder = PayloadBuilder(MethodType.connection_start_ok)
+    def handle(self, frame):
+        method_type = frame.payload.method_type
+        getattr(self, 'handle_' + method_type.name)(frame)
 
-    client_properties = {}
-    builder.add_table(client_properties)
+    def handle_connection_start(self, frame):
+        builder = PayloadBuilder(MethodType.connection_start_ok)
+        builder.add_table({})
+        builder.add_short_string('AMQPLAIN')
+        builder.add_table({'LOGIN': self.username, 'PASSWORD': self.password})
+        builder.add_short_string('en_US')
+        frame = Frame(FrameType.method, 0, builder.build())
+        self.write_frame(frame)
 
-    mechanism = 'AMQPLAIN'
-    builder.add_short_string(mechanism)
+    def handle_connection_tune(self, frame):
+        builder = PayloadBuilder(MethodType.connection_tune_ok)
+        builder.add_short(1024)  # maximum channel number
+        builder.add_long(0)  # no maximum frame size
+        builder.add_short(0)  # no heartbeat
+        frame = Frame(FrameType.method, 0, builder.build())
+        self.write_frame(frame)
 
-    security_response = {'LOGIN': username, 'PASSWORD': password}
-    builder.add_table(security_response)
+        builder = PayloadBuilder(MethodType.connection_open)
+        builder.add_short_string(self.virtual_host)
+        builder.add_short_string('')
+        builder.add_bit(False)
+        frame = Frame(FrameType.method, 0, builder.build())
+        self.write_frame(frame)
 
-    locale = 'en_US'
-    builder.add_short_string(locale)
+    def write_frame(self, frame):
+        self.writer.write(frame.serialise())
 
-    frame = Frame(FrameType.method, 0, builder.build())
-    write_frame(writer, frame)
+    @asyncio.coroutine
+    def read_frame(self):
+        bytes = yield from self.reader.read(7)
+        frame_type, channel_id, size = struct.unpack('!BHL', bytes)
+        raw_payload = yield from self.reader.read(size)
+        frame_end = yield from self.reader.read(1)
+        if frame_end !=  b'\xCE':
+            raise AMQPError("Frame end byte was incorrect")
 
+        method_type = MethodType(struct.unpack('!HH', raw_payload[0:4]))
 
-def handle_tune(writer, frame):
-    builder = PayloadBuilder(MethodType.connection_tune_ok)
-
-    builder.add_short(1024)  # maximum channel number
-    builder.add_long(1024 * 128)  # 128 kb
-    builder.add_short(600)  # no heartbeat
-
-    return_frame = Frame(FrameType.method, 0, builder.build())
-    write_frame(writer, return_frame)
-
-
-    builder = PayloadBuilder(MethodType.connection_open)
-    builder.add_short_string('/')  # virtual host
-    builder.add_short_string('')
-    builder.add_bit(False)
-    frame = Frame(FrameType.method, 0, builder.build())
-    write_frame(writer, frame)
-
-
-def write_frame(writer, frame):
-    writer.write(frame.serialise())
-
-
-@asyncio.coroutine
-def read_frame(reader):
-    bytes = yield from reader.read(7)
-    frame_type, channel_id, size = struct.unpack('!BHL', bytes)
-    raw_payload = yield from reader.read(size)
-    frame_end = yield from reader.read(1)
-    if frame_end !=  b'\xCE':
-        raise AMQPError("Frame end byte was incorrect")
-
-    method_type = MethodType(struct.unpack('!HH', raw_payload[0:4]))
-
-    return Frame(FrameType(frame_type), channel_id, Payload(method_type, raw_payload[4:]))
+        return Frame(FrameType(frame_type), channel_id, Payload(method_type, raw_payload[4:]))
 
 
 class Frame(object):
