@@ -9,6 +9,24 @@ from . import serialisation
 FRAME_END = b'\xCE'
 
 
+@asyncio.coroutine
+def connect(host='localhost', port='5672', username='guest', password='guest', virtual_host='/', ssl=None, *, loop=None):
+    if loop is None:
+        loop = asyncio.get_event_loop()
+
+    # FIXME: the three-way circular dependency between AMQP, Dispatcher and Connection is upsetting.
+    #        Better than a two-way dependency between AMQP and Connection, at least...
+    dispatcher = Dispatcher()
+    transport, protocol = yield from loop.create_connection(lambda: AMQP(dispatcher), host=host, port=port, ssl=ssl)
+    connection = Connection(protocol, username, password, virtual_host, loop=loop)
+    dispatcher.add_channel(0, connection)
+
+    protocol.send_protocol_header()
+
+    yield from connection.is_open
+    return connection
+
+
 class AMQP(asyncio.Protocol):
     def __init__(self, dispatcher):
         self.dispatcher = dispatcher
@@ -52,12 +70,22 @@ class AMQP(asyncio.Protocol):
         self.transport.write(b'AMQP\x00\x00\x09\x01')
 
 
+# this class might have to die when I do channels
 class Dispatcher(object):
-    def __init__(self, connection):
-        self.connection = connection
+    def __init__(self):
+        self.channels = {}
+
+    def add_channel(self, channel_id, channel):
+        self.channels[channel_id] = channel
 
     def dispatch(self, frame):
-        getattr(self.connection, 'handle_' + type(frame.payload).__name__)(frame)
+        channel = self.channels[frame.channel_id]
+        try:
+            handler = getattr(channel, 'handle_' + type(frame.payload).__name__)
+        except AttributeError as e:
+            raise AMQPError('No handler configured for method: ' + type(frame.payload).__name__) from e
+        else:
+            handler(frame)
 
 
 class Connection(object):
@@ -74,7 +102,7 @@ class Connection(object):
         self.protocol.send_frame(frame)
 
     def handle_ConnectionTune(self, frame):
-        method = methods.ConnectionTuneOK(1024, 0, 0)
+        method = methods.ConnectionTuneOK(1024, 0, 0)  # todo: no magic numbers
         frame = Frame(FrameType.method, 0, method)
         self.protocol.send_frame(frame)
 

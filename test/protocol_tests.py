@@ -9,7 +9,9 @@ class ProtocolContext:
     def establish_the_connection(self):
         self.transport = mock.Mock(spec=asyncio.Transport)
         self.connection = mock.Mock(spec=asynqp.Connection)
-        self.protocol = asynqp.AMQP(asynqp.Dispatcher(self.connection))
+        dispatcher = asynqp.Dispatcher()
+        dispatcher.add_channel(0, self.connection)
+        self.protocol = asynqp.AMQP(dispatcher)
         self.protocol.connection_made(self.transport)
 
 
