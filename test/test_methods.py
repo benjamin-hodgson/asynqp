@@ -57,3 +57,14 @@ class WhenDeserialisingConnectionTune:
 
     def it_shoud_have_the_correct_heartbeat(self):
         assert self.result.heartbeat_interval == 600
+
+
+class WhenSerialisingConnectionTuneOK:
+    def given_a_method_to_send(self):
+        self.method = methods.ConnectionTuneOK(1024, 131072, 10)
+
+    def when_I_serialise_the_method(self):
+        self.result = self.method.serialise()
+
+    def it_should_return_the_correct_bytestring(self):
+        assert self.result == b'\x00\n\x00\x1F\x04\x00\x00\x02\x00\x00\x00\x0A'

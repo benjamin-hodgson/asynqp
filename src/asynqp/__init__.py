@@ -30,11 +30,8 @@ class Connection(object):
         self.write_frame(frame)
 
     def handle_ConnectionTune(self, frame):
-        builder = PayloadBuilder(methods.MethodType.connection_tune_ok)
-        builder.add_short(1024)  # maximum channel number
-        builder.add_long(0)  # no maximum frame size
-        builder.add_short(0)  # no heartbeat
-        frame = Frame(FrameType.method, 0, builder.build())
+        method = methods.ConnectionTuneOK(1024, 0, 0)
+        frame = Frame(FrameType.method, 0, method)
         self.write_frame(frame)
 
         builder = PayloadBuilder(methods.MethodType.connection_open)

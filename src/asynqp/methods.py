@@ -7,7 +7,6 @@ from .exceptions import AMQPError
 
 
 class MethodType(enum.Enum):
-    connection_tune_ok = (10, 31)
     connection_open = (10, 40)
     connection_open_ok = (10, 41)
 
@@ -18,9 +17,12 @@ def create_method(raw_payload):
 
 
 class IncomingMethod(abc.ABC):
+    """
+    Base class for methods which arrive from the server
+    """
     @classmethod
-    def deserialise(cls, body):
-        stream = BytesIO(body)
+    def deserialise(cls, raw):
+        stream = BytesIO(raw)
         method_type = struct.unpack('!HH', stream.read(4))
         if method_type != cls.method_type:
             raise AMQPError("How did this happen? Wrong method type for {}: {}".format(cls.__name__, method_type))
@@ -30,6 +32,22 @@ class IncomingMethod(abc.ABC):
     @abc.abstractmethod
     def read(cls, stream):
         pass
+
+
+class OutgoingMethod(abc.ABC):
+    """
+    Base class for methods which are sent to the server
+    """
+    def serialise(self):
+        stream = BytesIO(struct.pack('!HH', *self.method_type))
+        stream.seek(0, 2)
+        self.write(stream)
+        return stream.getvalue()
+
+    @abc.abstractmethod
+    def write(self, stream):
+        pass
+
 
 
 class ConnectionStart(IncomingMethod):
@@ -50,7 +68,7 @@ class ConnectionStart(IncomingMethod):
         return cls(major_version, minor_version, server_properties, mechanisms, locales)
 
 
-class ConnectionStartOK(object):
+class ConnectionStartOK(OutgoingMethod):
     method_type = (10, 11)
 
     def __init__(self, client_properties, mechanism, security_response, locale):
@@ -59,13 +77,11 @@ class ConnectionStartOK(object):
         self.security_response = security_response
         self.locale = locale
 
-    def serialise(self):
-        body = struct.pack('!HH', *self.method_type)
-        body += serialisation.pack_table(self.client_properties)
-        body += serialisation.pack_short_string(self.mechanism)
-        body += serialisation.pack_table(self.security_response)
-        body += serialisation.pack_short_string(self.locale)
-        return body
+    def write(self, stream):
+        stream.write(serialisation.pack_table(self.client_properties))
+        stream.write(serialisation.pack_short_string(self.mechanism))
+        stream.write(serialisation.pack_table(self.security_response))
+        stream.write(serialisation.pack_short_string(self.locale))
 
 
 class ConnectionTune(IncomingMethod):
@@ -84,14 +100,18 @@ class ConnectionTune(IncomingMethod):
         return cls(max_channel, max_frame_length, heartbeat_interval)
 
 
-class ConnectionTuneOK(object):
-    method_type = MethodType.connection_tune_ok
+class ConnectionTuneOK(OutgoingMethod):
+    method_type = (10, 31)
 
-    def __init__(self, arguments):
-        self.arguments = arguments
+    def __init__(self, max_channel, max_frame_length, heartbeat_interval):
+        self.max_channel = max_channel
+        self.max_frame_length = max_frame_length
+        self.heartbeat_interval = heartbeat_interval
 
-    def serialise(self):
-        return struct.pack('!HH', *self.method_type.value) + self.arguments
+    def write(self, stream):
+        stream.write(serialisation.pack_short(self.max_channel))
+        stream.write(serialisation.pack_long(self.max_frame_length))
+        stream.write(serialisation.pack_short(self.heartbeat_interval))
 
 
 class ConnectionOpen(object):
