@@ -47,14 +47,14 @@ class WhenDeserialisingConnectionStart:
 
 class WhenSendingConnectionStartOK(OutgoingMethodContext):
     def given_a_method_to_send(self):
-        method = methods.METHODS['ConnectionStartOK']({'somecrap': 'aboutme'}, 'AMQPLAIN', 'authinfo', 'en_US')
+        method = methods.ConnectionStartOK({'somecrap': 'aboutme'}, 'AMQPLAIN', {'auth':'info'}, 'en_US')
         self.frame = asynqp.Frame(asynqp.FrameType.method, 0, method)
 
     def when_we_send_the_method(self):
         self.protocol.send_frame(self.frame)
 
     def it_should_send_the_correct_bytestring(self):
-        self.transport.write.assert_called_once_with(b'\x01\x00\x00\x00\x00\x008\x00\n\x00\x0b\x00\x00\x00\x15\x08somecrapS\x00\x00\x00\x07aboutme\x08AMQPLAIN\x00\x00\x00\x08authinfo\x05en_US\xce')
+        self.transport.write.assert_called_once_with(b'\x01\x00\x00\x00\x00\x00>\x00\n\x00\x0b\x00\x00\x00\x15\x08somecrapS\x00\x00\x00\x07aboutme\x08AMQPLAIN\x00\x00\x00\x0e\x04authS\x00\x00\x00\x04info\x05en_US\xce')
 
 
 class WhenDeserialisingConnectionTune:
@@ -76,7 +76,7 @@ class WhenDeserialisingConnectionTune:
 
 class WhenSendingConnectionTuneOK(OutgoingMethodContext):
     def given_a_method_to_send(self):
-        method = methods.METHODS['ConnectionTuneOK'](1024, 131072, 10)
+        method = methods.ConnectionTuneOK(1024, 131072, 10)
         self.frame = asynqp.Frame(asynqp.FrameType.method, 0, method)
 
     def when_I_serialise_the_method(self):
@@ -88,7 +88,7 @@ class WhenSendingConnectionTuneOK(OutgoingMethodContext):
 
 class WhenSendingConnectionOpen(OutgoingMethodContext):
     def given_a_method_to_send(self):
-        method = methods.METHODS['ConnectionOpen']('/', '', False)
+        method = methods.ConnectionOpen('/', '', False)
         self.frame = asynqp.Frame(asynqp.FrameType.method, 0, method)
 
     def when_I_serialise_the_method(self):
@@ -106,4 +106,4 @@ class WhenDeserialisingConnectionOpenOK:
         self.result = methods.deserialise_method(self.raw)
 
     def it_should_be_a_ConnectionOpenOK(self):
-        assert isinstance(self.result, methods.METHODS['ConnectionOpenOK'])
+        assert isinstance(self.result, methods.ConnectionOpenOK)

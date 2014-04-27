@@ -18,14 +18,6 @@ def deserialise_method(raw_payload):
     return METHODS[method_type_code].deserialise(raw_payload)
 
 
-# what a hack! The application wants 'response' to be a table
-# but the protocol requires it to be a longstr.
-def make_connection_start_ok(client_properties, mechanism, response, locale):
-    meth = METHODS['ConnectionStartOK'](client_properties, mechanism, '', locale)
-    meth.fields['response'] = Table(response)
-    return meth
-
-
 class FieldType(abc.ABC):
     def __init__(self, value):
         if not self.isvalid(value):
@@ -163,14 +155,13 @@ FIELD_TYPES = {
 
 
 class Method:
-    field_info = []  # list of (name, class) tuples
     def __init__(self, *args):
         self.fields = OrderedDict()
 
         if len(args) != len(self.field_info):
             raise TypeError('__init__ takes {} arguments but {} were given'.format(len(self.field_info), len(args)))
 
-        for (fieldname, fieldcls), value in zip(self.field_info, args):
+        for (fieldname, fieldcls), value in zip(self.field_info.items(), args):
             self.fields[fieldname] = fieldcls(value)
 
     def __getattr__(self, name):
@@ -197,14 +188,10 @@ class Method:
             raise ValueError("How did this happen? Wrong method type for {}: {}".format(cls.__name__, method_type))
 
         args = []
-        for fieldname, fieldcls in cls.field_info:
+        for fieldname, fieldcls in cls.field_info.items():
             args.append(fieldcls.read(stream).value)
 
         return cls(*args)
-
-
-def make_method_subclass(name, method_type, fields):
-    return type(name, (Method,), {'method_type': method_type, 'field_info': fields})
 
 
 # here be monsters
@@ -219,7 +206,7 @@ def load_methods():
         class_methods = {}
         for method in class_elem.findall('method'):
             method_id = method.attrib['index']
-            fields = []
+            fields = OrderedDict()
             for elem in method.findall('field'):
                 fieldname = elem.attrib['name'].replace('-','_')
                 try:
@@ -227,7 +214,7 @@ def load_methods():
                 except KeyError:
                     fieldtype = domain_types[elem.attrib['domain']]
                 cls = FIELD_TYPES[fieldtype]
-                fields.append((fieldname, cls))
+                fields[fieldname] = cls
             class_methods[method.attrib['name'].capitalize().replace('-ok', 'OK')] = (int(method_id), fields)
 
         classes[class_elem.attrib['name'].capitalize()] = (int(class_id), class_methods)
@@ -238,9 +225,15 @@ def load_methods():
         for method_name, (method_id, fields) in ms.items():
             name = class_name + method_name
             method_type = (class_id, method_id)
-            methods[name] = methods[method_type] = make_method_subclass(name, method_type, fields)
+            methods[name] = methods[method_type] = type(name, (Method,), {'method_type': method_type, 'field_info': fields})
 
     return methods
 
 
 METHODS = load_methods()
+
+# what a hack! 'response' is almost always a table but the protocol spec says it's a longstr.
+METHODS['ConnectionStartOK'].field_info['response'] = Table
+
+# Also pretty hacky
+globals().update(METHODS)

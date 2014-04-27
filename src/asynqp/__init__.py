@@ -2,7 +2,7 @@ import asyncio
 import enum
 import struct
 from .exceptions import AMQPError
-from .methods import METHODS, deserialise_method
+from .methods import deserialise_method
 from . import methods
 from . import serialisation
 
@@ -101,17 +101,17 @@ class Connection(object):
         self.is_open = asyncio.Future(loop=loop)
 
     def handle_ConnectionStart(self, frame):
-        method = methods.make_connection_start_ok({}, 'AMQPLAIN', {'LOGIN': self.username, 'PASSWORD': self.password}, 'en_US')
+        method = methods.ConnectionStartOK({}, 'AMQPLAIN', {'LOGIN': self.username, 'PASSWORD': self.password}, 'en_US')
         frame = Frame(FrameType.method, 0, method)
         self.protocol.send_frame(frame)
 
     def handle_ConnectionTune(self, frame):
         print('four')
-        method = METHODS['ConnectionTuneOK'](1024, 0, 0)  # todo: no magic numbers
+        method = methods.ConnectionTuneOK(1024, 0, 0)  # todo: no magic numbers
         frame = Frame(FrameType.method, 0, method)
         self.protocol.send_frame(frame)
 
-        method = METHODS['ConnectionOpen'](self.virtual_host, '', False)
+        method = methods.ConnectionOpen(self.virtual_host, '', False)
         frame = Frame(FrameType.method, 0, method)
         self.protocol.send_frame(frame)
 

@@ -1,5 +1,5 @@
 import asynqp
-from asynqp.methods import METHODS
+from asynqp import methods
 from unittest import mock
 
 
@@ -11,9 +11,9 @@ class ConnectionContext:
 
 class WhenRespondingToConnectionStart(ConnectionContext):
     def given_a_start_frame_from_the_server(self):
-        start_method = METHODS['ConnectionStart'](0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
+        start_method = methods.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
         self.start_frame = asynqp.Frame(asynqp.FrameType.method, 0, start_method)
-        expected_method = asynqp.methods.make_connection_start_ok({}, 'AMQPLAIN', {'LOGIN':'guest', 'PASSWORD':'guest'}, 'en_US')
+        expected_method = methods.ConnectionStartOK({}, 'AMQPLAIN', {'LOGIN':'guest', 'PASSWORD':'guest'}, 'en_US')
         self.expected_frame = asynqp.Frame(asynqp.FrameType.method, 0, expected_method)
 
     def because_the_start_frame_arrives(self):
@@ -25,9 +25,9 @@ class WhenRespondingToConnectionStart(ConnectionContext):
 
 class WhenRespondingToConnectionTune(ConnectionContext):
     def given_a_tune_frame_from_the_server(self):
-        self.tune_frame = asynqp.Frame(asynqp.FrameType.method, 0, METHODS['ConnectionTune'](0, 131072, 600))
-        self.tune_ok_frame = asynqp.Frame(asynqp.FrameType.method, 0, METHODS['ConnectionTuneOK'](1024, 0, 0))
-        self.open_frame = asynqp.Frame(asynqp.FrameType.method, 0, METHODS['ConnectionOpen']('/', '', False))
+        self.tune_frame = asynqp.Frame(asynqp.FrameType.method, 0, methods.ConnectionTune(0, 131072, 600))
+        self.tune_ok_frame = asynqp.Frame(asynqp.FrameType.method, 0, methods.ConnectionTuneOK(1024, 0, 0))
+        self.open_frame = asynqp.Frame(asynqp.FrameType.method, 0, methods.ConnectionOpen('/', '', False))
 
     def when_the_tune_frame_arrives(self):
         self.connection.handle_ConnectionTune(self.tune_frame)
