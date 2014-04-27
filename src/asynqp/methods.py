@@ -1,158 +1,246 @@
 import abc
 import struct
+from collections import OrderedDict
 from io import BytesIO
+from xml.etree import ElementTree
+import pkg_resources
 from . import serialisation
-from .exceptions import AMQPError
+
+
+MAX_OCTET = 0xFF
+MAX_SHORT = 0xFFFF
+MAX_LONG = 0xFFFFFFFF
+MAX_LONG_LONG = 0xFFFFFFFFFFFFFFFF
 
 
 def deserialise_method(raw_payload):
     method_type_code = struct.unpack('!HH', raw_payload[0:4])
-    return METHOD_TYPES[method_type_code].deserialise(raw_payload)
+    return METHODS[method_type_code].deserialise(raw_payload)
 
 
-class IncomingMethod(abc.ABC):
-    """
-    Base class for methods which arrive from the server
-    """
+# what a hack! The application wants 'response' to be a table
+# but the protocol requires it to be a longstr.
+def make_connection_start_ok(client_properties, mechanism, response, locale):
+    meth = METHODS['ConnectionStartOK'](client_properties, mechanism, '', locale)
+    meth.fields['response'] = Table(response)
+    return meth
+
+
+class FieldType(abc.ABC):
+    def __init__(self, value):
+        if not self.isvalid(value):
+            raise TypeError('{} is not a valid value for type {}'.format(value, type(self).__name__))
+        self.value = value
+
+    def __eq__(self, other):
+        if isinstance(other, type(self.value)):
+            return self.value == other
+        try:
+            return self.value == other.value
+        except AttributeError:
+            return NotImplemented
+
+    @abc.abstractmethod
+    def isvalid(self, value):
+        pass
+
+    @abc.abstractmethod
+    def serialise(self):
+        pass
+
+    @classmethod
+    @abc.abstractmethod
+    def read(cls, stream):
+        pass
+
+
+class Bit(FieldType):
+    def isvalid(self, value):
+        return isinstance(value, bool)
+
+    def serialise(self):
+        return serialisation.pack_bool(self.value)
+
+    @classmethod
+    def read(cls, stream):
+        return cls(serialisation.read_bool(stream))
+
+
+class Octet(FieldType):
+    def isvalid(self, value):
+        return isinstance(value, int) and 0 <= value <= MAX_OCTET
+
+    def serialise(self):
+        return serialisation.pack_octet(self.value)
+
+    @classmethod
+    def read(cls, stream):
+        return cls(serialisation.read_octet(stream))
+
+
+class Short(FieldType):
+    def isvalid(self, value):
+        return isinstance(value, int) and 0 <= value <= MAX_SHORT
+
+    def serialise(self):
+        return serialisation.pack_short(self.value)
+
+    @classmethod
+    def read(cls, stream):
+        return cls(serialisation.read_short(stream))
+
+
+class Long(FieldType):
+    def isvalid(self, value):
+        return isinstance(value, int) and 0 <= value <= MAX_LONG
+
+    def serialise(self):
+        return serialisation.pack_long(self.value)
+
+    @classmethod
+    def read(cls, stream):
+        return cls(serialisation.read_long(stream))
+
+
+class LongLong(FieldType):
+    def isvalid(self, value):
+        return isinstance(value, int) and 0 <= value <= MAX_LONG_LONG
+
+    def serialise(self):
+        return serialisation.pack_long_long(self.value)
+
+    @classmethod
+    def read(cls, stream):
+        return cls(serialisation.read_long_long(stream))
+
+
+class ShortStr(FieldType):
+    def isvalid(self, value):
+        return isinstance(value, str) and len(value) <= MAX_OCTET
+
+    def serialise(self):
+        return serialisation.pack_short_string(self.value)
+
+    @classmethod
+    def read(cls, stream):
+        return cls(serialisation.read_short_string(stream))
+
+
+class LongStr(FieldType):
+    def isvalid(self, value):
+        return isinstance(value, str) and len(value) <= MAX_LONG
+
+    def serialise(self):
+        return serialisation.pack_long_string(self.value)
+
+    @classmethod
+    def read(cls, stream):
+        return cls(serialisation.read_long_string(stream))
+
+
+class Table(FieldType):
+    def isvalid(self, value):
+        return isinstance(value, dict)
+
+    def serialise(self):
+        return serialisation.pack_table(self.value)
+
+    @classmethod
+    def read(cls, stream):
+        return cls(serialisation.read_table(stream))
+
+
+FIELD_TYPES = {
+    'bit': Bit,
+    'octet': Octet,
+    'short': Short,
+    'long': Long,
+    'longlong': LongLong,
+    'table': Table,
+    'longstr': LongStr,
+    'shortstr': ShortStr
+}
+
+
+class Method:
+    field_info = []  # list of (name, class) tuples
+    def __init__(self, *args):
+        self.fields = OrderedDict()
+
+        if len(args) != len(self.field_info):
+            raise TypeError('__init__ takes {} arguments but {} were given'.format(len(self.field_info), len(args)))
+
+        for (fieldname, fieldcls), value in zip(self.field_info, args):
+            self.fields[fieldname] = fieldcls(value)
+
+    def __getattr__(self, name):
+        try:
+            return self.fields[name]
+        except KeyError as e:
+            raise AttributeError('{} object has no attribute {}'.format(type(self).__name__, name)) from e
+
+    def __eq__(self, other):
+        return (type(self) == type(other)
+            and self.fields == other.fields)
+
+    def serialise(self):
+        ret = struct.pack('!HH', *self.method_type)
+        for val in self.fields.values():
+            ret += val.serialise()
+        return ret
+
     @classmethod
     def deserialise(cls, raw):
         stream = BytesIO(raw)
         method_type = struct.unpack('!HH', stream.read(4))
         if method_type != cls.method_type:
-            raise AMQPError("How did this happen? Wrong method type for {}: {}".format(cls.__name__, method_type))
-        return cls.read(stream)
+            raise ValueError("How did this happen? Wrong method type for {}: {}".format(cls.__name__, method_type))
 
-    @classmethod
-    @abc.abstractmethod
-    def read(cls, stream):
-        """
-        Read a method from a binary file-like object.
-        """
+        args = []
+        for fieldname, fieldcls in cls.field_info:
+            args.append(fieldcls.read(stream).value)
+
+        return cls(*args)
 
 
-class OutgoingMethod(abc.ABC):
-    """
-    Base class for methods which are sent to the server
-    """
-    def serialise(self):
-        stream = BytesIO(struct.pack('!HH', *self.method_type))
-        stream.seek(0, 2)
-        self.write(stream)
-        return stream.getvalue()
-
-    @abc.abstractmethod
-    def write(self, stream):
-        """
-        Write the method to a binary file-like object.
-        """
+def make_method_subclass(name, method_type, fields):
+    return type(name, (Method,), {'method_type': method_type, 'field_info': fields})
 
 
-class ConnectionStart(IncomingMethod):
-    method_type = (10, 10)
+# here be monsters
+def load_methods():
+    filename = pkg_resources.resource_filename(__name__, 'amqp0-9-1.xml')
+    tree = ElementTree.parse(filename)
+    domain_types = {e.attrib['name']: e.attrib['type'] for e in tree.findall('domain')}
 
-    def __init__(self, major_version, minor_version, server_properties, mechanisms, locales):
-        self.version = (major_version, minor_version)
-        self.server_properties = server_properties
-        self.mechanisms = mechanisms
-        self.locales = locales
+    classes = {}
+    for class_elem in tree.findall('class'):
+        class_id = class_elem.attrib['index']
+        class_methods = {}
+        for method in class_elem.findall('method'):
+            method_id = method.attrib['index']
+            fields = []
+            for elem in method.findall('field'):
+                fieldname = elem.attrib['name'].replace('-','_')
+                try:
+                    fieldtype = elem.attrib['type']
+                except KeyError:
+                    fieldtype = domain_types[elem.attrib['domain']]
+                cls = FIELD_TYPES[fieldtype]
+                fields.append((fieldname, cls))
+            class_methods[method.attrib['name'].capitalize().replace('-ok', 'OK')] = (int(method_id), fields)
 
-    @classmethod
-    def read(cls, stream):
-        major_version, minor_version = struct.unpack('!BB', stream.read(2))
-        server_properties = serialisation.read_table(stream)
-        mechanisms = set(serialisation.read_long_string(stream).split(' '))
-        locales = set(serialisation.read_long_string(stream).split(' '))
-        return cls(major_version, minor_version, server_properties, mechanisms, locales)
+        classes[class_elem.attrib['name'].capitalize()] = (int(class_id), class_methods)
 
+    methods = {}
 
-class ConnectionStartOK(OutgoingMethod):
-    method_type = (10, 11)
+    for class_name, (class_id, ms) in classes.items():
+        for method_name, (method_id, fields) in ms.items():
+            name = class_name + method_name
+            method_type = (class_id, method_id)
+            methods[name] = methods[method_type] = make_method_subclass(name, method_type, fields)
 
-    def __init__(self, client_properties, mechanism, security_response, locale):
-        self.client_properties = client_properties
-        self.mechanism = mechanism
-        self.security_response = security_response
-        self.locale = locale
-
-    def write(self, stream):
-        stream.write(serialisation.pack_table(self.client_properties))
-        stream.write(serialisation.pack_short_string(self.mechanism))
-        stream.write(serialisation.pack_table(self.security_response))
-        stream.write(serialisation.pack_short_string(self.locale))
-
-    def __eq__(self, other):
-        return (self.client_properties == other.client_properties
-            and self.mechanism == other.mechanism
-            and self.security_response == other.security_response
-            and self.locale == other.locale)
+    return methods
 
 
-class ConnectionTune(IncomingMethod):
-    method_type = (10, 30)
-
-    def __init__(self, max_channel, max_frame_length, heartbeat_interval):
-        self.max_channel = max_channel
-        self.max_frame_length = max_frame_length
-        self.heartbeat_interval = heartbeat_interval
-
-    @classmethod
-    def read(cls, stream):
-        max_channel = serialisation.read_short(stream)
-        max_frame_length = serialisation.read_long(stream)
-        heartbeat_interval = serialisation.read_short(stream)
-        return cls(max_channel, max_frame_length, heartbeat_interval)
-
-class ConnectionTuneOK(OutgoingMethod):
-    method_type = (10, 31)
-
-    def __init__(self, max_channel, max_frame_length, heartbeat_interval):
-        self.max_channel = max_channel
-        self.max_frame_length = max_frame_length
-        self.heartbeat_interval = heartbeat_interval
-
-    def write(self, stream):
-        stream.write(serialisation.pack_short(self.max_channel))
-        stream.write(serialisation.pack_long(self.max_frame_length))
-        stream.write(serialisation.pack_short(self.heartbeat_interval))
-
-    def __eq__(self, other):
-        return (self.max_channel == other.max_channel
-            and self.max_frame_length == other.max_frame_length
-            and self.heartbeat_interval == other.heartbeat_interval)
-
-
-class ConnectionOpen(OutgoingMethod):
-    method_type = (10, 40)
-
-    def __init__(self, virtual_host):
-        self.virtual_host = virtual_host
-
-    def write(self, stream):
-        stream.write(serialisation.pack_short_string(self.virtual_host))
-        stream.write(serialisation.pack_short_string(''))  # reserved-1
-        stream.write(b'\x00')  # reserved-2
-
-    def __eq__(self, other):
-        return self.virtual_host == other.virtual_host
-
-
-class ConnectionOpenOK(IncomingMethod):
-    method_type = (10, 41)
-
-    @classmethod
-    def read(cls, stream):
-        serialisation.read_short_string(stream)  # reserved-1
-        return cls()
-
-    def __eq__(self, other):
-        return type(self) is type(other)
-
-
-METHOD_TYPES = {
-    (10,10): ConnectionStart,
-    (10,11): ConnectionStartOK,
-    (10,30): ConnectionTune,
-    (10,31): ConnectionTuneOK,
-    (10,40): ConnectionOpen,
-    (10,41): ConnectionOpenOK,
-}
+METHODS = load_methods()

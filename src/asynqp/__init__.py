@@ -2,6 +2,7 @@ import asyncio
 import enum
 import struct
 from .exceptions import AMQPError
+from .methods import METHODS, deserialise_method
 from . import methods
 from . import serialisation
 
@@ -17,12 +18,14 @@ def connect(host='localhost', port='5672', username='guest', password='guest', v
     # FIXME: the three-way circular dependency between AMQP, Dispatcher and Connection is upsetting.
     #        Better than a two-way dependency between AMQP and Connection, at least...
     dispatcher = Dispatcher()
+    print('one')
     transport, protocol = yield from loop.create_connection(lambda: AMQP(dispatcher), host=host, port=port, ssl=ssl)
     connection = Connection(protocol, username, password, virtual_host, loop=loop)
     dispatcher.add_channel(0, connection)
 
     protocol.send_protocol_header()
 
+    print('two')
     yield from connection.is_open
     return connection
 
@@ -80,6 +83,7 @@ class Dispatcher(object):
 
     def dispatch(self, frame):
         channel = self.channels[frame.channel_id]
+        print(type(frame.payload).__name__)
         try:
             handler = getattr(channel, 'handle_' + type(frame.payload).__name__)
         except AttributeError as e:
@@ -97,16 +101,17 @@ class Connection(object):
         self.is_open = asyncio.Future(loop=loop)
 
     def handle_ConnectionStart(self, frame):
-        method = methods.ConnectionStartOK({}, 'AMQPLAIN', {'LOGIN': self.username, 'PASSWORD': self.password}, 'en_US')
+        method = methods.make_connection_start_ok({}, 'AMQPLAIN', {'LOGIN': self.username, 'PASSWORD': self.password}, 'en_US')
         frame = Frame(FrameType.method, 0, method)
         self.protocol.send_frame(frame)
 
     def handle_ConnectionTune(self, frame):
-        method = methods.ConnectionTuneOK(1024, 0, 0)  # todo: no magic numbers
+        print('four')
+        method = METHODS['ConnectionTuneOK'](1024, 0, 0)  # todo: no magic numbers
         frame = Frame(FrameType.method, 0, method)
         self.protocol.send_frame(frame)
 
-        method = methods.ConnectionOpen(self.virtual_host)
+        method = METHODS['ConnectionOpen'](self.virtual_host, '', False)
         frame = Frame(FrameType.method, 0, method)
         self.protocol.send_frame(frame)
 
@@ -116,7 +121,7 @@ class Connection(object):
 
 def read_frame(frame_type, channel_id, raw_payload):
     if frame_type == 1:
-        payload = methods.deserialise_method(raw_payload)
+        payload = deserialise_method(raw_payload)
     return Frame(FrameType(frame_type), channel_id, payload)
 
 
