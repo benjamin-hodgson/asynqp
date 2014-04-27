@@ -57,7 +57,7 @@ class AMQP(asyncio.Protocol):
             self.transport.close()
             raise AMQPError("Frame end byte was incorrect")
 
-        frame = create_frame(frame_type, channel_id, raw_payload)
+        frame = read_frame(frame_type, channel_id, raw_payload)
         self.dispatcher.dispatch(frame)
 
         # repeat if more than a whole frame was received
@@ -114,7 +114,7 @@ class Connection(object):
         self.is_open.set_result(True)
 
 
-def create_frame(frame_type, channel_id, raw_payload):
+def read_frame(frame_type, channel_id, raw_payload):
     if frame_type == 1:
         payload = methods.deserialise_method(raw_payload)
     return Frame(FrameType(frame_type), channel_id, payload)

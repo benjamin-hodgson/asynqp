@@ -60,7 +60,7 @@ class WhenHalfAFrameArrives(ProtocolContext):
     def because_the_whole_frame_arrives(self, raw):
         self.protocol.data_received(raw)
 
-    def it_should_notdispatch_the_method(self):
+    def it_should_not_dispatch_the_method(self):
         assert not self.connection.handle_ConnectionOpenOK.called
 
 
