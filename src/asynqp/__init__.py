@@ -18,14 +18,12 @@ def connect(host='localhost', port='5672', username='guest', password='guest', v
     # FIXME: the three-way circular dependency between AMQP, Dispatcher and Connection is upsetting.
     #        Better than a two-way dependency between AMQP and Connection, at least...
     dispatcher = Dispatcher()
-    print('one')
     transport, protocol = yield from loop.create_connection(lambda: AMQP(dispatcher), host=host, port=port, ssl=ssl)
     connection = Connection(protocol, username, password, virtual_host, loop=loop)
     dispatcher.add_channel(0, connection)
 
     protocol.send_protocol_header()
 
-    print('two')
     yield from connection.is_open
     return connection
 
@@ -83,7 +81,6 @@ class Dispatcher(object):
 
     def dispatch(self, frame):
         channel = self.channels[frame.channel_id]
-        print(type(frame.payload).__name__)
         try:
             handler = getattr(channel, 'handle_' + type(frame.payload).__name__)
         except AttributeError as e:
@@ -106,7 +103,6 @@ class Connection(object):
         self.protocol.send_frame(frame)
 
     def handle_ConnectionTune(self, frame):
-        print('four')
         method = methods.ConnectionTuneOK(1024, 0, 0)  # todo: no magic numbers
         frame = Frame(FrameType.method, 0, method)
         self.protocol.send_frame(frame)
