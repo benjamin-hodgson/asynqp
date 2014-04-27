@@ -7,18 +7,10 @@ from .util import rethrow_as
 #  Deserialisation
 ###########################################################
 
-@rethrow_as(KeyError, AMQPError('bad table value type code'))
-@rethrow_as(struct.error, AMQPError('bad table'))
-def read_table(stream):
-    return _read_table(stream)[0]
 
-
-def read_short_string(stream):
-    return _read_short_string(stream)[0]
-
-
-def read_long_string(stream):
-    return _read_long_string(stream)[0]
+@rethrow_as(struct.error, AMQPError('failed to read an octet'))
+def read_octet(stream):
+    return _read_octet(stream)[0]
 
 
 @rethrow_as(struct.error, AMQPError('failed to read a short'))
@@ -29,6 +21,25 @@ def read_short(stream):
 @rethrow_as(struct.error, AMQPError('failed to read a long'))
 def read_long(stream):
     return _read_long(stream)[0]
+
+
+@rethrow_as(struct.error, AMQPError('failed to read a long'))
+def read_long_long(stream):
+    return _read_long_long(stream)[0]
+
+
+def read_short_string(stream):
+    return _read_short_string(stream)[0]
+
+
+def read_long_string(stream):
+    return _read_long_string(stream)[0]
+
+
+@rethrow_as(KeyError, AMQPError('bad table value type code'))
+@rethrow_as(struct.error, AMQPError('bad table'))
+def read_table(stream):
+    return _read_table(stream)[0]
 
 
 def _read_table(stream):
@@ -95,6 +106,11 @@ def _read_long(stream):
     return x, 4
 
 
+def _read_long_long(stream):
+    x, = struct.unpack('!Q', stream.read(8))
+    return x, 8
+
+
 ###########################################################
 #  Serialisation
 ###########################################################
@@ -104,7 +120,7 @@ def pack_short_string(string):
     return pack_octet(len(bytes)) + bytes
 
 
-def long_string(string):
+def pack_long_string(string):
     bytes = string.encode('utf-8')
     return pack_long(len(bytes)) + bytes
 
@@ -116,7 +132,7 @@ def pack_table(d):
             raise NotImplementedError()
         bytes += pack_short_string(key)
         bytes += b'S'
-        bytes += long_string(d[key])
+        bytes += pack_long_string(d[key])
     return pack_long(len(bytes)) + bytes
 
 
@@ -130,3 +146,11 @@ def pack_short(number):
 
 def pack_long(number):
     return struct.pack('!L', number)
+
+
+def pack_long_long(number):
+    return struct.pack('!Q', number)
+
+
+def pack_bool(b):
+    return struct.pack('!?', b)
