@@ -13,7 +13,7 @@ class WhenRespondingToConnectionStart(ConnectionContext):
     def given_a_start_frame_from_the_server(self):
         start_method = methods.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
         self.start_frame = asynqp.Frame(asynqp.FrameType.method, 0, start_method)
-        expected_method = methods.ConnectionStartOK({}, 'AMQPLAIN', {'LOGIN':'guest', 'PASSWORD':'guest'}, 'en_US')
+        expected_method = methods.ConnectionStartOK({}, 'AMQPLAIN', {'LOGIN': 'guest', 'PASSWORD': 'guest'}, 'en_US')
         self.expected_frame = asynqp.Frame(asynqp.FrameType.method, 0, expected_method)
 
     def because_the_start_frame_arrives(self):

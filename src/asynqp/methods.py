@@ -13,9 +13,10 @@ MAX_LONG = 0xFFFFFFFF
 MAX_LONG_LONG = 0xFFFFFFFFFFFFFFFF
 
 
-def deserialise_method(raw_payload):
-    method_type_code = struct.unpack('!HH', raw_payload[0:4])
-    return METHODS[method_type_code].deserialise(raw_payload)
+def read_method(raw):
+    stream = BytesIO(raw)
+    method_type_code = struct.unpack('!HH', raw[0:4])
+    return METHODS[method_type_code].read(stream)
 
 
 class FieldType(abc.ABC):
@@ -37,7 +38,7 @@ class FieldType(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def serialise(self):
+    def write(self, stream):
         pass
 
     @classmethod
@@ -50,8 +51,8 @@ class Bit(FieldType):
     def isvalid(self, value):
         return isinstance(value, bool)
 
-    def serialise(self):
-        return serialisation.pack_bool(self.value)
+    def write(self, stream):
+        stream.write(serialisation.pack_bool(self.value))
 
     @classmethod
     def read(cls, stream):
@@ -62,8 +63,8 @@ class Octet(FieldType):
     def isvalid(self, value):
         return isinstance(value, int) and 0 <= value <= MAX_OCTET
 
-    def serialise(self):
-        return serialisation.pack_octet(self.value)
+    def write(self, stream):
+        stream.write(serialisation.pack_octet(self.value))
 
     @classmethod
     def read(cls, stream):
@@ -74,8 +75,8 @@ class Short(FieldType):
     def isvalid(self, value):
         return isinstance(value, int) and 0 <= value <= MAX_SHORT
 
-    def serialise(self):
-        return serialisation.pack_short(self.value)
+    def write(self, stream):
+        stream.write(serialisation.pack_short(self.value))
 
     @classmethod
     def read(cls, stream):
@@ -86,8 +87,8 @@ class Long(FieldType):
     def isvalid(self, value):
         return isinstance(value, int) and 0 <= value <= MAX_LONG
 
-    def serialise(self):
-        return serialisation.pack_long(self.value)
+    def write(self, stream):
+        stream.write(serialisation.pack_long(self.value))
 
     @classmethod
     def read(cls, stream):
@@ -98,8 +99,8 @@ class LongLong(FieldType):
     def isvalid(self, value):
         return isinstance(value, int) and 0 <= value <= MAX_LONG_LONG
 
-    def serialise(self):
-        return serialisation.pack_long_long(self.value)
+    def write(self, stream):
+        stream.write(serialisation.pack_long_long(self.value))
 
     @classmethod
     def read(cls, stream):
@@ -110,8 +111,8 @@ class ShortStr(FieldType):
     def isvalid(self, value):
         return isinstance(value, str) and len(value) <= MAX_OCTET
 
-    def serialise(self):
-        return serialisation.pack_short_string(self.value)
+    def write(self, stream):
+        stream.write(serialisation.pack_short_string(self.value))
 
     @classmethod
     def read(cls, stream):
@@ -122,8 +123,8 @@ class LongStr(FieldType):
     def isvalid(self, value):
         return isinstance(value, str) and len(value) <= MAX_LONG
 
-    def serialise(self):
-        return serialisation.pack_long_string(self.value)
+    def write(self, stream):
+        stream.write(serialisation.pack_long_string(self.value))
 
     @classmethod
     def read(cls, stream):
@@ -134,8 +135,8 @@ class Table(FieldType):
     def isvalid(self, value):
         return isinstance(value, dict)
 
-    def serialise(self):
-        return serialisation.pack_table(self.value)
+    def write(self, stream):
+        stream.write(serialisation.pack_table(self.value))
 
     @classmethod
     def read(cls, stream):
@@ -174,15 +175,13 @@ class Method:
         return (type(self) == type(other)
             and self.fields == other.fields)
 
-    def serialise(self):
-        ret = struct.pack('!HH', *self.method_type)
+    def write(self, stream):
+        stream.write(struct.pack('!HH', *self.method_type))
         for val in self.fields.values():
-            ret += val.serialise()
-        return ret
+            val.write(stream)
 
     @classmethod
-    def deserialise(cls, raw):
-        stream = BytesIO(raw)
+    def read(cls, stream):
         method_type = struct.unpack('!HH', stream.read(4))
         if method_type != cls.method_type:
             raise ValueError("How did this happen? Wrong method type for {}: {}".format(cls.__name__, method_type))

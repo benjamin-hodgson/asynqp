@@ -1,8 +1,8 @@
 import asyncio
 import enum
 import struct
+from io import BytesIO
 from .exceptions import AMQPError
-from .methods import deserialise_method
 from . import methods
 from . import serialisation
 
@@ -117,7 +117,7 @@ class Connection(object):
 
 def read_frame(frame_type, channel_id, raw_payload):
     if frame_type == 1:
-        payload = deserialise_method(raw_payload)
+        payload = methods.read_method(raw_payload)
     return Frame(FrameType(frame_type), channel_id, payload)
 
 
@@ -128,10 +128,11 @@ class Frame(object):
         self.payload = payload
 
     def serialise(self):
-        payload = self.payload.serialise()
         frame = serialisation.pack_octet(self.frame_type.value)
         frame += serialisation.pack_short(self.channel_id)
-        body = self.payload.serialise()
+        bytesio = BytesIO()
+        self.payload.write(bytesio)
+        body = bytesio.getvalue()
         frame += serialisation.pack_long(len(body)) + body
         frame += FRAME_END  # frame_end
         return frame
