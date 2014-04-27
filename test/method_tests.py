@@ -7,11 +7,11 @@ from asynqp import methods
 class OutgoingMethodContext:
     def establish_the_connection(self):
         self.transport = mock.Mock(spec=asyncio.Transport)
-        self.protocol = asynqp.AMQP(mock.Mock())
+        self.dispatcher = mock.Mock(spec=asynqp.Dispatcher)
+        self.protocol = asynqp.AMQP(self.dispatcher)
         self.protocol.connection_made(self.transport)
 
 
-# todo: refactor tests like this to target the protocol
 class WhenDeserialisingConnectionStart:
     def given_a_connection_start_method_I_copied_from_the_rabbitmq_server(self):
         self.raw = b"\x00\x0A\x00\x0A\x00\t\x00\x00\x01%\x0ccapabilitiesF\x00\x00\x00X\x12publisher_confirmst\x01\x1aexchange_exchange_bindingst\x01\nbasic.nackt\x01\x16consumer_cancel_notifyt\x01\tcopyrightS\x00\x00\x00'Copyright (C) 2007-2013 GoPivotal, Inc.\x0binformationS\x00\x00\x005Licensed under the MPL.  See http://www.rabbitmq.com/\x08platformS\x00\x00\x00\nErlang/OTP\x07productS\x00\x00\x00\x08RabbitMQ\x07versionS\x00\x00\x00\x053.1.5\x00\x00\x00\x0eAMQPLAIN PLAIN\x00\x00\x00\x0Ben_US en_GB"
@@ -82,28 +82,5 @@ class WhenSendingConnectionTuneOK(OutgoingMethodContext):
     def when_I_serialise_the_method(self):
         self.protocol.send_frame(self.frame)
 
-    def it_should_return_the_correct_bytestring(self):
+    def it_should_write_the_correct_bytestring(self):
         self.transport.write.assert_called_once_with(b'\x01\x00\x00\x00\x00\x00\x0C\x00\n\x00\x1F\x04\x00\x00\x02\x00\x00\x00\x0A\xCE')
-
-
-class WhenSendingConnectionOpen(OutgoingMethodContext):
-    def given_a_method_to_send(self):
-        method = methods.ConnectionOpen('/', '', False)
-        self.frame = asynqp.Frame(asynqp.FrameType.method, 0, method)
-
-    def when_I_serialise_the_method(self):
-        self.protocol.send_frame(self.frame)
-
-    def it_should_return_the_correct_bytestring(self):
-        self.transport.write.assert_called_once_with(b'\x01\x00\x00\x00\x00\x00\x08\x00\x0A\x00\x28\x01\x2F\x00\x00\xCE')
-
-
-class WhenDeserialisingConnectionOpenOK:
-    def given_a_connection_open_ok_method_I_copied_from_the_rabbitmq_server(self):
-        self.raw = b'\x00\x0A\x00\x29\x00'
-
-    def when_I_deserialise_the_method(self):
-        self.result = methods.deserialise_method(self.raw)
-
-    def it_should_be_a_ConnectionOpenOK(self):
-        assert isinstance(self.result, methods.ConnectionOpenOK)
