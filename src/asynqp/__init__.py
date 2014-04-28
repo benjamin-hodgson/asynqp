@@ -15,7 +15,7 @@ def connect(host='localhost', port='5672', username='guest', password='guest', v
     if loop is None:
         loop = asyncio.get_event_loop()
 
-    # the two-way dependency between AMQP and Connection is upsetting. fixable? not sure
+    # the two-way dependency between AMQP and Connection is unsettling. fixable? not sure
     connection = Connection(username, password, virtual_host, loop=loop)
     transport, protocol = yield from loop.create_connection(lambda: AMQP(connection), host=host, port=port, ssl=ssl)
     connection.protocol = protocol
@@ -35,6 +35,7 @@ class AMQP(asyncio.Protocol):
         self.transport = transport
 
     def data_received(self, data):
+        self.connection.reset_heartbeat_timeout()
         data = self.partial_frame + data
         self.partial_frame = b''
 
@@ -56,8 +57,8 @@ class AMQP(asyncio.Protocol):
             self.transport.close()
             raise AMQPError("Frame end byte was incorrect")
 
-        frame = read_frame(frame_type, channel_id, raw_payload)
-        self.connection.dispatch(frame)
+        frame = Frame.read(frame_type, channel_id, raw_payload)
+        self.connection.handle(frame)
 
         # repeat if more than a whole frame was received
         self.data_received(data[8+size:])
@@ -70,65 +71,88 @@ class AMQP(asyncio.Protocol):
 
 
 class Connection(object):
-    def __init__(self, username='guest', password='guest', virtual_host='/', *, loop=None):
+    def __init__(self, username='guest', password='guest', virtual_host='/', max_channel=1024, *, loop=None):
+        self.loop = asyncio.get_event_loop() if loop is None else loop
         self.protocol = None
         self.username = username
         self.password = password
         self.virtual_host = virtual_host
+        self.max_channel = max_channel
         self.opened = asyncio.Future(loop=loop)
         self.closed = False
         self.channels = {0: self}
+        self.heartbeat_timeout_callback = None
 
-    def close(self):
-        method = methods.ConnectionClose(0, '', 0, 0)
-        frame = Frame(FrameType.method, 0, method)
+    def close(self, reply_code=0, reply_text='Connection closed by application', class_id=0, method_id=0):
+        frame = self.make_method_frame(methods.ConnectionClose(reply_code, reply_text, class_id, method_id))
         self.protocol.send_frame(frame)
         self.closed = True
 
-    def dispatch(self, frame):
+    def send_heartbeat(self):
+        self.protocol.send_frame(Frame(FrameType.heartbeat, 0, b''))
+
+    def reset_heartbeat_timeout(self):
+        if self.heartbeat_timeout_callback is not None:
+            self.heartbeat_timeout_callback.cancel()
+            self.heartbeat_timeout_callback = self.loop.call_later(self.heartbeat_interval * 2, self.close, 501, 'Heartbeat timed out')
+
+    def handle(self, frame):
         method_type = type(frame.payload)
         if self.closed and method_type not in (methods.ConnectionClose, methods.ConnectionCloseOK):
             return
 
         channel = self.channels[frame.channel_id]
+
+        if frame.frame_type == FrameType.heartbeat:
+            return
+        else:
+            handle_name = method_type.__name__
+
         try:
-            handler = getattr(channel, 'handle_' + method_type.__name__)
+            handler = getattr(channel, 'handle_' + handle_name)
         except AttributeError as e:
-            raise AMQPError('No handler configured for method: ' + type(frame.payload).__name__) from e
+            raise AMQPError('No handler defined for ' + handle_name) from e
         else:
             handler(frame)
 
     def handle_ConnectionStart(self, frame):
         method = methods.ConnectionStartOK({}, 'AMQPLAIN', {'LOGIN': self.username, 'PASSWORD': self.password}, 'en_US')
-        frame = Frame(FrameType.method, 0, method)
+        frame = self.make_method_frame(method)
         self.protocol.send_frame(frame)
 
     def handle_ConnectionTune(self, frame):
-        method = methods.ConnectionTuneOK(1024, 0, 0)  # todo: no magic numbers
-        frame = Frame(FrameType.method, 0, method)
-        self.protocol.send_frame(frame)
+        # just agree with whatever the server wants. Make this configurable in future
+        if 0 < frame.payload.channel_max < 1024:
+            self.max_channel = frame.payload.channel_max.value
+        self.heartbeat_interval = frame.payload.heartbeat.value
 
-        method = methods.ConnectionOpen(self.virtual_host, '', False)
-        frame = Frame(FrameType.method, 0, method)
-        self.protocol.send_frame(frame)
+        self.loop.call_later(self.heartbeat_interval, self.send_heartbeat)
+
+        method = methods.ConnectionTuneOK(self.max_channel, frame.payload.frame_max, self.heartbeat_interval)
+        reply_frame = self.make_method_frame(method)
+        self.protocol.send_frame(reply_frame)
+
+                                                                                    # 'reserved' args
+        open_frame = self.make_method_frame(methods.ConnectionOpen(self.virtual_host, '', False))
+        self.protocol.send_frame(open_frame)
+
+        self.heartbeat_timeout_callback = self.loop.call_later(self.heartbeat_interval * 2, self.close, 501, 'Heartbeat timed out')
 
     def handle_ConnectionOpenOK(self, frame):
         self.opened.set_result(True)
 
     def handle_ConnectionClose(self, frame):
         method = methods.ConnectionCloseOK()
-        frame = Frame(FrameType.method, 0, method)
+        frame = self.make_method_frame(method)
         self.protocol.send_frame(frame)
         self.closed = True
 
     def handle_ConnectionCloseOK(self, frame):
         self.protocol.transport.close()
 
-
-def read_frame(frame_type, channel_id, raw_payload):
-    if frame_type == 1:
-        payload = methods.read_method(raw_payload)
-    return Frame(FrameType(frame_type), channel_id, payload)
+    @classmethod
+    def make_method_frame(cls, method):
+        return Frame(FrameType.method, 0, method)
 
 
 class Frame(object):
@@ -140,11 +164,16 @@ class Frame(object):
     def serialise(self):
         frame = serialisation.pack_octet(self.frame_type.value)
         frame += serialisation.pack_short(self.channel_id)
-        bytesio = BytesIO()
-        self.payload.write(bytesio)
-        body = bytesio.getvalue()
+
+        if isinstance(self.payload, bytes):
+            body = self.payload
+        else:
+            bytesio = BytesIO()
+            self.payload.write(bytesio)
+            body = bytesio.getvalue()
+
         frame += serialisation.pack_long(len(body)) + body
-        frame += FRAME_END  # frame_end
+        frame += FRAME_END
         return frame
 
     def __eq__(self, other):
@@ -152,6 +181,13 @@ class Frame(object):
             and self.channel_id == other.channel_id
             and self.payload == other.payload)
 
+    @classmethod
+    def read(cls, frame_type, channel_id, raw_payload):
+        if frame_type == 1:
+            payload = methods.read_method(raw_payload)
+        return cls(FrameType(frame_type), channel_id, payload)
+
 
 class FrameType(enum.Enum):
     method = 1
+    heartbeat = 4

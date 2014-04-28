@@ -6,6 +6,7 @@ from asynqp import methods
 
 
 # TODO: heartbeat
+# TODO: handle exceptions by closing the connection with a message
 
 
 class ProtocolContext:
@@ -35,7 +36,10 @@ class WhenAWholeFrameArrives(ProtocolContext):
         self.protocol.data_received(self.raw)
 
     def it_should_dispatch_the_method(self):
-        self.connection.dispatch.assert_called_once_with(self.expected_frame)
+        self.connection.handle.assert_called_once_with(self.expected_frame)
+
+    def it_should_reset_the_heartbeat_timeout(self):
+        assert self.connection.reset_heartbeat_timeout.called
 
 
 class WhenAFrameDoesNotEndInFrameEnd(ProtocolContext):
@@ -63,7 +67,7 @@ class WhenHalfAFrameArrives(ProtocolContext):
         self.protocol.data_received(raw)
 
     def it_should_not_dispatch_the_method(self):
-        assert not self.connection.dispatch.called
+        assert not self.connection.handle.called
 
 
 class WhenAFrameArrivesInTwoParts(ProtocolContext):
@@ -82,7 +86,7 @@ class WhenAFrameArrivesInTwoParts(ProtocolContext):
         self.protocol.data_received(raw2)
 
     def it_should_dispatch_the_method(self):
-        self.connection.dispatch.assert_called_once_with(self.expected_frame)
+        self.connection.handle.assert_called_once_with(self.expected_frame)
 
 
 class WhenMoreThanAWholeFrameArrives(ProtocolContext):
@@ -95,7 +99,7 @@ class WhenMoreThanAWholeFrameArrives(ProtocolContext):
         self.protocol.data_received(self.raw)
 
     def it_should_dispatch_the_method_once(self):
-        self.connection.dispatch.assert_called_once_with(self.expected_frame)
+        self.connection.handle.assert_called_once_with(self.expected_frame)
 
 
 class WhenTwoFramesArrive(ProtocolContext):
@@ -108,7 +112,7 @@ class WhenTwoFramesArrive(ProtocolContext):
         self.protocol.data_received(self.raw)
 
     def it_should_dispatch_the_method_twice(self):
-        self.connection.dispatch.assert_has_calls([mock.call(self.expected_frame), mock.call(self.expected_frame)])
+        self.connection.handle.assert_has_calls([mock.call(self.expected_frame), mock.call(self.expected_frame)])
 
 
 class WhenTwoFramesArrivePiecemeal(ProtocolContext):
@@ -129,4 +133,4 @@ class WhenTwoFramesArrivePiecemeal(ProtocolContext):
             self.protocol.data_received(fragment)
 
     def it_should_dispatch_the_method_twice(self):
-        self.connection.dispatch.assert_has_calls([mock.call(self.expected_frame), mock.call(self.expected_frame)])
+        self.connection.handle.assert_has_calls([mock.call(self.expected_frame), mock.call(self.expected_frame)])
