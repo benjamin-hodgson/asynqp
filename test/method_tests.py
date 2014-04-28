@@ -8,10 +8,10 @@ class ProtocolContext:
     def establish_the_connection(self):
         self.transport = mock.Mock(spec=asyncio.Transport)
         self.connection = mock.Mock(spec=asynqp.Connection)
-        dispatcher = asynqp.Dispatcher()
-        dispatcher.add_channel(0, self.connection)
-        self.protocol = asynqp.AMQP(dispatcher)
+        self.protocol = asynqp.AMQP(self.connection)
+        self.connection.protocol = self.protocol
         self.protocol.connection_made(self.transport)
+
 
 
 class WhenConnectionStartArrives(ProtocolContext):
@@ -35,7 +35,7 @@ class WhenConnectionStartArrives(ProtocolContext):
         self.protocol.data_received(self.raw)
 
     def it_should_dispatch_a_correctly_deserialised_ConnectionStart_method(self):
-        self.connection.handle_ConnectionStart.assert_called_once_with(self.expected_frame)
+        self.connection.dispatch.assert_called_once_with(self.expected_frame)
 
 
 class WhenSendingConnectionStartOK(ProtocolContext):
@@ -60,7 +60,7 @@ class WhenDeserialisingConnectionTune(ProtocolContext):
         self.protocol.data_received(self.raw)
 
     def it_should_dispatch_a_correctly_deserialised_ConnectionTune_method(self):
-        self.connection.handle_ConnectionTune.assert_called_once_with(self.expected_frame)
+        self.connection.dispatch.assert_called_once_with(self.expected_frame)
 
 
 class WhenSendingConnectionTuneOK(ProtocolContext):

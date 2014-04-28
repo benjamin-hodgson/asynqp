@@ -15,12 +15,10 @@ def connect(host='localhost', port='5672', username='guest', password='guest', v
     if loop is None:
         loop = asyncio.get_event_loop()
 
-    # FIXME: the three-way circular dependency between AMQP, Dispatcher and Connection is upsetting.
-    #        Better than a two-way dependency between AMQP and Connection, at least...
-    dispatcher = Dispatcher()
-    transport, protocol = yield from loop.create_connection(lambda: AMQP(dispatcher), host=host, port=port, ssl=ssl)
-    connection = Connection(protocol, username, password, virtual_host, loop=loop)
-    dispatcher.add_channel(0, connection)
+    # the two-way dependency between AMQP and Connection is upsetting. fixable? not sure
+    connection = Connection(username, password, virtual_host, loop=loop)
+    transport, protocol = yield from loop.create_connection(lambda: AMQP(connection), host=host, port=port, ssl=ssl)
+    connection.protocol = protocol
 
     protocol.send_protocol_header()
 
@@ -29,8 +27,8 @@ def connect(host='localhost', port='5672', username='guest', password='guest', v
 
 
 class AMQP(asyncio.Protocol):
-    def __init__(self, dispatcher):
-        self.dispatcher = dispatcher
+    def __init__(self, connection):
+        self.connection = connection
         self.partial_frame = b''
 
     def connection_made(self, transport):
@@ -59,7 +57,7 @@ class AMQP(asyncio.Protocol):
             raise AMQPError("Frame end byte was incorrect")
 
         frame = read_frame(frame_type, channel_id, raw_payload)
-        self.dispatcher.dispatch(frame)
+        self.connection.dispatch(frame)
 
         # repeat if more than a whole frame was received
         self.data_received(data[8+size:])
@@ -71,13 +69,14 @@ class AMQP(asyncio.Protocol):
         self.transport.write(b'AMQP\x00\x00\x09\x01')
 
 
-# this class might have to die when I do channels
-class Dispatcher(object):
-    def __init__(self):
-        self.channels = {}
-
-    def add_channel(self, channel_id, channel):
-        self.channels[channel_id] = channel
+class Connection(object):
+    def __init__(self, username='guest', password='guest', virtual_host='/', *, loop=None):
+        self.protocol = None
+        self.username = username
+        self.password = password
+        self.virtual_host = virtual_host
+        self.is_open = asyncio.Future(loop=loop)
+        self.channels = {0: self}
 
     def dispatch(self, frame):
         channel = self.channels[frame.channel_id]
@@ -87,15 +86,6 @@ class Dispatcher(object):
             raise AMQPError('No handler configured for method: ' + type(frame.payload).__name__) from e
         else:
             handler(frame)
-
-
-class Connection(object):
-    def __init__(self, protocol, username='guest', password='guest', virtual_host='/', *, loop=None):
-        self.protocol = protocol
-        self.username = username
-        self.password = password
-        self.virtual_host = virtual_host
-        self.is_open = asyncio.Future(loop=loop)
 
     def handle_ConnectionStart(self, frame):
         method = methods.ConnectionStartOK({}, 'AMQPLAIN', {'LOGIN': self.username, 'PASSWORD': self.password}, 'en_US')

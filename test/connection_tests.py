@@ -5,8 +5,8 @@ from unittest import mock
 
 class ConnectionContext:
     def given_a_connection(self):
-        self.protocol = mock.Mock(spec=asynqp.AMQP)
-        self.connection = asynqp.Connection(self.protocol, 'guest', 'guest')
+        self.connection = asynqp.Connection('guest', 'guest')
+        self.connection.protocol = self.protocol = mock.Mock(spec=asynqp.AMQP)
 
 
 class WhenRespondingToConnectionStart(ConnectionContext):

@@ -2,17 +2,19 @@ import asyncio
 from unittest import mock
 import contexts
 import asynqp
-from asynqp.methods import METHODS
+from asynqp import methods
 
-#TODO: protocol-level exception handling
+
+# TODO: protocol-level exception handling
+# TODO: heartbeat
+
 
 class ProtocolContext:
     def establish_the_connection(self):
         self.transport = mock.Mock(spec=asyncio.Transport)
         self.connection = mock.Mock(spec=asynqp.Connection)
-        dispatcher = asynqp.Dispatcher()
-        dispatcher.add_channel(0, self.connection)
-        self.protocol = asynqp.AMQP(dispatcher)
+        self.protocol = asynqp.AMQP(self.connection)
+        self.connection.protocol = self.protocol
         self.protocol.connection_made(self.transport)
 
 
@@ -27,14 +29,14 @@ class WhenInitiatingProceedings(ProtocolContext):
 class WhenAWholeFrameArrives(ProtocolContext):
     def establish_the_frame(self):
         self.raw = b'\x01\x00\x00\x00\x00\x00\x05\x00\x0A\x00\x29\x00\xCE'
-        method = METHODS['ConnectionOpenOK']('')
+        method = methods.ConnectionOpenOK('')
         self.expected_frame = asynqp.Frame(asynqp.FrameType.method, 0, method)
 
     def because_the_whole_frame_arrives(self):
         self.protocol.data_received(self.raw)
 
     def it_should_dispatch_the_method(self):
-        self.connection.handle_ConnectionOpenOK.assert_called_once_with(self.expected_frame)
+        self.connection.dispatch.assert_called_once_with(self.expected_frame)
 
 
 class WhenAFrameDoesNotEndInFrameEnd(ProtocolContext):
@@ -62,17 +64,18 @@ class WhenHalfAFrameArrives(ProtocolContext):
         self.protocol.data_received(raw)
 
     def it_should_not_dispatch_the_method(self):
-        assert not self.connection.handle_ConnectionOpenOK.called
+        assert not self.connection.dispatch.called
 
 
 class WhenAFrameArrivesInTwoParts(ProtocolContext):
     @classmethod
     def examples_of_broken_up_frames(cls):
-        yield  b'\x01\x00\x00\x00\x00\x00\x05\x00\x0A', b'\x00\x29\x00\xCE'  # cut off half way through the payload
-        yield  b'\x01\x00\x00\x00\x00\x00\x05\x00\x0A\x00\x29\x00', b'\xCE'  # cut off right before the frame end byte
-        yield  b'\x01\x00', b'\x00\x00\x00\x00\x05\x00\x0A\x00\x29\x00\xCE'  # cut off before the end of the header
+        yield b'\x01\x00\x00\x00\x00\x00\x05\x00\x0A', b'\x00\x29\x00\xCE'  # cut off half way through the payload
+        yield b'\x01\x00\x00\x00\x00\x00\x05\x00\x0A\x00\x29\x00', b'\xCE'  # cut off right before the frame end byte
+        yield b'\x01\x00', b'\x00\x00\x00\x00\x05\x00\x0A\x00\x29\x00\xCE'  # cut off before the end of the header
+
     def establish_the_frame(self):
-        method = METHODS['ConnectionOpenOK']('')
+        method = methods.ConnectionOpenOK('')
         self.expected_frame = asynqp.Frame(asynqp.FrameType.method, 0, method)
 
     def because_the_whole_frame_eventually_arrives(self, raw1, raw2):
@@ -80,33 +83,33 @@ class WhenAFrameArrivesInTwoParts(ProtocolContext):
         self.protocol.data_received(raw2)
 
     def it_should_dispatch_the_method(self):
-        self.connection.handle_ConnectionOpenOK.assert_called_once_with(self.expected_frame)
+        self.connection.dispatch.assert_called_once_with(self.expected_frame)
 
 
 class WhenMoreThanAWholeFrameArrives(ProtocolContext):
     def establish_the_frame(self):
         self.raw = b'\x01\x00\x00\x00\x00\x00\x05\x00\x0A\x00\x29\x00\xCE\x01\x00\x00\x00\x00\x00\x05\x00\x0A'
-        method = METHODS['ConnectionOpenOK']('')
+        method = methods.ConnectionOpenOK('')
         self.expected_frame = asynqp.Frame(asynqp.FrameType.method, 0, method)
 
     def because_more_than_a_whole_frame_arrives(self):
         self.protocol.data_received(self.raw)
 
     def it_should_dispatch_the_method_once(self):
-        self.connection.handle_ConnectionOpenOK.assert_called_once_with(self.expected_frame)
+        self.connection.dispatch.assert_called_once_with(self.expected_frame)
 
 
 class WhenTwoFramesArrive(ProtocolContext):
     def establish_the_frame(self):
         self.raw = b'\x01\x00\x00\x00\x00\x00\x05\x00\x0A\x00\x29\x00\xCE\x01\x00\x00\x00\x00\x00\x05\x00\x0A\x00\x29\x00\xCE'
-        method = METHODS['ConnectionOpenOK']('')
+        method = methods.ConnectionOpenOK('')
         self.expected_frame = asynqp.Frame(asynqp.FrameType.method, 0, method)
 
     def because_more_than_a_whole_frame_arrives(self):
         self.protocol.data_received(self.raw)
 
     def it_should_dispatch_the_method_twice(self):
-        self.connection.handle_ConnectionOpenOK.assert_has_calls([mock.call(self.expected_frame), mock.call(self.expected_frame)])
+        self.connection.dispatch.assert_has_calls([mock.call(self.expected_frame), mock.call(self.expected_frame)])
 
 
 class WhenTwoFramesArrivePiecemeal(ProtocolContext):
@@ -119,7 +122,7 @@ class WhenTwoFramesArrivePiecemeal(ProtocolContext):
         yield b'\x01', b'\x00\x00\x00\x00\x00\x05\x00', b'\x0A\x00\x29\x00', b'\xCE\x01\x00\x00\x00\x00\x00\x05\x00', b'\x0A\x00\x29\x00\xCE', b''
 
     def establish_what_we_expected(self):
-        method = METHODS['ConnectionOpenOK']('')
+        method = methods.ConnectionOpenOK('')
         self.expected_frame = asynqp.Frame(asynqp.FrameType.method, 0, method)
 
     def because_two_frames_arrive_in_bits(self, fragments):
@@ -127,4 +130,4 @@ class WhenTwoFramesArrivePiecemeal(ProtocolContext):
             self.protocol.data_received(fragment)
 
     def it_should_dispatch_the_method_twice(self):
-        self.connection.handle_ConnectionOpenOK.assert_has_calls([mock.call(self.expected_frame), mock.call(self.expected_frame)])
+        self.connection.dispatch.assert_has_calls([mock.call(self.expected_frame), mock.call(self.expected_frame)])
