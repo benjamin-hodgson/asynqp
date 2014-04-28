@@ -22,7 +22,7 @@ def connect(host='localhost', port='5672', username='guest', password='guest', v
 
     protocol.send_protocol_header()
 
-    yield from connection.is_open
+    yield from connection.opened
     return connection
 
 
@@ -75,13 +75,24 @@ class Connection(object):
         self.username = username
         self.password = password
         self.virtual_host = virtual_host
-        self.is_open = asyncio.Future(loop=loop)
+        self.opened = asyncio.Future(loop=loop)
+        self.closed = False
         self.channels = {0: self}
 
+    def close(self):
+        method = methods.ConnectionClose(0, '', 0, 0)
+        frame = Frame(FrameType.method, 0, method)
+        self.protocol.send_frame(frame)
+        self.closed = True
+
     def dispatch(self, frame):
+        method_type = type(frame.payload)
+        if self.closed and method_type not in (methods.ConnectionClose, methods.ConnectionCloseOK):
+            return
+
         channel = self.channels[frame.channel_id]
         try:
-            handler = getattr(channel, 'handle_' + type(frame.payload).__name__)
+            handler = getattr(channel, 'handle_' + method_type.__name__)
         except AttributeError as e:
             raise AMQPError('No handler configured for method: ' + type(frame.payload).__name__) from e
         else:
@@ -102,7 +113,16 @@ class Connection(object):
         self.protocol.send_frame(frame)
 
     def handle_ConnectionOpenOK(self, frame):
-        self.is_open.set_result(True)
+        self.opened.set_result(True)
+
+    def handle_ConnectionClose(self, frame):
+        method = methods.ConnectionCloseOK()
+        frame = Frame(FrameType.method, 0, method)
+        self.protocol.send_frame(frame)
+        self.closed = True
+
+    def handle_ConnectionCloseOK(self, frame):
+        self.protocol.transport.close()
 
 
 def read_frame(frame_type, channel_id, raw_payload):

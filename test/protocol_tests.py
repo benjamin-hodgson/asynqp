@@ -5,7 +5,6 @@ import asynqp
 from asynqp import methods
 
 
-# TODO: protocol-level exception handling
 # TODO: heartbeat
 
 
