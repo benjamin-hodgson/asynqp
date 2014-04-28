@@ -28,16 +28,18 @@ def read_long_long(stream):
     return _read_long_long(stream)[0]
 
 
+@rethrow_as(struct.error, AMQPError('failed to read a short string'))
 def read_short_string(stream):
     return _read_short_string(stream)[0]
 
 
+@rethrow_as(struct.error, AMQPError('failed to read a long string'))
 def read_long_string(stream):
     return _read_long_string(stream)[0]
 
 
-@rethrow_as(KeyError, AMQPError('bad table value type code'))
-@rethrow_as(struct.error, AMQPError('bad table'))
+@rethrow_as(KeyError, AMQPError('failed to read a table'))
+@rethrow_as(struct.error, AMQPError('failed to read a table'))
 def read_table(stream):
     return _read_table(stream)[0]
 
