@@ -1,4 +1,5 @@
 import abc
+import functools
 import struct
 from collections import OrderedDict
 from io import BytesIO
@@ -19,8 +20,11 @@ def read_method(raw):
     return METHODS[method_type_code].read(stream)
 
 
+@functools.total_ordering
 class FieldType(abc.ABC):
     def __init__(self, value):
+        if isinstance(value, type(self)):
+            value = value.value  # ha!
         if not self.isvalid(value):
             raise TypeError('{} is not a valid value for type {}'.format(value, type(self).__name__))
         self.value = value
@@ -30,6 +34,14 @@ class FieldType(abc.ABC):
             return self.value == other
         try:
             return self.value == other.value
+        except AttributeError:
+            return NotImplemented
+
+    def __lt__(self, other):
+        if isinstance(other, type(self.value)):
+            return self.value <= other
+        try:
+            return self.value <= other.value
         except AttributeError:
             return NotImplemented
 
@@ -175,11 +187,15 @@ class Method:
         return (type(self) == type(other)
             and self.fields == other.fields)
 
+
+class OutgoingMethod(Method):
     def write(self, stream):
         stream.write(struct.pack('!HH', *self.method_type))
         for val in self.fields.values():
             val.write(stream)
 
+
+class IncomingMethod(Method):
     @classmethod
     def read(cls, stream):
         method_type = struct.unpack('!HH', stream.read(4))
@@ -195,37 +211,62 @@ class Method:
 
 # here be monsters
 def load_methods():
+    tree = parse_tree()
+    classes = get_classes(tree)
+    return generate_methods(classes)
+
+
+def parse_tree():
     filename = pkg_resources.resource_filename(__name__, 'amqp0-9-1.xml')
-    tree = ElementTree.parse(filename)
+    return ElementTree.parse(filename)
+
+
+def get_classes(tree):
     domain_types = {e.attrib['name']: e.attrib['type'] for e in tree.findall('domain')}
 
     classes = {}
     for class_elem in tree.findall('class'):
         class_id = class_elem.attrib['index']
+
         class_methods = {}
         for method in class_elem.findall('method'):
             method_id = method.attrib['index']
+
             fields = OrderedDict()
             for elem in method.findall('field'):
-                fieldname = elem.attrib['name'].replace('-','_')
+                fieldname = elem.attrib['name'].replace('-', '_')
                 try:
                     fieldtype = elem.attrib['type']
                 except KeyError:
                     fieldtype = domain_types[elem.attrib['domain']]
                 cls = FIELD_TYPES[fieldtype]
                 fields[fieldname] = cls
-            class_methods[method.attrib['name'].capitalize().replace('-ok', 'OK')] = (int(method_id), fields)
+
+            method_support = {}
+            for elem in method.findall('chassis'):
+                method_support[elem.attrib['name']] = elem.attrib['implement']
+
+            class_methods[method.attrib['name'].capitalize().replace('-ok', 'OK')] = (int(method_id), fields, method_support)
 
         classes[class_elem.attrib['name'].capitalize()] = (int(class_id), class_methods)
 
-    methods = {}
+    return classes
 
+
+def generate_methods(classes):
+    methods = {}
     for class_name, (class_id, ms) in classes.items():
-        for method_name, (method_id, fields) in ms.items():
+        for method_name, (method_id, fields, method_support) in ms.items():
             name = class_name + method_name
             method_type = (class_id, method_id)
-            methods[name] = methods[method_type] = type(name, (Method,), {'method_type': method_type, 'field_info': fields})
 
+            parents = []
+            if 'server' in method_support:
+                parents.append(OutgoingMethod)
+            if 'client' in method_support:
+                parents.append(IncomingMethod)
+
+            methods[name] = methods[method_type] = type(name, tuple(parents), {'method_type': method_type, 'field_info': fields})
     return methods
 
 
