@@ -45,6 +45,23 @@ class WhenRespondingToConnectionTune(ConnectionContext):
         ])
 
 
+class WhenItIsTimeToHeartbeat(ConnectionContext):
+    def given_an_open_connection(self):
+        self.tune_frame = asynqp.Frame(asynqp.FrameType.method, 0, methods.ConnectionTune(0, 131072, 600))
+        self.connection.handle(self.tune_frame)
+        self.protocol.reset_mock()
+
+    def when_i_send_the_heartbeat(self):
+        self.connection.send_heartbeat()
+
+    def it_should_send_a_heartbeat_frame(self):
+        self.protocol.send_frame.assert_called_once_with(asynqp.Frame(asynqp.FrameType.heartbeat, 0, b''))
+
+    def it_should_set_up_the_next_heartbeat(self):
+        assert len(self.loop.call_later.call_args_list) == 3
+        self.loop.call_later.assert_called_with(600, self.connection.send_heartbeat)
+
+
 class WhenResettingTheHeartbeatTimeout(ConnectionContext):
     def given_an_open_connection(self):
         self.tune_frame = asynqp.Frame(asynqp.FrameType.method, 0, methods.ConnectionTune(0, 131072, 600))
@@ -125,11 +142,3 @@ class WhenRecievingConnectionCloseOK(ConnectionContext):
 
     def it_should_close_the_transport(self):
         assert self.protocol.transport.close.called
-
-
-class WhenItIsTimeToHeartbeat(ConnectionContext):
-    def when_i_send_the_heartbeat(self):
-        self.connection.send_heartbeat()
-
-    def it_should_send_a_heartbeat_frame(self):
-        self.protocol.send_frame.assert_called_once_with(asynqp.Frame(asynqp.FrameType.heartbeat, 0, b''))

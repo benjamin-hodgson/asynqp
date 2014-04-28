@@ -79,17 +79,18 @@ class Connection(object):
         self.virtual_host = virtual_host
         self.max_channel = max_channel
         self.opened = asyncio.Future(loop=loop)
-        self.closed = False
+        self.closing = asyncio.Future(loop=loop)
         self.channels = {0: self}
         self.heartbeat_timeout_callback = None
 
     def close(self, reply_code=0, reply_text='Connection closed by application', class_id=0, method_id=0):
         frame = self.make_method_frame(methods.ConnectionClose(reply_code, reply_text, class_id, method_id))
         self.protocol.send_frame(frame)
-        self.closed = True
+        self.closing.set_result(True)
 
     def send_heartbeat(self):
         self.protocol.send_frame(Frame(FrameType.heartbeat, 0, b''))
+        self.loop.call_later(self.heartbeat_interval, self.send_heartbeat)
 
     def reset_heartbeat_timeout(self):
         if self.heartbeat_timeout_callback is not None:
@@ -98,7 +99,7 @@ class Connection(object):
 
     def handle(self, frame):
         method_type = type(frame.payload)
-        if self.closed and method_type not in (methods.ConnectionClose, methods.ConnectionCloseOK):
+        if self.closing.done() and method_type not in (methods.ConnectionClose, methods.ConnectionCloseOK):
             return
 
         channel = self.channels[frame.channel_id]
@@ -146,7 +147,7 @@ class Connection(object):
         method = methods.ConnectionCloseOK()
         frame = self.make_method_frame(method)
         self.protocol.send_frame(frame)
-        self.closed = True
+        self.closing.set_result(True)
 
     def handle_ConnectionCloseOK(self, frame):
         self.protocol.transport.close()
