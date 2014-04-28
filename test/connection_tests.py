@@ -2,17 +2,10 @@ import asyncio
 import asynqp
 from asynqp import methods
 from unittest import mock
+from .base_contexts import LoopContext, MockLoopContext, ConnectionContext
 
 
-class ConnectionContext:
-    def given_a_connection(self):
-        self.loop = mock.Mock(spec=asyncio.AbstractEventLoop)
-        self.connection = asynqp.Connection('guest', 'guest', loop=self.loop)
-        self.connection.protocol = self.protocol = mock.Mock(spec=asynqp.AMQP)
-        self.protocol.transport = mock.Mock()
-
-
-class WhenRespondingToConnectionStart(ConnectionContext):
+class WhenRespondingToConnectionStart(ConnectionContext, LoopContext):
     def given_a_start_frame_from_the_server(self):
         start_method = methods.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
         self.start_frame = asynqp.Frame(asynqp.FrameType.method, 0, start_method)
@@ -26,7 +19,7 @@ class WhenRespondingToConnectionStart(ConnectionContext):
         self.protocol.send_frame.assert_called_once_with(expected_frame)
 
 
-class WhenRespondingToConnectionTune(ConnectionContext):
+class WhenRespondingToConnectionTune(ConnectionContext, MockLoopContext):
     def given_a_tune_frame_from_the_server(self):
         self.tune_frame = asynqp.Frame(asynqp.FrameType.method, 0, methods.ConnectionTune(0, 131072, 600))
 
@@ -45,7 +38,7 @@ class WhenRespondingToConnectionTune(ConnectionContext):
         ])
 
 
-class WhenItIsTimeToHeartbeat(ConnectionContext):
+class WhenItIsTimeToHeartbeat(ConnectionContext, MockLoopContext):
     def given_an_open_connection(self):
         self.tune_frame = asynqp.Frame(asynqp.FrameType.method, 0, methods.ConnectionTune(0, 131072, 600))
         self.connection.handle(self.tune_frame)
@@ -62,7 +55,7 @@ class WhenItIsTimeToHeartbeat(ConnectionContext):
         self.loop.call_later.assert_called_with(600, self.connection.send_heartbeat)
 
 
-class WhenResettingTheHeartbeatTimeout(ConnectionContext):
+class WhenResettingTheHeartbeatTimeout(ConnectionContext, MockLoopContext):
     def given_an_open_connection(self):
         self.tune_frame = asynqp.Frame(asynqp.FrameType.method, 0, methods.ConnectionTune(0, 131072, 600))
         self.connection.handle(self.tune_frame)
@@ -78,7 +71,7 @@ class WhenResettingTheHeartbeatTimeout(ConnectionContext):
         self.loop.call_later.assert_called_with(600*2, self.connection.close, 501, 'Heartbeat timed out')
 
 
-class WhenRespondingToConnectionClose(ConnectionContext):
+class WhenRespondingToConnectionClose(ConnectionContext, LoopContext):
     def given_a_close_frame_from_the_server(self):
         self.close_frame = asynqp.Frame(asynqp.FrameType.method, 0, methods.ConnectionClose(123, 'you muffed up', 10, 20))
 
@@ -90,7 +83,7 @@ class WhenRespondingToConnectionClose(ConnectionContext):
         self.protocol.send_frame.assert_called_once_with(expected_frame)
 
 
-class WhenAConnectionThatWasClosedByTheServerRecievesAMethod(ConnectionContext):
+class WhenAConnectionThatWasClosedByTheServerRecievesAMethod(ConnectionContext, LoopContext):
     def given_a_closed_connection(self):
         close_frame = asynqp.Frame(asynqp.FrameType.method, 0, methods.ConnectionClose(123, 'you muffed up', 10, 20))
         self.connection.handle(close_frame)
@@ -107,7 +100,7 @@ class WhenAConnectionThatWasClosedByTheServerRecievesAMethod(ConnectionContext):
         assert not self.mock_handler.called
 
 
-class WhenAConnectionThatWasClosedByTheApplicationRecievesAMethod(ConnectionContext):
+class WhenAConnectionThatWasClosedByTheApplicationRecievesAMethod(ConnectionContext, LoopContext):
     def given_a_closed_connection(self):
         self.connection.close()
 
@@ -123,8 +116,8 @@ class WhenAConnectionThatWasClosedByTheApplicationRecievesAMethod(ConnectionCont
         assert not self.mock_handler.called
 
 
-class WhenTheApplicationClosesTheConnection(ConnectionContext):
-    def when_i_close_the_connection(self):
+class WhenTheApplicationClosesTheConnection(ConnectionContext, LoopContext):
+    def when_I_close_the_connection(self):
         self.connection.close()
 
     def it_should_send_ConnectionClose_with_no_exception(self):
@@ -132,7 +125,7 @@ class WhenTheApplicationClosesTheConnection(ConnectionContext):
         self.protocol.send_frame.assert_called_once_with(expected_frame)
 
 
-class WhenRecievingConnectionCloseOK(ConnectionContext):
+class WhenRecievingConnectionCloseOK(ConnectionContext, LoopContext):
     def given_a_connection_that_I_closed(self):
         self.connection.close()
 

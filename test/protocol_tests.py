@@ -3,19 +3,10 @@ from unittest import mock
 import contexts
 import asynqp
 from asynqp import methods
+from .base_contexts import ProtocolContext
 
 
-# TODO: heartbeat
-# TODO: handle exceptions by closing the connection with a message
-
-
-class ProtocolContext:
-    def establish_the_connection(self):
-        self.transport = mock.Mock(spec=asyncio.Transport)
-        self.connection = mock.Mock(spec=asynqp.Connection)
-        self.protocol = asynqp.AMQP(self.connection)
-        self.connection.protocol = self.protocol
-        self.protocol.connection_made(self.transport)
+# TODO: handle low-level exceptions by closing the connection with a message
 
 
 class WhenInitiatingProceedings(ProtocolContext):

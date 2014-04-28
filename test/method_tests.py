@@ -1,16 +1,7 @@
 import asyncio
 import asynqp
-from unittest import mock
 from asynqp import methods
-
-
-class ProtocolContext:
-    def establish_the_connection(self):
-        self.transport = mock.Mock(spec=asyncio.Transport)
-        self.connection = mock.Mock(spec=asynqp.Connection)
-        self.protocol = asynqp.AMQP(self.connection)
-        self.connection.protocol = self.protocol
-        self.protocol.connection_made(self.transport)
+from .base_contexts import ProtocolContext
 
 
 class WhenConnectionStartArrives(ProtocolContext):

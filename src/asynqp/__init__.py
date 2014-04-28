@@ -78,10 +78,21 @@ class Connection(object):
         self.password = password
         self.virtual_host = virtual_host
         self.max_channel = max_channel
-        self.opened = asyncio.Future(loop=loop)
-        self.closing = asyncio.Future(loop=loop)
+        self.opened = asyncio.Future(loop=self.loop)
+        self.closing = asyncio.Future(loop=self.loop)
         self.channels = {0: self}
         self.heartbeat_timeout_callback = None
+
+    @asyncio.coroutine
+    def open_channel(self):
+        next_channel_num = max(self.channels.keys()) + 1
+        channel = Channel(next_channel_num, loop=self.loop)
+
+        self.channels[next_channel_num] = channel
+        self.protocol.send_frame(Frame(FrameType.method, next_channel_num, methods.ChannelOpen('')))
+
+        yield from channel.opened
+        return channel
 
     def close(self, reply_code=0, reply_text='Connection closed by application', class_id=0, method_id=0):
         frame = self.make_method_frame(methods.ConnectionClose(reply_code, reply_text, class_id, method_id))
@@ -155,6 +166,16 @@ class Connection(object):
     @classmethod
     def make_method_frame(cls, method):
         return Frame(FrameType.method, 0, method)
+
+
+class Channel(object):
+    def __init__(self, channel_id, *, loop=None):
+        self.channel_id = channel_id
+        self.loop = asyncio.get_event_loop() if loop is None else loop
+        self.opened = asyncio.Future(loop=self.loop)
+
+    def handle_ChannelOpenOK(self, frame):
+        self.opened.set_result(True)
 
 
 class Frame(object):
