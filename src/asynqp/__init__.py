@@ -125,10 +125,11 @@ class Connection(object):
         if 0 < frame.payload.channel_max < 1024:
             self.max_channel = frame.payload.channel_max.value
         self.heartbeat_interval = frame.payload.heartbeat.value
+        self.frame_max = frame.payload.frame_max.value
 
         self.loop.call_later(self.heartbeat_interval, self.send_heartbeat)
 
-        method = methods.ConnectionTuneOK(self.max_channel, frame.payload.frame_max, self.heartbeat_interval)
+        method = methods.ConnectionTuneOK(self.max_channel, self.frame_max, self.heartbeat_interval)
         reply_frame = self.make_method_frame(method)
         self.protocol.send_frame(reply_frame)
 

@@ -11,3 +11,6 @@ class WhenConnectingToRabbit:
 
     def it_should_connect(self):
         assert hasattr(self, 'connection')
+
+    def clenup_the_connection(self):
+        self.connection.close()
