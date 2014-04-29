@@ -34,7 +34,7 @@ class WhenRespondingToConnectionTune(ConnectionContext, MockLoopContext):
     def it_should_start_sending_and_monitoring_heartbeats(self):
         self.loop.call_later.assert_has_calls([
             mock.call(600, self.connection.send_heartbeat),
-            mock.call(600*2, self.connection.close, 501, 'Heartbeat timed out')
+            mock.call(600*2, self.connection._close, 501, 'Heartbeat timed out')
         ])
 
 
@@ -52,7 +52,6 @@ class WhenTheServerDoesNotWantAHeartbeat(ConnectionContext, MockLoopContext):
 
     def it_should_not_start_sending_and_monitoring_heartbeats(self):
         assert not self.loop.call_later.called
-
 
 
 class WhenItIsTimeToHeartbeat(ConnectionContext, MockLoopContext):
@@ -85,7 +84,7 @@ class WhenResettingTheHeartbeatTimeout(ConnectionContext, MockLoopContext):
 
     def it_should_set_up_another_close_callback(self):
         assert len(self.loop.call_later.call_args_list) == 3
-        self.loop.call_later.assert_called_with(600*2, self.connection.close, 501, 'Heartbeat timed out')
+        self.loop.call_later.assert_called_with(600*2, self.connection._close, 501, 'Heartbeat timed out')
 
 
 class WhenRespondingToConnectionClose(ConnectionContext, LoopContext):
@@ -119,7 +118,8 @@ class WhenAConnectionThatWasClosedByTheServerRecievesAMethod(ConnectionContext, 
 
 class WhenAConnectionThatWasClosedByTheApplicationRecievesAMethod(ConnectionContext, LoopContext):
     def given_a_closed_connection(self):
-        self.connection.close()
+        coro = self.connection.close()
+        next(coro)
 
         start_method = methods.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
         self.start_frame = asynqp.Frame(asynqp.FrameType.method, 0, start_method)
@@ -135,7 +135,8 @@ class WhenAConnectionThatWasClosedByTheApplicationRecievesAMethod(ConnectionCont
 
 class WhenTheApplicationClosesTheConnection(ConnectionContext, LoopContext):
     def when_I_close_the_connection(self):
-        self.connection.close()
+        coro = self.connection.close()
+        next(coro)
 
     def it_should_send_ConnectionClose_with_no_exception(self):
         expected_frame = asynqp.Frame(asynqp.FrameType.method, 0, methods.ConnectionClose(0, 'Connection closed by application', 0, 0))

@@ -79,7 +79,8 @@ class Connection(object):
         self.virtual_host = virtual_host
         self.max_channel = max_channel
         self.opened = asyncio.Future(loop=self.loop)
-        self.closing = asyncio.Future(loop=self.loop)
+        self.closed = asyncio.Future(loop=self.loop)
+        self.closing = False
         self.channels = {0: self}
         self.heartbeat_timeout_callback = None
 
@@ -94,10 +95,10 @@ class Connection(object):
         yield from channel.opened
         return channel
 
-    def close(self, reply_code=0, reply_text='Connection closed by application', class_id=0, method_id=0):
-        frame = self.make_method_frame(methods.ConnectionClose(reply_code, reply_text, class_id, method_id))
-        self.protocol.send_frame(frame)
-        self.closing.set_result(True)
+    @asyncio.coroutine
+    def close(self):
+        self._close()
+        yield from self.closed
 
     def send_heartbeat(self):
         self.protocol.send_frame(Frame(FrameType.heartbeat, 0, b''))
@@ -106,11 +107,11 @@ class Connection(object):
     def reset_heartbeat_timeout(self):
         if self.heartbeat_timeout_callback is not None:
             self.heartbeat_timeout_callback.cancel()
-            self.heartbeat_timeout_callback = self.loop.call_later(self.heartbeat_interval * 2, self.close, 501, 'Heartbeat timed out')
+            self.heartbeat_timeout_callback = self.loop.call_later(self.heartbeat_interval * 2, self._close, 501, 'Heartbeat timed out')
 
     def handle(self, frame):
         method_type = type(frame.payload)
-        if self.closing.done() and method_type not in (methods.ConnectionClose, methods.ConnectionCloseOK):
+        if self.closing and method_type not in (methods.ConnectionClose, methods.ConnectionCloseOK):
             return
 
         channel = self.channels[frame.channel_id]
@@ -151,7 +152,7 @@ class Connection(object):
         self.protocol.send_frame(open_frame)
 
         if self.heartbeat_interval > 0:
-            self.heartbeat_timeout_callback = self.loop.call_later(self.heartbeat_interval * 2, self.close, 501, 'Heartbeat timed out')
+            self.heartbeat_timeout_callback = self.loop.call_later(self.heartbeat_interval * 2, self._close, 501, 'Heartbeat timed out')
 
     def handle_ConnectionOpenOK(self, frame):
         self.opened.set_result(True)
@@ -160,10 +161,16 @@ class Connection(object):
         method = methods.ConnectionCloseOK()
         frame = self.make_method_frame(method)
         self.protocol.send_frame(frame)
-        self.closing.set_result(True)
+        self.closing = True
 
     def handle_ConnectionCloseOK(self, frame):
         self.protocol.transport.close()
+        self.closed.set_result(True)
+
+    def _close(self, reply_code=0, reply_text='Connection closed by application', class_id=0, method_id=0):
+        frame = self.make_method_frame(methods.ConnectionClose(reply_code, reply_text, class_id, method_id))
+        self.protocol.send_frame(frame)
+        self.closing = True
 
     @classmethod
     def make_method_frame(cls, method):
