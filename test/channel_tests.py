@@ -11,7 +11,7 @@ class OpenChannelContext(OpenConnectionContext):
     def open_channel(self, channel_id=1):
         coro = self.connection.open_channel()
         next(coro)
-        open_ok_frame = asynqp.Frame(asynqp.FrameType.method, channel_id, methods.ChannelOpenOK(''))
+        open_ok_frame = asynqp.MethodFrame(channel_id, methods.ChannelOpenOK(''))
         self.connection.dispatch(open_ok_frame)
         try:
             next(coro)
@@ -24,7 +24,7 @@ class WhenOpeningAChannel(OpenConnectionContext):
         next(self.connection.open_channel())
 
     def it_should_send_a_channel_open_frame(self):
-        expected_frame = asynqp.Frame(asynqp.FrameType.method, 1, methods.ChannelOpen(''))
+        expected_frame = asynqp.MethodFrame(1, methods.ChannelOpen(''))
         self.protocol.send_frame.assert_called_once_with(expected_frame)
 
 
@@ -34,7 +34,7 @@ class WhenChannelOpenOKArrives(OpenConnectionContext):
         next(self.coro)
 
     def when_channel_open_ok_arrives(self):
-        open_ok_frame = asynqp.Frame(asynqp.FrameType.method, 1, methods.ChannelOpenOK(''))
+        open_ok_frame = asynqp.MethodFrame(1, methods.ChannelOpenOK(''))
         self.connection.dispatch(open_ok_frame)
         try:
             next(self.coro)
@@ -50,7 +50,7 @@ class WhenOpeningASecondChannel(OpenChannelContext):
         self.result = self.open_channel(2)
 
     def it_should_send_another_channel_open_frame(self):
-        expected_frame = asynqp.Frame(asynqp.FrameType.method, 2, methods.ChannelOpen(''))
+        expected_frame = asynqp.MethodFrame(2, methods.ChannelOpen(''))
         self.protocol.send_frame.assert_called_once_with(expected_frame)
 
     def it_should_have_the_correct_channel_id(self):
@@ -62,17 +62,17 @@ class WhenClosingAChannel(OpenChannelContext):
         next(self.channel.close())
 
     def it_should_send_a_ChannelClose_method(self):
-        expected_frame = asynqp.Frame(asynqp.FrameType.method, 1, methods.ChannelClose(0, 'Channel closed by application', 0, 0))
+        expected_frame = asynqp.MethodFrame(1, methods.ChannelClose(0, 'Channel closed by application', 0, 0))
         self.protocol.send_frame.assert_called_once_with(expected_frame)
 
 
 class WhenTheServerClosesAChannel(OpenChannelContext):
     def when_the_server_shuts_the_channel_down(self):
-        channel_close_frame = asynqp.Frame(asynqp.FrameType.method, 1, methods.ChannelClose(123, 'i am tired of you', 40, 50))
+        channel_close_frame = asynqp.MethodFrame(1, methods.ChannelClose(123, 'i am tired of you', 40, 50))
         self.connection.dispatch(channel_close_frame)
 
     def it_should_send_ChannelCloseOK(self):
-        expected_frame = asynqp.Frame(asynqp.FrameType.method, 1, methods.ChannelCloseOK())
+        expected_frame = asynqp.MethodFrame(1, methods.ChannelCloseOK())
         self.protocol.send_frame.assert_called_once_with(expected_frame)
 
 
@@ -82,7 +82,7 @@ class WhenAnotherMethodArrivesAfterTheChannelIsClosed(OpenChannelContext):
         self.protocol.reset_mock()
 
     def when_another_method_arrives(self):
-        open_ok_frame = asynqp.Frame(asynqp.FrameType.method, 1, methods.ChannelOpenOK(''))
+        open_ok_frame = asynqp.MethodFrame(1, methods.ChannelOpenOK(''))
         self.connection.dispatch(open_ok_frame)
 
     def it_should_discard_the_method(self):
@@ -95,7 +95,7 @@ class WhenChannelCloseOKArrives(OpenChannelContext):
         next(self.coro)
 
     def when_channel_close_ok_arrives(self):
-        close_ok_frame = asynqp.Frame(asynqp.FrameType.method, 1, methods.ChannelCloseOK())
+        close_ok_frame = asynqp.MethodFrame(1, methods.ChannelCloseOK())
         self.connection.dispatch(close_ok_frame)
 
     def it_should_close_the_channel(self):

@@ -21,7 +21,7 @@ class WhenAWholeFrameArrives(ProtocolContext):
     def establish_the_frame(self):
         self.raw = b'\x01\x00\x00\x00\x00\x00\x05\x00\x0A\x00\x29\x00\xCE'
         method = methods.ConnectionOpenOK('')
-        self.expected_frame = asynqp.Frame(asynqp.FrameType.method, 0, method)
+        self.expected_frame = asynqp.MethodFrame(0, method)
 
     def because_the_whole_frame_arrives(self):
         self.protocol.data_received(self.raw)
@@ -70,7 +70,7 @@ class WhenAFrameArrivesInTwoParts(ProtocolContext):
 
     def establish_the_frame(self):
         method = methods.ConnectionOpenOK('')
-        self.expected_frame = asynqp.Frame(asynqp.FrameType.method, 0, method)
+        self.expected_frame = asynqp.MethodFrame(0, method)
 
     def because_the_whole_frame_eventually_arrives(self, raw1, raw2):
         self.protocol.data_received(raw1)
@@ -84,7 +84,7 @@ class WhenMoreThanAWholeFrameArrives(ProtocolContext):
     def establish_the_frame(self):
         self.raw = b'\x01\x00\x00\x00\x00\x00\x05\x00\x0A\x00\x29\x00\xCE\x01\x00\x00\x00\x00\x00\x05\x00\x0A'
         method = methods.ConnectionOpenOK('')
-        self.expected_frame = asynqp.Frame(asynqp.FrameType.method, 0, method)
+        self.expected_frame = asynqp.MethodFrame(0, method)
 
     def because_more_than_a_whole_frame_arrives(self):
         self.protocol.data_received(self.raw)
@@ -97,7 +97,7 @@ class WhenTwoFramesArrive(ProtocolContext):
     def establish_the_frame(self):
         self.raw = b'\x01\x00\x00\x00\x00\x00\x05\x00\x0A\x00\x29\x00\xCE\x01\x00\x00\x00\x00\x00\x05\x00\x0A\x00\x29\x00\xCE'
         method = methods.ConnectionOpenOK('')
-        self.expected_frame = asynqp.Frame(asynqp.FrameType.method, 0, method)
+        self.expected_frame = asynqp.MethodFrame(0, method)
 
     def because_more_than_a_whole_frame_arrives(self):
         self.protocol.data_received(self.raw)
@@ -117,7 +117,7 @@ class WhenTwoFramesArrivePiecemeal(ProtocolContext):
 
     def establish_what_we_expected(self):
         method = methods.ConnectionOpenOK('')
-        self.expected_frame = asynqp.Frame(asynqp.FrameType.method, 0, method)
+        self.expected_frame = asynqp.MethodFrame(0, method)
 
     def because_two_frames_arrive_in_bits(self, fragments):
         for fragment in fragments:

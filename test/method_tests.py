@@ -19,7 +19,7 @@ class WhenConnectionStartArrives(ProtocolContext):
             'product': 'RabbitMQ',
             'version': '3.1.5'
         }, 'AMQPLAIN PLAIN', 'en_US en_GB')
-        self.expected_frame = asynqp.Frame(asynqp.FrameType.method, 0, expected_method)
+        self.expected_frame = asynqp.MethodFrame(0, expected_method)
 
     def when_the_frame_arrives(self):
         self.protocol.data_received(self.raw)
@@ -31,7 +31,7 @@ class WhenConnectionStartArrives(ProtocolContext):
 class WhenSendingConnectionStartOK(ProtocolContext):
     def given_a_method_to_send(self):
         method = methods.ConnectionStartOK({'somecrap': 'aboutme'}, 'AMQPLAIN', {'auth': 'info'}, 'en_US')
-        self.frame = asynqp.Frame(asynqp.FrameType.method, 0, method)
+        self.frame = asynqp.MethodFrame(0, method)
 
     def when_we_send_the_method(self):
         self.protocol.send_frame(self.frame)
@@ -44,7 +44,7 @@ class WhenDeserialisingConnectionTune(ProtocolContext):
     def given_a_connection_tune_method_I_copied_from_the_rabbitmq_server(self):
         self.raw = b'\x01\x00\x00\x00\x00\x00\x0C\x00\x0A\x00\x1E\x00\x00\x00\x02\x00\x00\x02\x58\xCE'
         expected_method = methods.ConnectionTune(0, 131072, 600)
-        self.expected_frame = asynqp.Frame(asynqp.FrameType.method, 0, expected_method)
+        self.expected_frame = asynqp.MethodFrame(0, expected_method)
 
     def when_the_frame_arrives(self):
         self.protocol.data_received(self.raw)
@@ -56,7 +56,7 @@ class WhenDeserialisingConnectionTune(ProtocolContext):
 class WhenSendingConnectionTuneOK(ProtocolContext):
     def given_a_method_to_send(self):
         method = methods.ConnectionTuneOK(1024, 131072, 10)
-        self.frame = asynqp.Frame(asynqp.FrameType.method, 0, method)
+        self.frame = asynqp.MethodFrame(0, method)
 
     def when_I_serialise_the_method(self):
         self.protocol.send_frame(self.frame)
