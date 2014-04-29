@@ -230,10 +230,6 @@ class Channel(object):
 
 
 class Frame(object):
-    def __init__(self, channel_id, payload):
-        self.channel_id = channel_id
-        self.payload = payload
-
     def serialise(self):
         frame = serialisation.pack_octet(self.frame_type)
         frame += serialisation.pack_short(self.channel_id)

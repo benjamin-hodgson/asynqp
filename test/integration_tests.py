@@ -10,9 +10,9 @@ class WhenConnectingToRabbit:
         self.connection = self.loop.run_until_complete(asyncio.wait_for(asynqp.connect(), 0.2))
 
     def it_should_connect(self):
-        assert hasattr(self, 'connection')
+        assert self.connection is not None
 
-    def clenup_the_connection(self):
+    def cleanup_the_connection(self):
         self.connection.close()
 
 
@@ -25,4 +25,12 @@ class WhenOpeningAChannel:
         self.channel = self.loop.run_until_complete(asyncio.wait_for(self.connection.open_channel(), 0.2))
 
     def it_should_give_me_the_channel(self):
-        assert hasattr(self, 'channel')
+        assert self.channel is not None
+
+    def cleanup_the_channel_and_connection(self):
+        self.loop.run_until_complete(self.close())
+
+    @asyncio.coroutine
+    def close(self):
+        yield from self.channel.close()
+        yield from self.connection.close()
