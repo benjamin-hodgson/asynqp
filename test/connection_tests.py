@@ -11,7 +11,7 @@ class WhenRespondingToConnectionStart(ConnectionContext, LoopContext):
         self.start_frame = asynqp.Frame(asynqp.FrameType.method, 0, start_method)
 
     def because_the_start_frame_arrives(self):
-        self.connection.handle(self.start_frame)  # TODO: what does the server do when the credentials are wrong?
+        self.connection.handle(self.start_frame)
 
     def it_should_send_start_ok(self):
         expected_method = methods.ConnectionStartOK({}, 'AMQPLAIN', {'LOGIN': 'guest', 'PASSWORD': 'guest'}, 'en_US')
@@ -36,6 +36,23 @@ class WhenRespondingToConnectionTune(ConnectionContext, MockLoopContext):
             mock.call(600, self.connection.send_heartbeat),
             mock.call(600*2, self.connection.close, 501, 'Heartbeat timed out')
         ])
+
+
+class WhenTheServerDoesNotWantAHeartbeat(ConnectionContext, MockLoopContext):
+    def given_a_tune_frame_from_the_server(self):
+        self.tune_frame = asynqp.Frame(asynqp.FrameType.method, 0, methods.ConnectionTune(0, 131072, 0))
+
+    def when_the_tune_frame_arrives(self):
+        self.connection.handle(self.tune_frame)
+
+    def it_should_send_tune_ok_followed_by_open(self):
+        tune_ok_frame = asynqp.Frame(asynqp.FrameType.method, 0, methods.ConnectionTuneOK(1024, 131072, 0))
+        open_frame = asynqp.Frame(asynqp.FrameType.method, 0, methods.ConnectionOpen('/', '', False))
+        self.protocol.send_frame.assert_has_calls([mock.call(tune_ok_frame), mock.call(open_frame)])
+
+    def it_should_not_start_sending_and_monitoring_heartbeats(self):
+        assert not self.loop.call_later.called
+
 
 
 class WhenItIsTimeToHeartbeat(ConnectionContext, MockLoopContext):

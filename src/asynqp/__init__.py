@@ -139,7 +139,8 @@ class Connection(object):
         self.heartbeat_interval = frame.payload.heartbeat.value
         self.frame_max = frame.payload.frame_max.value
 
-        self.loop.call_later(self.heartbeat_interval, self.send_heartbeat)
+        if self.heartbeat_interval > 0:
+            self.loop.call_later(self.heartbeat_interval, self.send_heartbeat)
 
         method = methods.ConnectionTuneOK(self.max_channel, self.frame_max, self.heartbeat_interval)
         reply_frame = self.make_method_frame(method)
@@ -149,7 +150,8 @@ class Connection(object):
         open_frame = self.make_method_frame(methods.ConnectionOpen(self.virtual_host, '', False))
         self.protocol.send_frame(open_frame)
 
-        self.heartbeat_timeout_callback = self.loop.call_later(self.heartbeat_interval * 2, self.close, 501, 'Heartbeat timed out')
+        if self.heartbeat_interval > 0:
+            self.heartbeat_timeout_callback = self.loop.call_later(self.heartbeat_interval * 2, self.close, 501, 'Heartbeat timed out')
 
     def handle_ConnectionOpenOK(self, frame):
         self.opened.set_result(True)
