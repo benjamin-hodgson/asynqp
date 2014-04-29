@@ -15,9 +15,9 @@ def connect(host='localhost', port='5672', username='guest', password='guest', v
     if loop is None:
         loop = asyncio.get_event_loop()
 
-    connection = Connection(username, password, virtual_host, loop=loop)
-    transport, protocol = yield from loop.create_connection(lambda: AMQP(connection), host=host, port=port, ssl=ssl)
-    connection.protocol = protocol
+    transport, protocol = yield from loop.create_connection(AMQP, host=host, port=port, ssl=ssl)
+    connection = Connection(protocol, username, password, virtual_host, loop=loop)
+    protocol.connection = connection
 
     protocol.send_protocol_header()
 
@@ -26,8 +26,7 @@ def connect(host='localhost', port='5672', username='guest', password='guest', v
 
 
 class AMQP(asyncio.Protocol):
-    def __init__(self, connection):
-        self.connection = connection
+    def __init__(self):
         self.partial_frame = b''
 
     def connection_made(self, transport):
@@ -71,9 +70,9 @@ class AMQP(asyncio.Protocol):
 
 
 class Connection(object):
-    def __init__(self, username='guest', password='guest', virtual_host='/', max_channel=1024, *, loop=None):
+    def __init__(self, protocol, username='guest', password='guest', virtual_host='/', max_channel=1024, *, loop=None):
         self.loop = asyncio.get_event_loop() if loop is None else loop
-        self.protocol = None
+        self.protocol = protocol
         self.username = username
         self.password = password
         self.virtual_host = virtual_host
@@ -264,21 +263,6 @@ class MethodFrame(Frame):
     def __init__(self, channel_id, payload):
         self.channel_id = channel_id
         self.payload = payload
-
-    def serialise(self):
-        frame = serialisation.pack_octet(self.frame_type)
-        frame += serialisation.pack_short(self.channel_id)
-
-        if isinstance(self.payload, bytes):
-            body = self.payload
-        else:
-            bytesio = BytesIO()
-            self.payload.write(bytesio)
-            body = bytesio.getvalue()
-
-        frame += serialisation.pack_long(len(body)) + body
-        frame += FRAME_END
-        return frame
 
 
 class HeartbeatFrame(Frame):

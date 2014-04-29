@@ -16,8 +16,8 @@ class MockLoopContext(LoopContext):
 
 class ConnectionContext(LoopContext):
     def given_a_connection(self):
-        self.connection = asynqp.Connection('guest', 'guest', loop=self.loop)
-        self.connection.protocol = self.protocol = mock.Mock(spec=asynqp.AMQP)
+        self.protocol = mock.Mock(spec=asynqp.AMQP)
+        self.connection = asynqp.Connection(self.protocol, 'guest', 'guest', loop=self.loop)
         self.protocol.transport = mock.Mock()
 
 
@@ -38,6 +38,6 @@ class ProtocolContext:
     def establish_the_connection(self):
         self.transport = mock.Mock(spec=asyncio.Transport)
         self.connection = mock.Mock(spec=asynqp.Connection)
-        self.protocol = asynqp.AMQP(self.connection)
-        self.connection.protocol = self.protocol
+        self.protocol = asynqp.AMQP()
+        self.protocol.connection = self.connection
         self.protocol.connection_made(self.transport)
