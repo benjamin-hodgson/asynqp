@@ -25,7 +25,7 @@ class WhenConnectionStartArrives(ProtocolContext):
         self.protocol.data_received(self.raw)
 
     def it_should_dispatch_a_correctly_deserialised_ConnectionStart_method(self):
-        self.connection.handle.assert_called_once_with(self.expected_frame)
+        self.connection.dispatch.assert_called_once_with(self.expected_frame)
 
 
 class WhenSendingConnectionStartOK(ProtocolContext):
@@ -50,7 +50,7 @@ class WhenDeserialisingConnectionTune(ProtocolContext):
         self.protocol.data_received(self.raw)
 
     def it_should_dispatch_a_correctly_deserialised_ConnectionTune_method(self):
-        self.connection.handle.assert_called_once_with(self.expected_frame)
+        self.connection.dispatch.assert_called_once_with(self.expected_frame)
 
 
 class WhenSendingConnectionTuneOK(ProtocolContext):

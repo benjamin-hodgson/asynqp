@@ -9,12 +9,12 @@ class LoopContext:
         self.loop = asyncio.get_event_loop()
 
 
-class MockLoopContext:
+class MockLoopContext(LoopContext):
     def given_an_event_loop(self):
         self.loop = mock.Mock(spec=asyncio.AbstractEventLoop)
 
 
-class ConnectionContext:
+class ConnectionContext(LoopContext):
     def given_a_connection(self):
         self.connection = asynqp.Connection('guest', 'guest', loop=self.loop)
         self.connection.protocol = self.protocol = mock.Mock(spec=asynqp.AMQP)
@@ -24,13 +24,13 @@ class ConnectionContext:
 class OpenConnectionContext(ConnectionContext):
     def given_an_open_connection(self):
         start_frame = asynqp.Frame(asynqp.FrameType.method, 0, methods.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US'))
-        self.connection.handle(start_frame)
+        self.connection.dispatch(start_frame)
 
         tune_frame = asynqp.Frame(asynqp.FrameType.method, 0, methods.ConnectionTune(0, 131072, 600))
-        self.connection.handle(tune_frame)
+        self.connection.dispatch(tune_frame)
 
         open_ok_frame = asynqp.Frame(asynqp.FrameType.method, 0, methods.ConnectionOpenOK(''))
-        self.connection.handle(open_ok_frame)
+        self.connection.dispatch(open_ok_frame)
         self.protocol.reset_mock()
 
 
