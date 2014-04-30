@@ -1,6 +1,6 @@
 import asyncio
 import asynqp
-from asynqp import methods
+from asynqp import spec
 from .base_contexts import ProtocolContext
 
 
@@ -8,7 +8,7 @@ class WhenConnectionStartArrives(ProtocolContext):
     def given_a_connection_start_method_I_copied_from_the_rabbitmq_server(self):
         self.raw = b"\x01\x00\x00\x00\x00\x01\x50\x00\x0A\x00\x0A\x00\t\x00\x00\x01%\x0ccapabilitiesF\x00\x00\x00X\x12publisher_confirmst\x01\x1aexchange_exchange_bindingst\x01\nbasic.nackt\x01\x16consumer_cancel_notifyt\x01\tcopyrightS\x00\x00\x00'Copyright (C) 2007-2013 GoPivotal, Inc.\x0binformationS\x00\x00\x005Licensed under the MPL.  See http://www.rabbitmq.com/\x08platformS\x00\x00\x00\nErlang/OTP\x07productS\x00\x00\x00\x08RabbitMQ\x07versionS\x00\x00\x00\x053.1.5\x00\x00\x00\x0eAMQPLAIN PLAIN\x00\x00\x00\x0Ben_US en_GB\xCE"
 
-        expected_method = methods.ConnectionStart(0, 9, {
+        expected_method = spec.ConnectionStart(0, 9, {
             'capabilities': {'publisher_confirms': True,
                              'exchange_exchange_bindings': True,
                              'basic.nack': True,
@@ -30,7 +30,7 @@ class WhenConnectionStartArrives(ProtocolContext):
 
 class WhenSendingConnectionStartOK(ProtocolContext):
     def given_a_method_to_send(self):
-        method = methods.ConnectionStartOK({'somecrap': 'aboutme'}, 'AMQPLAIN', {'auth': 'info'}, 'en_US')
+        method = spec.ConnectionStartOK({'somecrap': 'aboutme'}, 'AMQPLAIN', {'auth': 'info'}, 'en_US')
         self.frame = asynqp.MethodFrame(0, method)
 
     def when_we_send_the_method(self):
@@ -43,7 +43,7 @@ class WhenSendingConnectionStartOK(ProtocolContext):
 class WhenDeserialisingConnectionTune(ProtocolContext):
     def given_a_connection_tune_method_I_copied_from_the_rabbitmq_server(self):
         self.raw = b'\x01\x00\x00\x00\x00\x00\x0C\x00\x0A\x00\x1E\x00\x00\x00\x02\x00\x00\x02\x58\xCE'
-        expected_method = methods.ConnectionTune(0, 131072, 600)
+        expected_method = spec.ConnectionTune(0, 131072, 600)
         self.expected_frame = asynqp.MethodFrame(0, expected_method)
 
     def when_the_frame_arrives(self):
@@ -55,7 +55,7 @@ class WhenDeserialisingConnectionTune(ProtocolContext):
 
 class WhenSendingConnectionTuneOK(ProtocolContext):
     def given_a_method_to_send(self):
-        method = methods.ConnectionTuneOK(1024, 131072, 10)
+        method = spec.ConnectionTuneOK(1024, 131072, 10)
         self.frame = asynqp.MethodFrame(0, method)
 
     def when_I_serialise_the_method(self):

@@ -3,11 +3,8 @@ import enum
 import struct
 from io import BytesIO
 from .exceptions import AMQPError
-from . import methods
+from . import spec
 from . import serialisation
-
-
-FRAME_END = b'\xCE'
 
 
 @asyncio.coroutine
@@ -49,9 +46,9 @@ class AMQP(asyncio.Protocol):
             return
 
         raw_payload = data[7:7+size]
-        frame_end = data[7+size:8+size]
+        frame_end = data[7+size]
 
-        if frame_end != FRAME_END:
+        if frame_end != spec.FRAME_END:
             self.transport.close()
             raise AMQPError("Frame end byte was incorrect")
 
@@ -89,7 +86,7 @@ class Connection(object):
         channel = Channel(self.protocol, next_channel_num, loop=self.loop)
 
         self.handlers[next_channel_num] = channel
-        self.send_frame(MethodFrame(next_channel_num, methods.ChannelOpen('')))
+        self.send_frame(MethodFrame(next_channel_num, spec.ChannelOpen('')))
 
         yield from channel.opened
         return channel
@@ -107,13 +104,13 @@ class Connection(object):
     def dispatch(self, frame):
         if isinstance(frame, HeartbeatFrame):
             return
-        if self.closing and type(frame.payload) not in (methods.ConnectionClose, methods.ConnectionCloseOK):
+        if self.closing and type(frame.payload) not in (spec.ConnectionClose, spec.ConnectionCloseOK):
             return
         handler = self.handlers[frame.channel_id]
         return handler.handle(frame)
 
     def send_close(self, reply_code=0, reply_text='Connection closed by application', class_id=0, method_id=0):
-        self.send_method(methods.ConnectionClose(reply_code, reply_text, class_id, method_id))
+        self.send_method(spec.ConnectionClose(reply_code, reply_text, class_id, method_id))
         self.closing = True
 
     def send_method(self, method):
@@ -140,7 +137,7 @@ class ConnectionFrameHandler(object):
             handler(frame)
 
     def handle_ConnectionStart(self, frame):
-        method = methods.ConnectionStartOK(
+        method = spec.ConnectionStartOK(
             {},
             'AMQPLAIN',
             {'LOGIN': self.connection.username, 'PASSWORD': self.connection.password},
@@ -153,17 +150,17 @@ class ConnectionFrameHandler(object):
         self.connection.set_connection_info(max_channel, frame.payload.heartbeat.value, frame.payload.frame_max.value)
         self.connection.heartbeat_monitor.send_heartbeat()
 
-        method = methods.ConnectionTuneOK(self.connection.max_channel, self.connection.max_frame_size, self.connection.heartbeat_monitor.heartbeat_interval)
+        method = spec.ConnectionTuneOK(self.connection.max_channel, self.connection.max_frame_size, self.connection.heartbeat_monitor.heartbeat_interval)
         reply_frame = self.connection.send_method(method)
 
-        open_frame = self.connection.send_method(methods.ConnectionOpen(self.connection.virtual_host, '', False))
+        open_frame = self.connection.send_method(spec.ConnectionOpen(self.connection.virtual_host, '', False))
         self.connection.heartbeat_monitor.monitor_heartbeat()
 
     def handle_ConnectionOpenOK(self, frame):
         self.connection.opened.set_result(True)
 
     def handle_ConnectionClose(self, frame):
-        frame = self.connection.send_method(methods.ConnectionCloseOK())
+        frame = self.connection.send_method(spec.ConnectionCloseOK())
         self.connection.closing = True
 
     def handle_ConnectionCloseOK(self, frame):
@@ -204,7 +201,7 @@ class Channel(object):
 
     @asyncio.coroutine
     def close(self):
-        frame = MethodFrame(self.channel_id, methods.ChannelClose(0, 'Channel closed by application', 0, 0))
+        frame = MethodFrame(self.channel_id, spec.ChannelClose(0, 'Channel closed by application', 0, 0))
         self.protocol.send_frame(frame)
         self.closing = True
         yield from self.closed
@@ -212,7 +209,7 @@ class Channel(object):
     def handle(self, frame):
         method_type = type(frame.payload)
         handle_name = method_type.__name__
-        if self.closing and method_type not in (methods.ChannelClose, methods.ChannelCloseOK):
+        if self.closing and method_type not in (spec.ChannelClose, spec.ChannelCloseOK):
             return
 
         try:
@@ -227,7 +224,7 @@ class Channel(object):
 
     def handle_ChannelClose(self, frame):
         self.closing = True
-        frame = MethodFrame(self.channel_id, methods.ChannelCloseOK())
+        frame = MethodFrame(self.channel_id, spec.ChannelCloseOK())
         self.protocol.send_frame(frame)
 
     def handle_ChannelCloseOK(self, frame):
@@ -247,7 +244,7 @@ class Frame(object):
             body = bytesio.getvalue()
 
         frame += serialisation.pack_long(len(body)) + body
-        frame += FRAME_END
+        frame += serialisation.pack_octet(spec.FRAME_END)
         return frame
 
     def __eq__(self, other):
@@ -258,14 +255,14 @@ class Frame(object):
     @classmethod
     def read(cls, frame_type, channel_id, raw_payload):
         if frame_type == MethodFrame.frame_type:
-            method = methods.read_method(raw_payload)
+            method = spec.read_method(raw_payload)
             return MethodFrame(channel_id, method)
         elif frame_type == HeartbeatFrame.frame_type:
             return HeartbeatFrame()
 
 
 class MethodFrame(Frame):
-    frame_type = 1
+    frame_type = spec.FRAME_METHOD
     def __init__(self, channel_id, payload):
         self.channel_id = channel_id
         self.payload = payload

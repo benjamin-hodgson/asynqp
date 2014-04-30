@@ -210,10 +210,10 @@ class IncomingMethod(Method):
 
 
 # here be monsters
-def load_methods():
+def load_spec():
     tree = parse_tree()
     classes = get_classes(tree)
-    return generate_methods(classes)
+    return generate_methods(classes), get_constants(tree)
 
 
 def parse_tree():
@@ -253,6 +253,15 @@ def get_classes(tree):
     return classes
 
 
+def get_constants(tree):
+    constants = {}
+    for elem in tree.findall('constant'):
+        name = elem.attrib['name'].replace('-', '_').upper()
+        value = int(elem.attrib['value'])
+        constants[name] = value
+    return constants
+
+
 def generate_methods(classes):
     methods = {}
     for class_name, (class_id, ms) in classes.items():
@@ -270,10 +279,11 @@ def generate_methods(classes):
     return methods
 
 
-METHODS = load_methods()
+METHODS, CONSTANTS = load_spec()
 
 # what a hack! 'response' is almost always a table but the protocol spec says it's a longstr.
 METHODS['ConnectionStartOK'].field_info['response'] = Table
 
 # Also pretty hacky
 globals().update(METHODS)
+globals().update(CONSTANTS)
