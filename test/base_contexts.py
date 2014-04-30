@@ -38,6 +38,7 @@ class ProtocolContext:
     def establish_the_connection(self):
         self.transport = mock.Mock(spec=asyncio.Transport)
         self.connection = mock.Mock(spec=asynqp.Connection)
+        self.connection.heartbeat_monitor = mock.Mock()
         self.protocol = asynqp.AMQP()
         self.protocol.connection = self.connection
         self.protocol.connection_made(self.transport)

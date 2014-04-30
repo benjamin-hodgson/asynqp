@@ -30,7 +30,7 @@ class WhenAWholeFrameArrives(ProtocolContext):
         self.connection.dispatch.assert_called_once_with(self.expected_frame)
 
     def it_should_reset_the_heartbeat_timeout(self):
-        assert self.connection.reset_heartbeat_timeout.called
+        assert self.connection.heartbeat_monitor.reset_heartbeat_timeout.called
 
 
 class WhenAFrameDoesNotEndInFrameEnd(ProtocolContext):

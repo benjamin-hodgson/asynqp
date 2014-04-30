@@ -33,7 +33,7 @@ class WhenRespondingToConnectionTune(ConnectionContext, MockLoopContext):
 
     def it_should_start_sending_and_monitoring_heartbeats(self):
         self.loop.call_later.assert_has_calls([
-            mock.call(600, self.connection.send_heartbeat),
+            mock.call(600, self.connection.heartbeat_monitor.send_heartbeat),
             mock.call(600*2, self.connection.send_close, 501, 'Heartbeat timed out')
         ])
 
@@ -61,14 +61,14 @@ class WhenItIsTimeToHeartbeat(ConnectionContext, MockLoopContext):
         self.protocol.reset_mock()
         self.loop.reset_mock()
 
-    def when_the_event_loop_comes_aknockin(self):
-        self.connection.send_heartbeat()
+    def when_the_event_loop_comes_a_knockin(self):
+        self.connection.heartbeat_monitor.send_heartbeat()
 
     def it_should_send_a_heartbeat_frame(self):
         self.protocol.send_frame.assert_called_once_with(asynqp.HeartbeatFrame())
 
     def it_should_set_up_the_next_heartbeat(self):
-        self.loop.call_later.assert_called_once_with(600, self.connection.send_heartbeat)
+        self.loop.call_later.assert_called_once_with(600, self.connection.heartbeat_monitor.send_heartbeat)
 
 
 class WhenResettingTheHeartbeatTimeout(ConnectionContext, MockLoopContext):
@@ -78,7 +78,7 @@ class WhenResettingTheHeartbeatTimeout(ConnectionContext, MockLoopContext):
         self.loop.reset_mock()
 
     def because_the_timeout_gets_reset(self):
-        self.connection.reset_heartbeat_timeout()
+        self.connection.heartbeat_monitor.reset_heartbeat_timeout()
 
     def it_should_cancel_the_close_callback(self):
         self.loop.call_later.return_value.cancel.assert_called_once_with()
@@ -109,7 +109,7 @@ class WhenAConnectionThatWasClosedByTheServerRecievesAMethod(ConnectionContext):
         self.mock_handler = mock.Mock()
 
     def when_another_frame_arrives(self):
-        with mock.patch.object(self.connection, 'handler', self.mock_handler):
+        with mock.patch.dict(self.connection.handlers, {0: self.mock_handler}):
             self.connection.dispatch(self.start_frame)
 
     def it_MUST_be_discarded(self):
@@ -126,7 +126,7 @@ class WhenAConnectionThatWasClosedByTheApplicationRecievesAMethod(ConnectionCont
         self.mock_handler = mock.Mock()
 
     def when_another_frame_arrives(self):
-        with mock.patch.object(self.connection, 'handler', self.mock_handler):
+        with mock.patch.dict(self.connection.handlers, {0: self.mock_handler}):
             self.connection.dispatch(self.start_frame)
 
     def it_should_not_dispatch_the_frame(self):

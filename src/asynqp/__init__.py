@@ -33,7 +33,7 @@ class AMQP(asyncio.Protocol):
         self.transport = transport
 
     def data_received(self, data):
-        self.connection.reset_heartbeat_timeout()  # the spec says 'any octet may substitute for a heartbeat'
+        self.connection.heartbeat_monitor.reset_heartbeat_timeout()  # the spec says 'any octet may substitute for a heartbeat'
         data = self.partial_frame + data
         self.partial_frame = b''
 
@@ -80,9 +80,8 @@ class Connection(object):
         self.opened = asyncio.Future(loop=self.loop)
         self.closed = asyncio.Future(loop=self.loop)
         self.closing = False
-        self.heartbeat_timeout_callback = None
-        self.handler = ConnectionFrameHandler(self)
-        self.handlers = {0: self.handler}
+        self.handlers = {0: ConnectionFrameHandler(self)}
+        self.heartbeat_monitor = HeartbeatMonitor(self, self.loop)
 
     @asyncio.coroutine
     def open_channel(self):
@@ -100,19 +99,10 @@ class Connection(object):
         self.send_close()
         yield from self.closed
 
-    def send_heartbeat(self):
-        if self.heartbeat_interval > 0:
-            self.send_frame(HeartbeatFrame())
-            self.loop.call_later(self.heartbeat_interval, self.send_heartbeat)
-
-    def monitor_heartbeat(self):
-        if self.heartbeat_interval > 0:
-            self.heartbeat_timeout_callback = self.loop.call_later(self.heartbeat_interval * 2, self.send_close, 501, 'Heartbeat timed out')
-
-    def reset_heartbeat_timeout(self):
-        if self.heartbeat_timeout_callback is not None:
-            self.heartbeat_timeout_callback.cancel()
-            self.monitor_heartbeat()
+    def set_connection_info(self, max_channel, heartbeat_interval, max_frame_size):
+        self.max_channel = max_channel
+        self.heartbeat_monitor.heartbeat_interval = heartbeat_interval
+        self.max_frame_size = max_frame_size
 
     def dispatch(self, frame):
         if isinstance(frame, HeartbeatFrame):
@@ -158,21 +148,16 @@ class ConnectionFrameHandler(object):
         )
         frame = self.connection.send_method(method)
 
-    def handle_ConnectionTune(self, frame):
-        # just agree with whatever the server wants. Make this configurable in future
-        if 0 < frame.payload.channel_max < 1024:
-            self.connection.max_channel = frame.payload.channel_max.value
-        self.connection.heartbeat_interval = frame.payload.heartbeat.value
-        self.connection.frame_max = frame.payload.frame_max.value
+    def handle_ConnectionTune(self, frame):  # just agree with whatever the server wants. Make this configurable in future
+        max_channel = frame.payload.channel_max.value if 0 < frame.payload.channel_max < 1024 else 1024
+        self.connection.set_connection_info(max_channel, frame.payload.heartbeat.value, frame.payload.frame_max.value)
+        self.connection.heartbeat_monitor.send_heartbeat()
 
-        self.connection.send_heartbeat()
-
-        method = methods.ConnectionTuneOK(self.connection.max_channel, self.connection.frame_max, self.connection.heartbeat_interval)
+        method = methods.ConnectionTuneOK(self.connection.max_channel, self.connection.max_frame_size, self.connection.heartbeat_monitor.heartbeat_interval)
         reply_frame = self.connection.send_method(method)
 
         open_frame = self.connection.send_method(methods.ConnectionOpen(self.connection.virtual_host, '', False))
-
-        self.connection.monitor_heartbeat()
+        self.connection.heartbeat_monitor.monitor_heartbeat()
 
     def handle_ConnectionOpenOK(self, frame):
         self.connection.opened.set_result(True)
@@ -184,6 +169,27 @@ class ConnectionFrameHandler(object):
     def handle_ConnectionCloseOK(self, frame):
         self.connection.protocol.transport.close()
         self.connection.closed.set_result(True)
+
+
+class HeartbeatMonitor(object):
+    def __init__(self, connection, loop):
+        self.connection = connection
+        self.loop = loop
+        self.heartbeat_timeout_callback = None
+
+    def send_heartbeat(self):
+        if self.heartbeat_interval > 0:
+            self.connection.send_frame(HeartbeatFrame())
+            self.loop.call_later(self.heartbeat_interval, self.send_heartbeat)
+
+    def monitor_heartbeat(self):
+        if self.heartbeat_interval > 0:
+            self.heartbeat_timeout_callback = self.loop.call_later(self.heartbeat_interval * 2, self.connection.send_close, 501, 'Heartbeat timed out')
+
+    def reset_heartbeat_timeout(self):
+        if self.heartbeat_timeout_callback is not None:
+            self.heartbeat_timeout_callback.cancel()
+            self.monitor_heartbeat()
 
 
 class Channel(object):
