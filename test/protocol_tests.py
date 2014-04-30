@@ -6,9 +6,6 @@ from asynqp import spec
 from .base_contexts import ProtocolContext
 
 
-# TODO: handle low-level exceptions by closing the connection with a message
-
-
 class WhenInitiatingProceedings(ProtocolContext):
     def when_i_send_the_protocol_header(self):
         self.protocol.send_protocol_header()
@@ -22,6 +19,7 @@ class WhenAWholeFrameArrives(ProtocolContext):
         self.raw = b'\x01\x00\x00\x00\x00\x00\x05\x00\x0A\x00\x29\x00\xCE'
         method = spec.ConnectionOpenOK('')
         self.expected_frame = asynqp.MethodFrame(0, method)
+        self.protocol.heartbeat_monitor = mock.Mock(spec=asynqp.HeartbeatMonitor)
 
     def because_the_whole_frame_arrives(self):
         self.protocol.data_received(self.raw)
@@ -30,7 +28,7 @@ class WhenAWholeFrameArrives(ProtocolContext):
         self.connection.dispatch.assert_called_once_with(self.expected_frame)
 
     def it_should_reset_the_heartbeat_timeout(self):
-        assert self.connection.heartbeat_monitor.reset_heartbeat_timeout.called
+        assert self.protocol.heartbeat_monitor.reset_heartbeat_timeout.called
 
 
 class WhenAFrameDoesNotEndInFrameEnd(ProtocolContext):

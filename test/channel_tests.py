@@ -24,8 +24,8 @@ class WhenOpeningAChannel(OpenConnectionContext):
         next(self.connection.open_channel())
 
     def it_should_send_a_channel_open_frame(self):
-        expected_frame = asynqp.MethodFrame(1, spec.ChannelOpen(''))
-        self.protocol.send_frame.assert_called_once_with(expected_frame)
+        expected = spec.ChannelOpen('')
+        self.protocol.send_method.assert_called_once_with(1, expected)
 
 
 class WhenChannelOpenOKArrives(OpenConnectionContext):
@@ -50,8 +50,8 @@ class WhenOpeningASecondChannel(OpenChannelContext):
         self.result = self.open_channel(2)
 
     def it_should_send_another_channel_open_frame(self):
-        expected_frame = asynqp.MethodFrame(2, spec.ChannelOpen(''))
-        self.protocol.send_frame.assert_called_once_with(expected_frame)
+        expected = spec.ChannelOpen('')
+        self.protocol.send_method.assert_called_once_with(2, expected)
 
     def it_should_have_the_correct_channel_id(self):
         assert self.result.channel_id == 2

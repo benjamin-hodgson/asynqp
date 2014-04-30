@@ -39,9 +39,9 @@ class FieldType(abc.ABC):
 
     def __lt__(self, other):
         if isinstance(other, type(self.value)):
-            return self.value <= other
+            return self.value < other
         try:
-            return self.value <= other.value
+            return self.value < other.value
         except AttributeError:
             return NotImplemented
 

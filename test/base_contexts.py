@@ -17,6 +17,7 @@ class MockLoopContext(LoopContext):
 class ConnectionContext(LoopContext):
     def given_a_connection(self):
         self.protocol = mock.Mock(spec=asynqp.AMQP)
+        self.protocol.send_frame._is_coroutine = False  # :(
         self.connection = asynqp.Connection(self.protocol, 'guest', 'guest', loop=self.loop)
         self.protocol.transport = mock.Mock()
 
