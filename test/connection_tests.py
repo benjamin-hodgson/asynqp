@@ -29,54 +29,8 @@ class WhenRespondingToConnectionTune(ConnectionContext, MockLoopContext):
         open = spec.ConnectionOpen('/', '', False)
         self.protocol.send_method.assert_has_calls([mock.call(0, tune_ok), mock.call(0, open)])
 
-    # def it_should_start_sending_and_monitoring_heartbeats(self):
-    #     self.loop.call_later.assert_has_calls([
-    #         mock.call(600, self.connection.heartbeat_monitor.send_heartbeat),
-    #         mock.call(600*2, self.connection.send_close, 501, 'Heartbeat timed out')
-    #     ])
-
-
-class WhenTheServerDoesNotWantAHeartbeat(ConnectionContext, MockLoopContext):
-    def given_a_tune_frame_from_the_server(self):
-        self.tune_frame = asynqp.frames.MethodFrame(0, spec.ConnectionTune(0, 131072, 0))
-
-    def when_the_tune_frame_arrives(self):
-        self.dispatcher.dispatch(self.tune_frame)
-
-    def it_should_not_start_sending_and_monitoring_heartbeats(self):
-        assert not self.loop.call_later.called
-
-
-class WhenItIsTimeToHeartbeat(ConnectionContext, MockLoopContext):
-    def given_a_heartbeat_monitor(self):
-        self.heartbeat_monitor = asynqp.HeartbeatMonitor(self.protocol, self.loop, 600)
-
-    def when_the_event_loop_comes_a_knockin(self):
-        self.heartbeat_monitor.send_heartbeat()
-
-    def it_should_send_a_heartbeat_frame(self):
-        self.protocol.send_frame.assert_called_once_with(asynqp.frames.HeartbeatFrame())
-
-    def it_should_set_up_the_next_heartbeat(self):
-        self.loop.call_later.assert_called_once_with(600, self.heartbeat_monitor.send_heartbeat)
-
-
-class WhenResettingTheHeartbeatTimeout(ConnectionContext, MockLoopContext):
-    def given_an_open_connection(self):
-        self.heartbeat_monitor = asynqp.HeartbeatMonitor(self.protocol, self.loop, 600)
-        self.heartbeat_monitor.monitor_heartbeat()
-        self.loop.reset_mock()
-
-    def because_the_timeout_gets_reset(self):
-        self.heartbeat_monitor.reset_heartbeat_timeout()
-
-    def it_should_cancel_the_close_callback(self):
-        self.loop.call_later.return_value.cancel.assert_called_once_with()
-
-    def it_should_set_up_another_close_callback(self):
-        expected_method = spec.ConnectionClose(501, 'Heartbeat timed out', 0, 0)
-        expected_frame = asynqp.frames.MethodFrame(0, expected_method)
-        self.loop.call_later.assert_called_once_with(600*2, self.protocol.send_frame, expected_frame)
+    def it_should_start_heartbeating(self):
+        self.protocol.start_heartbeat.assert_called_once_with(600)
 
 
 class WhenRespondingToConnectionClose(ConnectionContext):

@@ -1,4 +1,3 @@
-import asyncio
 from unittest import mock
 import contexts
 import asynqp
@@ -31,7 +30,7 @@ class WhenAWholeFrameArrives(ProtocolContext):
         self.handler.handle.assert_called_once_with(self.expected_frame)
 
     def it_should_reset_the_heartbeat_timeout(self):
-        assert self.protocol.heartbeat_monitor.reset_heartbeat_timeout.called
+        assert self.protocol.heartbeat_monitor.heartbeat_received.called
 
 
 class WhenAFrameDoesNotEndInFrameEnd(ProtocolContext):

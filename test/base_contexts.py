@@ -19,7 +19,8 @@ class ConnectionContext(LoopContext):
         self.protocol = mock.Mock(spec=asynqp.AMQP)
         self.protocol.send_frame._is_coroutine = False  # :(
         self.dispatcher = asynqp.Dispatcher()
-        self.connection = asynqp.Connection(self.protocol, self.dispatcher, 'guest', 'guest', loop=self.loop)
+        self.connection_info = asynqp.ConnectionInfo('guest', 'guest', '/')
+        self.connection = asynqp.Connection(self.loop, self.protocol, self.dispatcher, self.connection_info)
         self.protocol.transport = mock.Mock()
 
 
@@ -36,11 +37,9 @@ class OpenConnectionContext(ConnectionContext):
         self.protocol.reset_mock()
 
 
-class ProtocolContext:
-    def establish_the_connection(self):
+class ProtocolContext(LoopContext):
+    def given_a_connected_protocol(self):
         self.transport = mock.Mock(spec=asyncio.Transport)
-        self.connection = mock.Mock(spec=asynqp.Connection)
         self.dispatcher = asynqp.Dispatcher()
-        self.protocol = asynqp.AMQP(self.dispatcher)
-        self.protocol.connection = self.connection
+        self.protocol = asynqp.AMQP(self.dispatcher, self.loop)
         self.protocol.connection_made(self.transport)
