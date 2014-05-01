@@ -11,8 +11,8 @@ class OpenChannelContext(OpenConnectionContext):
     def open_channel(self, channel_id=1):
         coro = self.connection.open_channel()
         next(coro)
-        open_ok_frame = asynqp.MethodFrame(channel_id, spec.ChannelOpenOK(''))
-        self.connection.dispatch(open_ok_frame)
+        open_ok_frame = asynqp.frames.MethodFrame(channel_id, spec.ChannelOpenOK(''))
+        self.dispatcher.dispatch(open_ok_frame)
         try:
             next(coro)
         except StopIteration as e:
@@ -34,8 +34,8 @@ class WhenChannelOpenOKArrives(OpenConnectionContext):
         next(self.coro)
 
     def when_channel_open_ok_arrives(self):
-        open_ok_frame = asynqp.MethodFrame(1, spec.ChannelOpenOK(''))
-        self.connection.dispatch(open_ok_frame)
+        open_ok_frame = asynqp.frames.MethodFrame(1, spec.ChannelOpenOK(''))
+        self.dispatcher.dispatch(open_ok_frame)
         try:
             next(self.coro)
         except StopIteration as e:
@@ -62,17 +62,17 @@ class WhenClosingAChannel(OpenChannelContext):
         next(self.channel.close())
 
     def it_should_send_a_ChannelClose_method(self):
-        expected_frame = asynqp.MethodFrame(1, spec.ChannelClose(0, 'Channel closed by application', 0, 0))
+        expected_frame = asynqp.frames.MethodFrame(1, spec.ChannelClose(0, 'Channel closed by application', 0, 0))
         self.protocol.send_frame.assert_called_once_with(expected_frame)
 
 
 class WhenTheServerClosesAChannel(OpenChannelContext):
     def when_the_server_shuts_the_channel_down(self):
-        channel_close_frame = asynqp.MethodFrame(1, spec.ChannelClose(123, 'i am tired of you', 40, 50))
-        self.connection.dispatch(channel_close_frame)
+        channel_close_frame = asynqp.frames.MethodFrame(1, spec.ChannelClose(123, 'i am tired of you', 40, 50))
+        self.dispatcher.dispatch(channel_close_frame)
 
     def it_should_send_ChannelCloseOK(self):
-        expected_frame = asynqp.MethodFrame(1, spec.ChannelCloseOK())
+        expected_frame = asynqp.frames.MethodFrame(1, spec.ChannelCloseOK())
         self.protocol.send_frame.assert_called_once_with(expected_frame)
 
 
@@ -82,8 +82,8 @@ class WhenAnotherMethodArrivesAfterTheChannelIsClosed(OpenChannelContext):
         self.protocol.reset_mock()
 
     def when_another_method_arrives(self):
-        open_ok_frame = asynqp.MethodFrame(1, spec.ChannelOpenOK(''))
-        self.connection.dispatch(open_ok_frame)
+        open_ok_frame = asynqp.frames.MethodFrame(1, spec.ChannelOpenOK(''))
+        self.dispatcher.dispatch(open_ok_frame)
 
     def it_should_discard_the_method(self):
         assert not self.protocol.send_frame.called
@@ -95,8 +95,8 @@ class WhenChannelCloseOKArrives(OpenChannelContext):
         next(self.coro)
 
     def when_channel_close_ok_arrives(self):
-        close_ok_frame = asynqp.MethodFrame(1, spec.ChannelCloseOK())
-        self.connection.dispatch(close_ok_frame)
+        close_ok_frame = asynqp.frames.MethodFrame(1, spec.ChannelCloseOK())
+        self.dispatcher.dispatch(close_ok_frame)
 
     def it_should_close_the_channel(self):
         assert self.channel.closed.result()
