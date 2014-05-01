@@ -16,6 +16,10 @@ class Channel(object):
 
     @asyncio.coroutine
     def close(self):
+        """
+        Close the channel by handshaking with the server.
+        This method is a coroutine.
+        """
         frame = frames.MethodFrame(self.channel_id, spec.ChannelClose(0, 'Channel closed by application', 0, 0))
         self.protocol.send_frame(frame)
         self.closing = True

@@ -22,6 +22,13 @@ class Connection(object):
 
     @asyncio.coroutine
     def open_channel(self):
+        """
+        Open a new channel on this connection.
+        This method is a coroutine.
+
+        Return value:
+            The new channel object
+        """
         channel = Channel(self.protocol, self.next_channel_num, loop=self.loop)
 
         self.dispatcher.add_handler(self.next_channel_num, channel)
@@ -33,6 +40,10 @@ class Connection(object):
 
     @asyncio.coroutine
     def close(self):
+        """
+        Close the connection by handshaking with the server.
+        This method is a coroutine
+        """
         self.protocol.send_method(0, spec.ConnectionClose(0, 'Connection closed by application', 0, 0))
         yield from self.handler.closed
 
