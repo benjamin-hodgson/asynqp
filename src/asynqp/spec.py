@@ -1,5 +1,6 @@
 import abc
 import functools
+import operator
 import struct
 from collections import OrderedDict
 from io import BytesIO
@@ -20,7 +21,6 @@ def read_method(raw):
     return METHODS[method_type_code].read(stream)
 
 
-@functools.total_ordering
 class FieldType(abc.ABC):
     def __init__(self, value):
         if isinstance(value, type(self)):
@@ -37,16 +37,12 @@ class FieldType(abc.ABC):
         except AttributeError:
             return NotImplemented
 
-    def __lt__(self, other):
-        if isinstance(other, type(self.value)):
-            return self.value < other
-        try:
-            return self.value < other.value
-        except AttributeError:
-            return NotImplemented
+    def __repr__(self):
+        return "{}({})".format(type(self).__name__, self.value)
 
+    @classmethod
     @abc.abstractmethod
-    def isvalid(self, value):
+    def isvalid(cls, value):
         pass
 
     @abc.abstractmethod
@@ -58,9 +54,44 @@ class FieldType(abc.ABC):
     def read(cls, stream):
         pass
 
+    def operate(self, func, other):
+        if isinstance(other, type(self.value)):
+            return type(self)(func(self.value, other))
+        try:
+            return type(self)(func(self.value, other.value))
+        except (AttributeError, TypeError):
+            return NotImplemented
 
-class Bit(FieldType):
-    def isvalid(self, value):
+
+@functools.total_ordering
+class OrderedFieldType(FieldType):
+    __lt__ = functools.partialmethod(FieldType.operate, operator.lt)
+
+
+class NumericFieldType(OrderedFieldType):
+    __add__ = functools.partialmethod(FieldType.operate, operator.add)
+    __sub__ = functools.partialmethod(FieldType.operate, operator.sub)
+    __mul__ = functools.partialmethod(FieldType.operate, operator.mul)
+    __truediv__ = functools.partialmethod(FieldType.operate, operator.truediv)
+    __floordiv__ = functools.partialmethod(FieldType.operate, operator.floordiv)
+
+
+class IntegralFieldType(NumericFieldType):
+    def __int__(self):
+        return int(self.value)
+
+    def __index__(self):
+        return operator.index(self.value)
+
+
+class StringFieldType(FieldType):
+    def __str__(self):
+        return str(self.value)
+
+
+class Bit(IntegralFieldType):
+    @classmethod
+    def isvalid(cls, value):
         return isinstance(value, bool)
 
     def write(self, stream):
@@ -71,8 +102,9 @@ class Bit(FieldType):
         return cls(serialisation.read_bool(stream))
 
 
-class Octet(FieldType):
-    def isvalid(self, value):
+class Octet(IntegralFieldType):
+    @classmethod
+    def isvalid(cls, value):
         return isinstance(value, int) and 0 <= value <= MAX_OCTET
 
     def write(self, stream):
@@ -83,8 +115,9 @@ class Octet(FieldType):
         return cls(serialisation.read_octet(stream))
 
 
-class Short(FieldType):
-    def isvalid(self, value):
+class Short(IntegralFieldType):
+    @classmethod
+    def isvalid(cls, value):
         return isinstance(value, int) and 0 <= value <= MAX_SHORT
 
     def write(self, stream):
@@ -95,8 +128,9 @@ class Short(FieldType):
         return cls(serialisation.read_short(stream))
 
 
-class Long(FieldType):
-    def isvalid(self, value):
+class Long(IntegralFieldType):
+    @classmethod
+    def isvalid(cls, value):
         return isinstance(value, int) and 0 <= value <= MAX_LONG
 
     def write(self, stream):
@@ -107,8 +141,9 @@ class Long(FieldType):
         return cls(serialisation.read_long(stream))
 
 
-class LongLong(FieldType):
-    def isvalid(self, value):
+class LongLong(IntegralFieldType):
+    @classmethod
+    def isvalid(cls, value):
         return isinstance(value, int) and 0 <= value <= MAX_LONG_LONG
 
     def write(self, stream):
@@ -120,7 +155,8 @@ class LongLong(FieldType):
 
 
 class ShortStr(FieldType):
-    def isvalid(self, value):
+    @classmethod
+    def isvalid(cls, value):
         return isinstance(value, str) and len(value) <= MAX_OCTET
 
     def write(self, stream):
@@ -132,7 +168,8 @@ class ShortStr(FieldType):
 
 
 class LongStr(FieldType):
-    def isvalid(self, value):
+    @classmethod
+    def isvalid(cls, value):
         return isinstance(value, str) and len(value) <= MAX_LONG
 
     def write(self, stream):
@@ -144,7 +181,8 @@ class LongStr(FieldType):
 
 
 class Table(FieldType):
-    def isvalid(self, value):
+    @classmethod
+    def isvalid(cls, value):
         return isinstance(value, dict)
 
     def write(self, stream):
@@ -185,7 +223,7 @@ class Method:
 
     def __eq__(self, other):
         return (type(self) == type(other)
-            and self.fields == other.fields)
+                and self.fields == other.fields)
 
 
 class OutgoingMethod(Method):

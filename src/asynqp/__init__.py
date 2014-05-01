@@ -1,11 +1,8 @@
 import asyncio
-import enum
 import struct
-from io import BytesIO
 from .exceptions import AMQPError
 from . import frames
 from . import spec
-from . import serialisation
 
 
 @asyncio.coroutine
@@ -21,20 +18,6 @@ def connect(host='localhost', port='5672', username='guest', password='guest', v
 
     yield from dispatcher.handlers[0].opened
     return connection
-
-
-class Dispatcher(object):
-    def __init__(self):
-        self.handlers = {}
-
-    def add_handler(self, index, handler):
-        self.handlers[index] = handler
-
-    def dispatch(self, frame):
-        if isinstance(frame, frames.HeartbeatFrame):
-            return
-        handler = self.handlers[frame.channel_id]
-        return handler.handle(frame)
 
 
 class AMQP(asyncio.Protocol):
@@ -64,8 +47,8 @@ class AMQP(asyncio.Protocol):
             self.partial_frame = data
             return
 
-        raw_payload = data[7:7+size]
-        frame_end = data[7+size]
+        raw_payload = data[7:7 + size]
+        frame_end = data[7 + size]
 
         if frame_end != spec.FRAME_END:
             self.transport.close()
@@ -74,7 +57,7 @@ class AMQP(asyncio.Protocol):
         frame = frames.read(frame_type, channel_id, raw_payload)
         self.dispatcher.dispatch(frame)
 
-        remainder = data[8+size:]
+        remainder = data[8 + size:]
         if remainder:
             self.data_received(remainder)
 
@@ -87,6 +70,20 @@ class AMQP(asyncio.Protocol):
 
     def send_protocol_header(self):
         self.transport.write(b'AMQP\x00\x00\x09\x01')
+
+
+class Dispatcher(object):
+    def __init__(self):
+        self.handlers = {}
+
+    def add_handler(self, index, handler):
+        self.handlers[index] = handler
+
+    def dispatch(self, frame):
+        if isinstance(frame, frames.HeartbeatFrame):
+            return
+        handler = self.handlers[frame.channel_id]
+        return handler.handle(frame)
 
 
 class Connection(object):
@@ -141,14 +138,14 @@ class ConnectionFrameHandler(object):
             {'LOGIN': self.connection_info['username'], 'PASSWORD': self.connection_info['password']},
             'en_US'
         )
-        frame = self.protocol.send_method(0, method)
+        self.protocol.send_method(0, method)
 
     def handle_ConnectionTune(self, frame):  # just agree with whatever the server wants. Make this configurable in future
-        self.protocol.heartbeat_monitor = HeartbeatMonitor(self.protocol, self.loop, frame.payload.heartbeat.value)
+        self.protocol.heartbeat_monitor = HeartbeatMonitor(self.protocol, self.loop, frame.payload.heartbeat)
         self.protocol.heartbeat_monitor.send_heartbeat()
 
         max_channel = frame.payload.channel_max.value if 0 < frame.payload.channel_max < 1024 else 1024
-        method = spec.ConnectionTuneOK(max_channel, frame.payload.frame_max.value, frame.payload.heartbeat.value)
+        method = spec.ConnectionTuneOK(max_channel, frame.payload.frame_max, frame.payload.heartbeat)
         self.protocol.send_method(0, method)
 
         self.protocol.send_method(0, spec.ConnectionOpen(self.connection_info['virtual_host'], '', False))
@@ -158,7 +155,7 @@ class ConnectionFrameHandler(object):
         self.opened.set_result(True)
 
     def handle_ConnectionClose(self, frame):
-        frame = self.protocol.send_method(0, spec.ConnectionCloseOK())
+        self.protocol.send_method(0, spec.ConnectionCloseOK())
 
     def handle_ConnectionCloseOK(self, frame):
         self.protocol.transport.close()

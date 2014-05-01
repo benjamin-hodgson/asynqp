@@ -29,12 +29,13 @@ class Frame(object):
 
     def __eq__(self, other):
         return (self.frame_type == other.frame_type
-            and self.channel_id == other.channel_id
-            and self.payload == other.payload)
+                and self.channel_id == other.channel_id
+                and self.payload == other.payload)
 
 
 class MethodFrame(Frame):
     frame_type = spec.FRAME_METHOD
+
     def __init__(self, channel_id, payload):
         self.channel_id = channel_id
         self.payload = payload
