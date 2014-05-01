@@ -47,8 +47,8 @@ class AMQP(asyncio.Protocol):
             self.partial_frame = data
             return
 
-        raw_payload = data[7:7 + size]
-        frame_end = data[7 + size]
+        raw_payload = data[7:7+size]
+        frame_end = data[7+size]
 
         if frame_end != spec.FRAME_END:
             self.transport.close()
@@ -57,7 +57,7 @@ class AMQP(asyncio.Protocol):
         frame = frames.read(frame_type, channel_id, raw_payload)
         self.dispatcher.dispatch(frame)
 
-        remainder = data[8 + size:]
+        remainder = data[8+size:]
         if remainder:
             self.data_received(remainder)
 
@@ -144,8 +144,7 @@ class ConnectionFrameHandler(object):
         self.protocol.heartbeat_monitor = HeartbeatMonitor(self.protocol, self.loop, frame.payload.heartbeat)
         self.protocol.heartbeat_monitor.send_heartbeat()
 
-        max_channel = frame.payload.channel_max.value if 0 < frame.payload.channel_max < 1024 else 1024
-        method = spec.ConnectionTuneOK(max_channel, frame.payload.frame_max, frame.payload.heartbeat)
+        method = spec.ConnectionTuneOK(frame.payload.channel_max, frame.payload.frame_max, frame.payload.heartbeat)
         self.protocol.send_method(0, method)
 
         self.protocol.send_method(0, spec.ConnectionOpen(self.connection_info['virtual_host'], '', False))

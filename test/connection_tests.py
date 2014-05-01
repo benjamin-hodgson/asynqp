@@ -1,4 +1,3 @@
-import asyncio
 import asynqp
 from asynqp import spec
 from unittest import mock
@@ -26,7 +25,7 @@ class WhenRespondingToConnectionTune(ConnectionContext, MockLoopContext):
         self.dispatcher.dispatch(self.tune_frame)
 
     def it_should_send_tune_ok_followed_by_open(self):
-        tune_ok = spec.ConnectionTuneOK(1024, 131072, 600)
+        tune_ok = spec.ConnectionTuneOK(0, 131072, 600)
         open = spec.ConnectionOpen('/', '', False)
         self.protocol.send_method.assert_has_calls([mock.call(0, tune_ok), mock.call(0, open)])
 
@@ -43,11 +42,6 @@ class WhenTheServerDoesNotWantAHeartbeat(ConnectionContext, MockLoopContext):
 
     def when_the_tune_frame_arrives(self):
         self.dispatcher.dispatch(self.tune_frame)
-
-    def it_should_send_tune_ok_followed_by_open(self):
-        tune_ok = spec.ConnectionTuneOK(1024, 131072, 0)
-        open = spec.ConnectionOpen('/', '', False)
-        self.protocol.send_method.assert_has_calls([mock.call(0, tune_ok), mock.call(0, open)])
 
     def it_should_not_start_sending_and_monitoring_heartbeats(self):
         assert not self.loop.call_later.called
