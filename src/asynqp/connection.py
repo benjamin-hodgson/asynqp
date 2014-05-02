@@ -1,4 +1,5 @@
 import asyncio
+import sys
 from .channel import Channel
 from . import spec
 from .exceptions import AMQPError
@@ -74,7 +75,9 @@ class ConnectionFrameHandler(object):
 
     def handle_ConnectionStart(self, frame):
         method = spec.ConnectionStartOK(
-            {},  # TODO
+            {"product": "asynqp",
+             "version": "0.1",  # todo: use pkg_resources to inspect the package
+             "platform": sys.version},
             'AMQPLAIN',
             {'LOGIN': self.connection_info.username, 'PASSWORD': self.connection_info.password},
             'en_US'

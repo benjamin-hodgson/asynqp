@@ -1,4 +1,5 @@
 import asyncio
+import sys
 import asynqp
 from asyncio import test_utils
 from asynqp import spec
@@ -15,7 +16,12 @@ class WhenRespondingToConnectionStart(ConnectionContext):
         self.dispatcher.dispatch(self.start_frame)
 
     def it_should_send_start_ok(self):
-        expected_method = spec.ConnectionStartOK({}, 'AMQPLAIN', {'LOGIN': 'guest', 'PASSWORD': 'guest'}, 'en_US')
+        expected_method = spec.ConnectionStartOK(
+            {"product": "asynqp", "version": mock.ANY, "platform": sys.version},
+            'AMQPLAIN',
+            {'LOGIN': 'guest', 'PASSWORD': 'guest'},
+            'en_US'
+        )
         self.protocol.send_method.assert_called_once_with(0, expected_method)
 
 
