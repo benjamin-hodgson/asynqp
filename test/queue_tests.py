@@ -100,3 +100,18 @@ class WhenILetTheServerPickTheQueueName(OpenChannelContext):
 
     def it_should_return_a_queue_with_the_correct_name(self):
         assert self.result.name == self.queue_name
+
+
+class WhenIUseAnIllegalNameForAQueue(OpenChannelContext):
+    @classmethod
+    def examples_of_bad_names(cls):
+        yield 'amq.begins.with.amq.'
+        yield 'contains~illegal/symbols'
+
+    def when_I_declare_the_queue(self, queue_name):
+        self.task = asyncio.async(self.channel.declare_queue(queue_name, durable=True, exclusive=True, auto_delete=True),
+                                  loop=self.loop)
+        test_utils.run_briefly(self.loop)
+
+    def it_should_throw_ValueError(self):
+        assert isinstance(self.task.exception(), ValueError)

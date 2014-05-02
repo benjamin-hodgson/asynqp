@@ -1,7 +1,11 @@
 import asyncio
+import re
 from . import spec
 from . import queue
 from .exceptions import AMQPError
+
+
+VALID_QUEUE_NAME_RE = re.compile(r'^(?!amq\.)(\w|[-.:])*$', flags=re.A)
 
 
 class Channel(object):
@@ -20,6 +24,7 @@ class Channel(object):
         channel.closed: a Future which is done when the handshake to close the channel has finished
 
     Methods:
+        channel.declare_queue(name='', **kwargs): Declare a queue on the broker. This method is a coroutine.
         channel.close(): Close the channel. This method is a coroutine.
     """
     def __init__(self, protocol, channel_id, dispatcher, loop):
@@ -42,7 +47,7 @@ class Channel(object):
 
         Arguments:
             name: the name of the queue.
-                  Supplying a name of '' will cause the broker to create a uniquely-named queue.
+                  Supplying a name of '' will create a queue with a unique name of the server's choosing.
                   default: ''
             durable: If true, the queue will be re-created when the server restarts.
                      default: True
@@ -56,6 +61,11 @@ class Channel(object):
         Return value:
             The new Queue object.
         """
+        if not VALID_QUEUE_NAME_RE.match(name):
+            raise ValueError("Not a valid queue name.\n"
+                             "Valid names consist of letters, digits, hyphen, underscore, period, or colon,"
+                             " and do not begin with 'amq.'")
+
         self.handler.queue_declare_futures[name] = fut = asyncio.Future(loop=self.loop)
         self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete)
         name = yield from fut
