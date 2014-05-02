@@ -17,9 +17,11 @@ class Connection(object):
         self.protocol = protocol
         self.dispatcher = dispatcher
         self.handler = ConnectionFrameHandler(self.protocol, self.loop, connection_info)
-        self.handler.closing.add_done_callback(self.dispatcher.closing.set_result)
-        self.handler.closing.add_done_callback(print)
+        self.opened = self.handler.opened
+        self.closed = self.handler.closed
+
         self.next_channel_num = 1
+        self.handler.closing.add_done_callback(self.dispatcher.closing.set_result)  # bit hacky
         self.dispatcher.add_handler(0, self.handler)
 
     @asyncio.coroutine
@@ -31,9 +33,8 @@ class Connection(object):
         Return value:
             The new channel object
         """
-        channel = Channel(self.protocol, self.next_channel_num, loop=self.loop)
+        channel = Channel(self.protocol, self.next_channel_num, self.dispatcher, loop=self.loop)
 
-        self.dispatcher.add_handler(self.next_channel_num, channel)
         self.protocol.send_method(self.next_channel_num, spec.ChannelOpen(''))
         self.next_channel_num += 1
 

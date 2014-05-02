@@ -33,5 +33,5 @@ def connect(host='localhost', port=5672, username='guest', password='guest', vir
 
     protocol.send_protocol_header()
 
-    yield from dispatcher.handlers[0].opened
+    yield from connection.opened
     return connection

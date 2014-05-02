@@ -1,5 +1,6 @@
 import asyncio
 import asynqp
+from asyncio import test_utils
 from asynqp import spec
 from unittest import mock
 from .base_contexts import MockLoopContext, ConnectionContext
@@ -50,7 +51,7 @@ class WhenAConnectionThatWasClosedByTheServerReceivesAMethod(ConnectionContext):
     def given_a_closed_connection(self):
         close_frame = asynqp.frames.MethodFrame(0, spec.ConnectionClose(123, 'you muffed up', 10, 20))
         self.dispatcher.dispatch(close_frame)
-        self.loop.run_until_complete(asyncio.sleep(0.1))
+        test_utils.run_briefly(self.loop)
 
         start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
         self.start_frame = asynqp.frames.MethodFrame(0, start_method)
@@ -66,9 +67,8 @@ class WhenAConnectionThatWasClosedByTheServerReceivesAMethod(ConnectionContext):
 
 class WhenAConnectionThatWasClosedByTheApplicationReceivesAMethod(ConnectionContext):
     def given_a_closed_connection(self):
-        coro = self.connection.close()
-        next(coro)
-        self.loop.run_until_complete(asyncio.sleep(0.1))
+        asyncio.Task(self.connection.close())
+        test_utils.run_briefly(self.loop)
 
         start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
         self.start_frame = asynqp.frames.MethodFrame(0, start_method)

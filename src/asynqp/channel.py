@@ -5,14 +5,16 @@ from .exceptions import AMQPError
 
 
 class Channel(object):
-    def __init__(self, protocol, channel_id, *, loop=None):
+    def __init__(self, protocol, channel_id, dispatcher, loop):
         self.protocol = protocol
         self.channel_id = channel_id
-        self.loop = asyncio.get_event_loop() if loop is None else loop
+        self.loop = loop
 
-        self.opened = asyncio.Future(loop=self.loop)
-        self.closed = asyncio.Future(loop=self.loop)
-        self.closing = False
+        self.handler = ChannelFrameHandler(self.channel_id, self.protocol, loop)
+        self.opened = self.handler.opened
+        self.closing = self.handler.closing
+        self.closed = self.handler.closed
+        dispatcher.add_handler(channel_id, self.handler)
 
     @asyncio.coroutine
     def close(self):
@@ -22,13 +24,23 @@ class Channel(object):
         """
         frame = frames.MethodFrame(self.channel_id, spec.ChannelClose(0, 'Channel closed by application', 0, 0))
         self.protocol.send_frame(frame)
-        self.closing = True
+        self.closing.set_result(True)
         yield from self.closed
+
+
+class ChannelFrameHandler(object):
+    def __init__(self, channel_id, protocol, loop):
+        self.channel_id = channel_id
+        self.protocol = protocol
+
+        self.opened = asyncio.Future(loop=loop)
+        self.closing = asyncio.Future(loop=loop)
+        self.closed = asyncio.Future(loop=loop)
 
     def handle(self, frame):
         method_type = type(frame.payload)
         handle_name = method_type.__name__
-        if self.closing and method_type not in (spec.ChannelClose, spec.ChannelCloseOK):
+        if self.closing.done() and method_type not in (spec.ChannelClose, spec.ChannelCloseOK):
             return
 
         try:
@@ -42,7 +54,7 @@ class Channel(object):
         self.opened.set_result(True)
 
     def handle_ChannelClose(self, frame):
-        self.closing = True
+        self.closing.set_result(True)
         frame = frames.MethodFrame(self.channel_id, spec.ChannelCloseOK())
         self.protocol.send_frame(frame)
 
