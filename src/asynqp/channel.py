@@ -56,9 +56,9 @@ class Channel(object):
         Return value:
             The new Queue object.
         """
-        self.handler.queue_declared = asyncio.Future(loop=self.loop)
+        self.handler.queue_declare_futures[name] = fut = asyncio.Future(loop=self.loop)
         self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete)
-        name = yield from self.handler.queue_declared
+        name = yield from fut
         return queue.Queue(name, durable, exclusive, auto_delete)
 
     @asyncio.coroutine
@@ -81,7 +81,7 @@ class ChannelFrameHandler(object):
         self.closing = asyncio.Future(loop=loop)
         self.closed = asyncio.Future(loop=loop)
 
-        self.queue_declared = None
+        self.queue_declare_futures = {}
 
     def handle(self, frame):
         method_type = type(frame.payload)
@@ -101,7 +101,8 @@ class ChannelFrameHandler(object):
 
     def handle_QueueDeclareOK(self, frame):
         name = frame.payload.queue
-        self.queue_declared.set_result(name)
+        fut = self.queue_declare_futures.get(name, self.queue_declare_futures.get('', None))
+        fut.set_result(name)
 
     def handle_ChannelClose(self, frame):
         self.closing.set_result(True)

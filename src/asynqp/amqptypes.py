@@ -52,12 +52,17 @@ class FieldType(abc.ABC):
             return NotImplemented
 
 
+class HashableFieldType(FieldType):
+    def __hash__(self):
+        return hash(self.value)
+
+
 @functools.total_ordering
 class OrderedFieldType(FieldType):
     __lt__ = functools.partialmethod(FieldType.operate, operator.lt)
 
 
-class NumericFieldType(OrderedFieldType):
+class NumericFieldType(OrderedFieldType, HashableFieldType):
     __add__ = functools.partialmethod(FieldType.operate, operator.add)
     __sub__ = functools.partialmethod(FieldType.operate, operator.sub)
     __mul__ = functools.partialmethod(FieldType.operate, operator.mul)
@@ -73,7 +78,7 @@ class IntegralFieldType(NumericFieldType):
         return operator.index(self.value)
 
 
-class StringFieldType(FieldType):
+class StringFieldType(HashableFieldType):
     def __str__(self):
         return str(self.value)
 
@@ -84,7 +89,7 @@ class Bit(IntegralFieldType):
         return isinstance(value, bool)
 
     def write(self, stream):
-        stream.write(serialisation.pack_bool(self.value))
+        raise NotImplementedError
 
     @classmethod
     def read(cls, stream):
@@ -143,7 +148,7 @@ class LongLong(IntegralFieldType):
         return cls(serialisation.read_long_long(stream))
 
 
-class ShortStr(FieldType):
+class ShortStr(StringFieldType):
     @classmethod
     def isvalid(cls, value):
         return isinstance(value, str) and len(value) <= MAX_OCTET
@@ -156,7 +161,7 @@ class ShortStr(FieldType):
         return cls(serialisation.read_short_string(stream))
 
 
-class LongStr(FieldType):
+class LongStr(StringFieldType):
     @classmethod
     def isvalid(cls, value):
         return isinstance(value, str) and len(value) <= MAX_LONG
