@@ -2,6 +2,7 @@ import asyncio
 import re
 from . import spec
 from . import queue
+from . import exchange
 from .exceptions import AMQPError
 
 
@@ -38,6 +39,31 @@ class Channel(object):
         self.closing = self.handler.closing
         self.closed = self.handler.closed
         dispatcher.add_handler(channel_id, self.handler)
+
+    @asyncio.coroutine
+    def declare_exchange(self, name, type, *, durable=True, auto_delete=False, internal=False):
+        """
+        Declare an exchange on the broker. If the exchange does not exist, it will be created.
+        This method is a coroutine.
+
+        Arguments:
+            name: the name of the exchange.
+            type: the type of the exchange (usually one of 'fanout', 'direct', 'topic', or 'headers')
+            durable: If true, the exchange will be re-created when the server restarts.
+                     default: True
+            auto_delete: If true, the exchange will be deleted when the last queue is un-bound from it.
+                         default: False
+            internal: If true, the exchange cannot be published to directly; it can only be bound to other exchanges.
+                      default: False
+
+        Return value:
+            the new Exchange object.
+        """
+        self.handler.exchange_declare_future = fut = asyncio.Future(loop=self.loop)
+
+        self.sender.send_ExchangeDeclare(name, type, durable, auto_delete, internal)
+        yield from fut
+        return exchange.Exchange(name, type)
 
     @asyncio.coroutine
     def declare_queue(self, name='', *, durable=True, exclusive=False, auto_delete=False):
@@ -92,6 +118,7 @@ class ChannelFrameHandler(object):
         self.closed = asyncio.Future(loop=loop)
 
         self.queue_declare_futures = {}
+        self.exchange_declare_future = None
 
     def handle(self, frame):
         method_type = type(frame.payload)
@@ -114,6 +141,9 @@ class ChannelFrameHandler(object):
         fut = self.queue_declare_futures.get(name, self.queue_declare_futures.get('', None))
         fut.set_result(name)
 
+    def handle_ExchangeDeclareOK(self, frame):
+        self.exchange_declare_future.set_result(None)
+
     def handle_ChannelClose(self, frame):
         self.closing.set_result(True)
         self.sender.send_CloseOK()
@@ -126,6 +156,10 @@ class ChannelMethodSender(object):
     def __init__(self, channel_id, protocol):
         self.channel_id = channel_id
         self.protocol = protocol
+
+    def send_ExchangeDeclare(self, name, type, durable, auto_delete, internal):
+        method = spec.ExchangeDeclare(0, name, type, False, durable, auto_delete, internal, False, {})
+        self.protocol.send_method(self.channel_id, method)
 
     def send_QueueDeclare(self, name, durable, exclusive, auto_delete):
         self.protocol.send_method(self.channel_id, spec.QueueDeclare(0, name, False, durable, exclusive, auto_delete, False, {}))
