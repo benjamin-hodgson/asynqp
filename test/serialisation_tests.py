@@ -45,3 +45,18 @@ class WhenParsingABadLongString:
 
     def it_should_throw_an_AMQPError(self):
         assert isinstance(self.exception, AMQPError)
+
+
+class WhenPackingBools:
+    @classmethod
+    def examples_of_bools(self):
+        yield [False], b"\x00"
+        yield [True], b"\x01"
+        yield [True, False, True], b'\x05'
+        yield [True, True, True, True, True, True, True, True], b'\xFF'
+
+    def because_I_pack_them(self, bools, expected):
+        self.result = serialisation.pack_bools(*bools)
+
+    def it_should_pack_them_correctly(self, bools, expected):
+        assert self.result == expected

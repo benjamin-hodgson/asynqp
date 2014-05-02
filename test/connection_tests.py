@@ -73,7 +73,7 @@ class WhenAConnectionThatWasClosedByTheServerReceivesAMethod(ConnectionContext):
 
 class WhenAConnectionThatWasClosedByTheApplicationReceivesAMethod(ConnectionContext):
     def given_a_closed_connection(self):
-        asyncio.Task(self.connection.close())
+        asyncio.async(self.connection.close())
         test_utils.run_briefly(self.loop)
 
         start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')

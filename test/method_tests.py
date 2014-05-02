@@ -64,8 +64,31 @@ class WhenSendingConnectionTuneOK(ProtocolContext):
         method = spec.ConnectionTuneOK(1024, 131072, 10)
         self.frame = asynqp.frames.MethodFrame(0, method)
 
-    def when_I_serialise_the_method(self):
+    def when_I_send_the_method(self):
         self.protocol.send_frame(self.frame)
 
     def it_should_write_the_correct_bytestring(self):
         self.transport.write.assert_called_once_with(b'\x01\x00\x00\x00\x00\x00\x0C\x00\n\x00\x1F\x04\x00\x00\x02\x00\x00\x00\x0A\xCE')
+
+
+class WhenSendingConnectionOpen(ProtocolContext):
+    def given_a_method_to_send(self):
+        method = spec.ConnectionOpen('/', '', False)
+        self.frame = asynqp.frames.MethodFrame(0, method)
+
+    def when_I_send_the_method(self):
+        self.protocol.send_frame(self.frame)
+
+    def it_should_write_the_correct_bytestring(self):
+        self.transport.write.assert_called_once_with(b'\x01\x00\x00\x00\x00\x00\x08\x00\x0A\x00\x28\x01/\x00\x00\xCE')
+
+
+class WhenSendingQueueDeclare(ProtocolContext):
+    def given_a_method_to_send(self):
+        self.method = spec.QueueDeclare(0, 'a', True, False, True, False, True, {})
+
+    def when_I_send_the_method(self):
+        self.protocol.send_method(1, self.method)
+
+    def it_should_write_the_correct_bytestring(self):
+        self.transport.write.assert_called_once_with(b'\x01\x00\x01\x00\x00\x00\x0D\x00\x32\x00\x0A\x00\x00\x01a\x15\x00\x00\x00\x00\xCE')

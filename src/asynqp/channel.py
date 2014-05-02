@@ -1,5 +1,6 @@
 import asyncio
 from . import spec
+from . import queue
 from .exceptions import AMQPError
 
 
@@ -23,6 +24,7 @@ class Channel(object):
     """
     def __init__(self, protocol, channel_id, dispatcher, loop):
         self.channel_id = channel_id
+        self.loop = loop
 
         self.sender = ChannelMethodSender(channel_id, protocol)
 
@@ -31,6 +33,13 @@ class Channel(object):
         self.closing = self.handler.closing
         self.closed = self.handler.closed
         dispatcher.add_handler(channel_id, self.handler)
+
+    @asyncio.coroutine
+    def declare_queue(self, name, *, durable=True, exclusive=False, auto_delete=False):
+        self.handler.queue_declared = asyncio.Future(loop=self.loop)
+        self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete)
+        name = yield from self.handler.queue_declared
+        return queue.Queue(name, durable, exclusive, auto_delete)
 
     @asyncio.coroutine
     def close(self):
@@ -52,6 +61,8 @@ class ChannelFrameHandler(object):
         self.closing = asyncio.Future(loop=loop)
         self.closed = asyncio.Future(loop=loop)
 
+        self.queue_declared = None
+
     def handle(self, frame):
         method_type = type(frame.payload)
         handle_name = method_type.__name__
@@ -68,6 +79,10 @@ class ChannelFrameHandler(object):
     def handle_ChannelOpenOK(self, frame):
         self.opened.set_result(True)
 
+    def handle_QueueDeclareOK(self, frame):
+        name = frame.payload.queue
+        self.queue_declared.set_result(name)
+
     def handle_ChannelClose(self, frame):
         self.closing.set_result(True)
         self.sender.send_CloseOK()
@@ -80,6 +95,9 @@ class ChannelMethodSender(object):
     def __init__(self, channel_id, protocol):
         self.channel_id = channel_id
         self.protocol = protocol
+
+    def send_QueueDeclare(self, name, durable, exclusive, auto_delete):
+        self.protocol.send_method(self.channel_id, spec.QueueDeclare(0, name, False, durable, exclusive, auto_delete, False, {}))
 
     def send_Close(self, status_code, message, class_id, method_id):
         self.protocol.send_method(self.channel_id, spec.ChannelClose(0, 'Channel closed by application', 0, 0))

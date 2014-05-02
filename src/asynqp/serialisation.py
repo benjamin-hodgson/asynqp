@@ -156,3 +156,11 @@ def pack_long_long(number):
 
 def pack_bool(b):
     return struct.pack('!?', b)
+
+
+def pack_bools(*bs):
+    tot = 0
+    for n, b in enumerate(reversed(bs)):
+        x = 1 if b else 0
+        tot += (x << n)
+    return pack_octet(tot)

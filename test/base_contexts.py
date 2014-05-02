@@ -1,5 +1,6 @@
 import asyncio
 import asynqp
+from asyncio import test_utils
 from asynqp import spec
 from unittest import mock
 
@@ -43,3 +44,17 @@ class ProtocolContext(LoopContext):
         self.dispatcher = asynqp.Dispatcher(self.loop)
         self.protocol = asynqp.AMQP(self.dispatcher, self.loop)
         self.protocol.connection_made(self.transport)
+
+
+class OpenChannelContext(OpenConnectionContext):
+    def given_an_open_channel(self):
+        self.channel = self.open_channel()
+        self.protocol.reset_mock()
+
+    def open_channel(self, channel_id=1):
+        task = asyncio.async(self.connection.open_channel(), loop=self.loop)
+        test_utils.run_briefly(self.loop)
+        open_ok_frame = asynqp.frames.MethodFrame(channel_id, spec.ChannelOpenOK(''))
+        self.dispatcher.dispatch(open_ok_frame)
+        test_utils.run_briefly(self.loop)
+        return task.result()

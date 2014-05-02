@@ -2,26 +2,12 @@ import asyncio
 import asynqp
 from asyncio import test_utils
 from asynqp import spec
-from .base_contexts import OpenConnectionContext
-
-
-class OpenChannelContext(OpenConnectionContext):
-    def given_an_open_channel(self):
-        self.channel = self.open_channel()
-        self.protocol.reset_mock()
-
-    def open_channel(self, channel_id=1):
-        task = asyncio.Task(self.connection.open_channel(), loop=self.loop)
-        test_utils.run_briefly(self.loop)
-        open_ok_frame = asynqp.frames.MethodFrame(channel_id, spec.ChannelOpenOK(''))
-        self.dispatcher.dispatch(open_ok_frame)
-        test_utils.run_briefly(self.loop)
-        return task.result()
+from .base_contexts import OpenConnectionContext, OpenChannelContext
 
 
 class WhenOpeningAChannel(OpenConnectionContext):
     def when_the_user_wants_to_open_a_channel(self):
-        asyncio.Task(self.connection.open_channel(), loop=self.loop)
+        asyncio.async(self.connection.open_channel(), loop=self.loop)
         test_utils.run_briefly(self.loop)
 
     def it_should_send_a_channel_open_frame(self):
@@ -31,7 +17,7 @@ class WhenOpeningAChannel(OpenConnectionContext):
 
 class WhenChannelOpenOKArrives(OpenConnectionContext):
     def given_the_user_has_called_open_channel(self):
-        self.task = asyncio.Task(self.connection.open_channel())
+        self.task = asyncio.async(self.connection.open_channel())
         test_utils.run_briefly(self.loop)
 
     def when_channel_open_ok_arrives(self):
@@ -58,7 +44,7 @@ class WhenOpeningASecondChannel(OpenChannelContext):
 
 class WhenTheApplicationClosesAChannel(OpenChannelContext):
     def when_I_close_the_channel(self):
-        asyncio.Task(self.channel.close())
+        asyncio.async(self.channel.close())
         test_utils.run_briefly(self.loop)
 
     def it_should_send_ChannelClose(self):
@@ -76,7 +62,7 @@ class WhenTheServerClosesAChannel(OpenChannelContext):
 
 class WhenAnotherMethodArrivesAfterIClosedTheChannel(OpenChannelContext):
     def given_that_i_closed_the_channel(self):
-        asyncio.Task(self.channel.close())
+        asyncio.async(self.channel.close())
         test_utils.run_briefly(self.loop)
         self.protocol.reset_mock()
 
@@ -105,7 +91,7 @@ class WhenAnotherMethodArrivesAfterTheServerClosedTheChannel(OpenChannelContext)
 
 class WhenChannelCloseOKArrives(OpenChannelContext):
     def given_the_user_has_called_close(self):
-        self.task = asyncio.Task(self.channel.close())
+        self.task = asyncio.async(self.channel.close())
         test_utils.run_briefly(self.loop)
 
     def when_channel_close_ok_arrives(self):

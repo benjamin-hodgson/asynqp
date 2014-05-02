@@ -4,6 +4,7 @@ from io import BytesIO
 from xml.etree import ElementTree
 import pkg_resources
 from . import amqptypes
+from . import serialisation
 from .amqptypes import FIELD_TYPES
 
 
@@ -37,8 +38,18 @@ class Method:
 class OutgoingMethod(Method):
     def write(self, stream):
         stream.write(struct.pack('!HH', *self.method_type))
+        bits = []
         for val in self.fields.values():
-            val.write(stream)
+            if isinstance(val, amqptypes.Bit):
+                bits.append(val.value)
+            else:
+                if bits:
+                    stream.write(serialisation.pack_bools(*bits))
+                    bits = []
+                val.write(stream)
+
+        if bits:
+            stream.write(serialisation.pack_bools(*bits))
 
 
 class IncomingMethod(Method):
