@@ -4,6 +4,23 @@ from .exceptions import AMQPError
 
 
 class Channel(object):
+    """
+    A Channel is a 'virtual connection' over which messages are sent and received.
+    Several independent channels can be multiplexed over the same connection,
+    so peers can perform several tasks concurrently while using a single socket.
+
+    Multi-threaded applications will typically use a 'channel-per-thread' approach,
+    though it is also acceptable to open several connections for a single thread.
+
+    Attributes:
+        channel.channel_id: the numerical ID of the channel
+        channel.opened: a Future which is done when the handshake to open the channel has finished
+        channel.closing: a Future which is done when the handshake to close the channel has been initiated
+        channel.closed: a Future which is done when the handshake to close the channel has finished
+
+    Methods:
+        channel.close(): Close the channel. This method is a coroutine.
+    """
     def __init__(self, protocol, channel_id, dispatcher, loop):
         self.channel_id = channel_id
 

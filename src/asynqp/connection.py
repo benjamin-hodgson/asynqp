@@ -16,6 +16,23 @@ class ConnectionInfo(object):
 
 
 class Connection(object):
+    """
+    A Connection is a long-lasting mode of communication with a remote server.
+    Each Connection occupies a single TCP connection, and may carry multiple Channels.
+    A Connection communicates with a single virtual host on the server; virtual hosts are
+    sandboxed and may not communicate with one another.
+
+    Applications are advised to use one Connection for each AMQP peer it needs to communicate with;
+    if you need to perform multiple concurrent tasks you should open multiple Channels.
+
+    Attributes:
+        connection.opened: a Future which is done when the handshake to open the connection has finished
+        connection.closed: a Future which is done when the handshake to close the connection has finished
+
+    Methods:
+        connection.open_channel: Open a new channel on this connection. This method is a coroutine.
+        connection.close: Close the connection. This method is a coroutine.
+    """
     def __init__(self, loop, protocol, dispatcher, connection_info):
         self.loop = loop
         self.protocol = protocol
@@ -23,7 +40,7 @@ class Connection(object):
 
         self.sender = ConnectionMethodSender(protocol)
 
-        self.handler = ConnectionFrameHandler(protocol, self.loop, connection_info)
+        self.handler = ConnectionFrameHandler(protocol, loop, connection_info)
         self.opened = self.handler.opened
         self.closed = self.handler.closed
 
