@@ -63,14 +63,17 @@ class AMQP(asyncio.Protocol):
 
 
 class Dispatcher(object):
-    def __init__(self):
+    def __init__(self, loop):
         self.handlers = {}
+        self.closing = asyncio.Future(loop=loop)
 
     def add_handler(self, index, handler):
         self.handlers[index] = handler
 
     def dispatch(self, frame):
         if isinstance(frame, frames.HeartbeatFrame):
+            return
+        if self.closing.done() and not isinstance(frame.payload, (spec.ConnectionClose, spec.ConnectionCloseOK)):
             return
         handler = self.handlers[frame.channel_id]
         return handler.handle(frame)

@@ -17,6 +17,8 @@ class Connection(object):
         self.protocol = protocol
         self.dispatcher = dispatcher
         self.handler = ConnectionFrameHandler(self.protocol, self.loop, connection_info)
+        self.handler.closing.add_done_callback(self.dispatcher.closing.set_result)
+        self.handler.closing.add_done_callback(print)
         self.next_channel_num = 1
         self.dispatcher.add_handler(0, self.handler)
 
@@ -44,6 +46,7 @@ class Connection(object):
         Close the connection by handshaking with the server.
         This method is a coroutine
         """
+        self.handler.closing.set_result(True)
         self.protocol.send_method(0, spec.ConnectionClose(0, 'Connection closed by application', 0, 0))
         yield from self.handler.closed
 
@@ -53,8 +56,9 @@ class ConnectionFrameHandler(object):
         self.protocol = protocol
         self.loop = loop
         self.connection_info = connection_info
-        self.opened = asyncio.Future()
-        self.closed = asyncio.Future()
+        self.opened = asyncio.Future(loop=loop)
+        self.closing = asyncio.Future(loop=loop)
+        self.closed = asyncio.Future(loop=loop)
 
     def handle(self, frame):
         method_type = type(frame.payload)
@@ -86,6 +90,7 @@ class ConnectionFrameHandler(object):
         self.opened.set_result(True)
 
     def handle_ConnectionClose(self, frame):
+        self.closing.set_result(True)
         self.protocol.send_method(0, spec.ConnectionCloseOK())
 
     def handle_ConnectionCloseOK(self, frame):

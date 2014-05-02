@@ -1,3 +1,4 @@
+import asyncio
 import asynqp
 from asynqp import spec
 from unittest import mock
@@ -45,38 +46,40 @@ class WhenRespondingToConnectionClose(ConnectionContext):
         self.protocol.send_method.assert_called_once_with(0, expected)
 
 
-# class WhenAConnectionThatWasClosedByTheServerReceivesAMethod(ConnectionContext):
-#     def given_a_closed_connection(self):
-#         close_frame = asynqp.frames.MethodFrame(0, spec.ConnectionClose(123, 'you muffed up', 10, 20))
-#         self.dispatcher.dispatch(close_frame)
+class WhenAConnectionThatWasClosedByTheServerReceivesAMethod(ConnectionContext):
+    def given_a_closed_connection(self):
+        close_frame = asynqp.frames.MethodFrame(0, spec.ConnectionClose(123, 'you muffed up', 10, 20))
+        self.dispatcher.dispatch(close_frame)
+        self.loop.run_until_complete(asyncio.sleep(0.1))
 
-#         start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
-#         self.start_frame = asynqp.frames.MethodFrame(0, start_method)
-#         self.mock_handler = mock.Mock()
+        start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
+        self.start_frame = asynqp.frames.MethodFrame(0, start_method)
+        self.mock_handler = mock.Mock()
 
-#     def when_another_frame_arrives(self):
-#         with mock.patch.dict(self.connection.handlers, {0: self.mock_handler}):
-#             self.dispatcher.dispatch(self.start_frame)
+    def when_another_frame_arrives(self):
+        with mock.patch.dict(self.dispatcher.handlers, {0: self.mock_handler}):
+            self.dispatcher.dispatch(self.start_frame)
 
-#     def it_MUST_be_discarded(self):
-#         assert not self.mock_handler.method_calls
+    def it_MUST_be_discarded(self):
+        assert not self.mock_handler.method_calls
 
 
-# class WhenAConnectionThatWasClosedByTheApplicationReceivesAMethod(ConnectionContext):
-#     def given_a_closed_connection(self):
-#         coro = self.connection.close()
-#         next(coro)
+class WhenAConnectionThatWasClosedByTheApplicationReceivesAMethod(ConnectionContext):
+    def given_a_closed_connection(self):
+        coro = self.connection.close()
+        next(coro)
+        self.loop.run_until_complete(asyncio.sleep(0.1))
 
-#         start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
-#         self.start_frame = asynqp.frames.MethodFrame(0, start_method)
-#         self.mock_handler = mock.Mock()
+        start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
+        self.start_frame = asynqp.frames.MethodFrame(0, start_method)
+        self.mock_handler = mock.Mock()
 
-#     def when_another_frame_arrives(self):
-#         with mock.patch.dict(self.dispatcher.handlers, {0: self.mock_handler}):
-#             self.dispatcher.dispatch(self.start_frame)
+    def when_another_frame_arrives(self):
+        with mock.patch.dict(self.dispatcher.handlers, {0: self.mock_handler}):
+            self.dispatcher.dispatch(self.start_frame)
 
-#     def it_should_not_dispatch_the_frame(self):
-#         assert not self.mock_handler.method_calls
+    def it_MUST_be_discarded(self):
+        assert not self.mock_handler.method_calls
 
 
 class WhenTheApplicationClosesTheConnection(ConnectionContext):
