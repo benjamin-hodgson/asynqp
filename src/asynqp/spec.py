@@ -55,7 +55,11 @@ class IncomingMethod(Method):
         return cls(*args)
 
 
-# here be monsters
+# Here, we load up the AMQP XML spec, traverse it,
+# and generate serialisable DTO classes (subclasses of Method, above)
+# based on the definitions in the XML file.
+# It's one of those things that works like magic until it doesn't.
+# Compare amqp0-9-1.xml to the classes that this module exports and you'll see what's going on
 def load_spec():
     tree = parse_tree()
     classes = get_classes(tree)
@@ -92,11 +96,20 @@ def get_classes(tree):
             for elem in method.findall('chassis'):
                 method_support[elem.attrib['name']] = elem.attrib['implement']
 
-            class_methods[method.attrib['name'].capitalize().replace('-ok', 'OK')] = (int(method_id), fields, method_support)
+            doc = build_docstring(method, fields)
+
+            class_methods[method.attrib['name'].capitalize().replace('-ok', 'OK')] = (int(method_id), fields, method_support, doc)
 
         classes[class_elem.attrib['name'].capitalize()] = (int(class_id), class_methods)
 
     return classes
+
+
+def build_docstring(method_elem, fields):
+    doc = '\n'.join([line.strip() for line in method_elem.find('doc').text.splitlines()]).strip()
+    doc += '\n\nArguments:\n    '
+    doc += '\n    '.join([n + ': ' + t.__name__ for n, t in fields.items()])
+    return doc
 
 
 def get_constants(tree):
@@ -110,8 +123,9 @@ def get_constants(tree):
 
 def generate_methods(classes):
     methods = {}
-    for class_name, (class_id, ms) in classes.items():
-        for method_name, (method_id, fields, method_support) in ms.items():
+
+    for class_name, (class_id, method_infos) in classes.items():
+        for method_name, (method_id, fields, method_support, method_doc) in method_infos.items():
             name = class_name + method_name
             method_type = (class_id, method_id)
 
@@ -121,7 +135,15 @@ def generate_methods(classes):
             if 'client' in method_support:
                 parents.append(IncomingMethod)
 
-            methods[name] = methods[method_type] = type(name, tuple(parents), {'method_type': method_type, 'field_info': fields})
+            # this call to type() is where the magic happens -
+            # we are dynamically building subclasses of OutgoingMethod and/or IncomingMethod
+            # with strongly-typed fields as defined in the spec.
+            # The write() and read() methods of the base classes traverse the fields
+            # and generate the correct bytestring
+            cls = type(name, tuple(parents), {'method_type': method_type, 'field_info': fields})
+            cls.__doc__ = method_doc
+            methods[name] = methods[method_type] = cls
+
     return methods
 
 
