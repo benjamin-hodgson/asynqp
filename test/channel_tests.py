@@ -62,8 +62,7 @@ class WhenTheApplicationClosesAChannel(OpenChannelContext):
         test_utils.run_briefly(self.loop)
 
     def it_should_send_ChannelClose(self):
-        expected_frame = asynqp.frames.MethodFrame(1, spec.ChannelClose(0, 'Channel closed by application', 0, 0))
-        self.protocol.send_frame.assert_called_once_with(expected_frame)
+        self.protocol.send_method.assert_called_once_with(1, spec.ChannelClose(0, 'Channel closed by application', 0, 0))
 
 
 class WhenTheServerClosesAChannel(OpenChannelContext):
@@ -72,8 +71,7 @@ class WhenTheServerClosesAChannel(OpenChannelContext):
         self.dispatcher.dispatch(channel_close_frame)
 
     def it_should_send_ChannelCloseOK(self):
-        expected_frame = asynqp.frames.MethodFrame(1, spec.ChannelCloseOK())
-        self.protocol.send_frame.assert_called_once_with(expected_frame)
+        self.protocol.send_method.assert_called_once_with(1, spec.ChannelCloseOK())
 
 
 class WhenAnotherMethodArrivesAfterIClosedTheChannel(OpenChannelContext):

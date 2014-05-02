@@ -1,4 +1,3 @@
-import asyncio
 import asynqp
 from unittest import mock
 from asynqp import spec

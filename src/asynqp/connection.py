@@ -5,6 +5,9 @@ from . import spec
 from .exceptions import AMQPError
 
 
+CONNECTION_CHANNEL = 0
+
+
 class ConnectionInfo(object):
     def __init__(self, username, password, virtual_host):
         self.username = username
@@ -17,13 +20,16 @@ class Connection(object):
         self.loop = loop
         self.protocol = protocol
         self.dispatcher = dispatcher
-        self.handler = ConnectionFrameHandler(self.protocol, self.loop, connection_info)
+
+        self.sender = ConnectionMethodSender(protocol)
+
+        self.handler = ConnectionFrameHandler(protocol, self.loop, connection_info)
         self.opened = self.handler.opened
         self.closed = self.handler.closed
 
-        self.next_channel_num = 1
+        self.next_channel_num = CONNECTION_CHANNEL + 1
         self.handler.closing.add_done_callback(self.dispatcher.closing.set_result)  # bit hacky
-        self.dispatcher.add_handler(0, self.handler)
+        self.dispatcher.add_handler(CONNECTION_CHANNEL, self.handler)
 
     @asyncio.coroutine
     def open_channel(self):
@@ -36,7 +42,7 @@ class Connection(object):
         """
         channel = Channel(self.protocol, self.next_channel_num, self.dispatcher, loop=self.loop)
 
-        self.protocol.send_method(self.next_channel_num, spec.ChannelOpen(''))
+        self.sender.send_ChannelOpen(self.next_channel_num)
         self.next_channel_num += 1
 
         yield from channel.opened
@@ -49,13 +55,14 @@ class Connection(object):
         This method is a coroutine
         """
         self.handler.closing.set_result(True)
-        self.protocol.send_method(0, spec.ConnectionClose(0, 'Connection closed by application', 0, 0))
-        yield from self.handler.closed
+        self.sender.send_Close(0, 'Connection closed by application', 0, 0)
+        yield from self.closed
 
 
 class ConnectionFrameHandler(object):
     def __init__(self, protocol, loop, connection_info):
         self.protocol = protocol
+        self.sender = ConnectionMethodSender(protocol)
         self.loop = loop
         self.connection_info = connection_info
         self.opened = asyncio.Future(loop=loop)
@@ -74,7 +81,7 @@ class ConnectionFrameHandler(object):
             handler(frame)
 
     def handle_ConnectionStart(self, frame):
-        method = spec.ConnectionStartOK(
+        self.sender.send_StartOK(
             {"product": "asynqp",
              "version": "0.1",  # todo: use pkg_resources to inspect the package
              "platform": sys.version},
@@ -82,12 +89,10 @@ class ConnectionFrameHandler(object):
             {'LOGIN': self.connection_info.username, 'PASSWORD': self.connection_info.password},
             'en_US'
         )
-        self.protocol.send_method(0, method)
 
     def handle_ConnectionTune(self, frame):  # just agree with whatever the server wants. Make this configurable in future
-        method = spec.ConnectionTuneOK(frame.payload.channel_max, frame.payload.frame_max, frame.payload.heartbeat)
-        self.protocol.send_method(0, method)
-        self.protocol.send_method(0, spec.ConnectionOpen(self.connection_info.virtual_host, '', False))
+        self.sender.send_TuneOK(frame.payload.channel_max, frame.payload.frame_max, frame.payload.heartbeat)
+        self.sender.send_Open(self.connection_info.virtual_host)
         self.protocol.start_heartbeat(frame.payload.heartbeat)
 
     def handle_ConnectionOpenOK(self, frame):
@@ -95,8 +100,33 @@ class ConnectionFrameHandler(object):
 
     def handle_ConnectionClose(self, frame):
         self.closing.set_result(True)
-        self.protocol.send_method(0, spec.ConnectionCloseOK())
+        self.sender.send_CloseOK()
 
     def handle_ConnectionCloseOK(self, frame):
         self.protocol.transport.close()
         self.closed.set_result(True)
+
+
+class ConnectionMethodSender(object):
+    def __init__(self, protocol):
+        self.protocol = protocol
+
+    def send_StartOK(self, client_properties, mechanism, response, locale):
+        method = spec.ConnectionStartOK(client_properties, mechanism, response, locale)
+        self.protocol.send_method(CONNECTION_CHANNEL, method)
+
+    def send_TuneOK(self, channel_max, frame_max, heartbeat):
+        self.protocol.send_method(CONNECTION_CHANNEL, spec.ConnectionTuneOK(channel_max, frame_max, heartbeat))
+
+    def send_Open(self, virtual_host):
+        self.protocol.send_method(CONNECTION_CHANNEL, spec.ConnectionOpen(virtual_host, '', False))
+
+    def send_Close(self, status_code, message, class_id, method_id):
+        method = spec.ConnectionClose(status_code, message, class_id, method_id)
+        self.protocol.send_method(CONNECTION_CHANNEL, method)
+
+    def send_CloseOK(self):
+        self.protocol.send_method(CONNECTION_CHANNEL, spec.ConnectionCloseOK())
+
+    def send_ChannelOpen(self, channel_id):
+        self.protocol.send_method(channel_id, spec.ChannelOpen(''))
