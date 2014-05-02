@@ -35,7 +35,27 @@ class Channel(object):
         dispatcher.add_handler(channel_id, self.handler)
 
     @asyncio.coroutine
-    def declare_queue(self, name, *, durable=True, exclusive=False, auto_delete=False):
+    def declare_queue(self, name='', *, durable=True, exclusive=False, auto_delete=False):
+        """
+        Declare a queue on the broker. If the queue does not exist, it will be created.
+        This method is a coroutine.
+
+        Arguments:
+            name: the name of the queue.
+                  Supplying a name of '' will cause the broker to create a uniquely-named queue.
+                  default: ''
+            durable: If true, the queue will be re-created when the server restarts.
+                     default: True
+            exclusive: If true, the queue can only be accessed by the current connection,
+                       and will be deleted when the connection is closed.
+                       default: False
+            auto_delete: If true, the queue will be deleted when the last consumer is cancelled.
+                         If there were never any conusmers, the queue won't be deleted.
+                         default: False
+
+        Return value:
+            The new Queue object.
+        """
         self.handler.queue_declared = asyncio.Future(loop=self.loop)
         self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete)
         name = yield from self.handler.queue_declared

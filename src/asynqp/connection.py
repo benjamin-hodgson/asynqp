@@ -55,7 +55,7 @@ class Connection(object):
         This method is a coroutine.
 
         Return value:
-            The new channel object
+            The new Channel object.
         """
         channel = Channel(self.protocol, self.next_channel_num, self.dispatcher, loop=self.loop)
 
