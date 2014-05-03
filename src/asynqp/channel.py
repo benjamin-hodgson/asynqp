@@ -7,6 +7,7 @@ from .exceptions import AMQPError
 
 
 VALID_QUEUE_NAME_RE = re.compile(r'^(?!amq\.)(\w|[-.:])*$', flags=re.A)
+VALID_EXCHANGE_NAME_RE = re.compile(r'^(?!amq\.)(\w|[-.:])+$', flags=re.A)
 
 
 class Channel(object):
@@ -59,11 +60,19 @@ class Channel(object):
         Return value:
             the new Exchange object.
         """
+        if name == '':
+            return exchange.Exchange(self.sender, '', 'direct', True, False, False)
+
+        if not VALID_EXCHANGE_NAME_RE.match(name):
+            raise ValueError("Invalid exchange name.\n"
+                             "Valid names consist of letters, digits, hyphen, underscore, period, or colon, "
+                             "and do not begin with 'amq.'")
+
         self.handler.exchange_declare_future = fut = asyncio.Future(loop=self.loop)
 
         self.sender.send_ExchangeDeclare(name, type, durable, auto_delete, internal)
         yield from fut
-        return exchange.Exchange(name, type, durable, auto_delete, internal)
+        return exchange.Exchange(self.sender, name, type, durable, auto_delete, internal)
 
     @asyncio.coroutine
     def declare_queue(self, name='', *, durable=True, exclusive=False, auto_delete=False):
@@ -89,8 +98,8 @@ class Channel(object):
         """
         if not VALID_QUEUE_NAME_RE.match(name):
             raise ValueError("Not a valid queue name.\n"
-                             "Valid names consist of letters, digits, hyphen, underscore, period, or colon,"
-                             " and do not begin with 'amq.'")
+                             "Valid names consist of letters, digits, hyphen, underscore, period, or colon, "
+                             "and do not begin with 'amq.'")
 
         self.handler.queue_declare_futures[name] = fut = asyncio.Future(loop=self.loop)
         self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete)
