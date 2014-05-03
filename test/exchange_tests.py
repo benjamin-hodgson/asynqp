@@ -32,3 +32,12 @@ class WhenExchangeDeclareOKArrives(OpenChannelContext):
 
     def it_should_have_the_correct_type(self):
         assert self.result.type == 'fanout'
+
+    def it_should_be_durable(self):
+        assert self.result.durable
+
+    def it_should_not_auto_delete(self):
+        assert not self.result.auto_delete
+
+    def it_should_not_be_internal(self):
+        assert not self.result.internal

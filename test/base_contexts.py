@@ -58,3 +58,29 @@ class OpenChannelContext(OpenConnectionContext):
         self.dispatcher.dispatch(open_ok_frame)
         test_utils.run_briefly(self.loop)
         return task.result()
+
+
+class QueueContext(OpenChannelContext):
+    def given_a_queue(self):
+        queue_name = 'my.nice.queue'
+        task = asyncio.async(self.channel.declare_queue(queue_name, durable=True, exclusive=True, auto_delete=True), loop=self.loop)
+        test_utils.run_briefly(self.loop)
+        frame = asynqp.frames.MethodFrame(self.channel.channel_id, spec.QueueDeclareOK(queue_name, 123, 456))
+        self.dispatcher.dispatch(frame)
+        test_utils.run_briefly(self.loop)
+        self.queue = task.result()
+
+        self.protocol.reset_mock()
+
+
+class ExchangeContext(OpenChannelContext):
+    def given_an_exchange(self):
+        task = asyncio.async(self.channel.declare_exchange('my.nice.exchange', 'fanout', durable=True, auto_delete=False, internal=False),
+                             loop=self.loop)
+        test_utils.run_briefly(self.loop)
+        frame = asynqp.frames.MethodFrame(self.channel.channel_id, spec.ExchangeDeclareOK())
+        self.dispatcher.dispatch(frame)
+        test_utils.run_briefly(self.loop)
+        self.exchange = task.result()
+
+        self.protocol.reset_mock()

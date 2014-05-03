@@ -2,7 +2,7 @@ import asyncio
 from asyncio import test_utils
 from asynqp import frames
 from asynqp import spec
-from .base_contexts import OpenChannelContext
+from .base_contexts import OpenChannelContext, QueueContext, ExchangeContext
 
 
 class WhenDeclaringAQueue(OpenChannelContext):
@@ -39,14 +39,7 @@ class WhenQueueDeclareOKArrives(OpenChannelContext):
         assert self.result.auto_delete
 
 
-class WhenIDeclareTwoQueues(OpenChannelContext):
-    def given_a_queue(self):
-        queue_name = 'my.nice.queue'
-        asyncio.async(self.channel.declare_queue(queue_name, durable=True, exclusive=True, auto_delete=True), loop=self.loop)
-        test_utils.run_briefly(self.loop)
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.channel_id, spec.QueueDeclareOK(queue_name, 123, 456)))
-        test_utils.run_briefly(self.loop)
-
+class WhenIDeclareTwoQueues(QueueContext):
     def when_I_declare_another_queue(self):
         self.expected_queue_name = 'another.queue'
         task = asyncio.async(self.channel.declare_queue(self.expected_queue_name, durable=True, exclusive=True, auto_delete=True), loop=self.loop)
@@ -115,3 +108,30 @@ class WhenIUseAnIllegalNameForAQueue(OpenChannelContext):
 
     def it_should_throw_ValueError(self):
         assert isinstance(self.task.exception(), ValueError)
+
+
+class WhenBindingAQueueToAnExchange(QueueContext, ExchangeContext):
+    def when_I_bind_the_queue(self):
+        asyncio.async(self.queue.bind(self.exchange, 'routing.key'))
+        test_utils.run_briefly(self.loop)
+
+    def it_should_send_QueueBind(self):
+        expected_method = spec.QueueBind(0, self.queue.name, self.exchange.name, 'routing.key', False, {})
+        self.protocol.send_method.assert_called_once_with(self.channel.channel_id, expected_method)
+
+
+class WhenQueueBindOKArrives(QueueContext, ExchangeContext):
+    def given_I_sent_QueueBind(self):
+        self.task = asyncio.async(self.queue.bind(self.exchange, 'routing.key'))
+        test_utils.run_briefly(self.loop)
+
+    def when_QueueBindOK_arrives(self):
+        self.dispatcher.dispatch(frames.MethodFrame(self.channel.channel_id, spec.QueueBindOK()))
+        test_utils.run_briefly(self.loop)
+        self.binding = self.task.result()
+
+    def then_the_returned_binding_should_have_the_correct_queue(self):
+        assert self.binding.queue is self.queue
+
+    def and_the_returned_binding_should_have_the_correct_exchange(self):
+        assert self.binding.exchange is self.exchange

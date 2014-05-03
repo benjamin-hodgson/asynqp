@@ -63,7 +63,7 @@ class Channel(object):
 
         self.sender.send_ExchangeDeclare(name, type, durable, auto_delete, internal)
         yield from fut
-        return exchange.Exchange(name, type)
+        return exchange.Exchange(name, type, durable, auto_delete, internal)
 
     @asyncio.coroutine
     def declare_queue(self, name='', *, durable=True, exclusive=False, auto_delete=False):
@@ -95,7 +95,7 @@ class Channel(object):
         self.handler.queue_declare_futures[name] = fut = asyncio.Future(loop=self.loop)
         self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete)
         name = yield from fut
-        return queue.Queue(name, durable, exclusive, auto_delete)
+        return queue.Queue(self.loop, self.sender, self.handler, name, durable, exclusive, auto_delete)
 
     @asyncio.coroutine
     def close(self):
@@ -144,6 +144,9 @@ class ChannelFrameHandler(object):
     def handle_ExchangeDeclareOK(self, frame):
         self.exchange_declare_future.set_result(None)
 
+    def handle_QueueBindOK(self, frame):
+        self.queue_bind_future.set_result(None)
+
     def handle_ChannelClose(self, frame):
         self.closing.set_result(True)
         self.sender.send_CloseOK()
@@ -163,6 +166,9 @@ class ChannelMethodSender(object):
 
     def send_QueueDeclare(self, name, durable, exclusive, auto_delete):
         self.protocol.send_method(self.channel_id, spec.QueueDeclare(0, name, False, durable, exclusive, auto_delete, False, {}))
+
+    def send_QueueBind(self, queue_name, exchange_name, routing_key):
+        self.protocol.send_method(self.channel_id, spec.QueueBind(0, queue_name, exchange_name, routing_key, False, {}))
 
     def send_Close(self, status_code, message, class_id, method_id):
         self.protocol.send_method(self.channel_id, spec.ChannelClose(0, 'Channel closed by application', 0, 0))
