@@ -53,6 +53,7 @@ class WhenPackingBools:
         yield [False], b"\x00"
         yield [True], b"\x01"
         yield [True, False, True], b'\x05'
+        yield [True, False], b'\x01'
         yield [True, True, True, True, True, True, True, True], b'\xFF'
 
     def because_I_pack_them(self, bools, expected):

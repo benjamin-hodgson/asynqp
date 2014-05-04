@@ -2,6 +2,7 @@ from unittest import mock
 import contexts
 import asynqp
 from asynqp import spec
+from asynqp import protocol
 from .base_contexts import ProtocolContext
 
 
@@ -21,7 +22,7 @@ class WhenAWholeFrameArrives(ProtocolContext):
         self.raw = b'\x01\x00\x00\x00\x00\x00\x05\x00\x0A\x00\x29\x00\xCE'
         method = spec.ConnectionOpenOK('')
         self.expected_frame = asynqp.frames.MethodFrame(0, method)
-        self.protocol.heartbeat_monitor = mock.Mock(spec=asynqp.HeartbeatMonitor)
+        self.protocol.heartbeat_monitor = mock.Mock(spec=protocol.HeartbeatMonitor)
 
     def because_the_whole_frame_arrives(self):
         self.protocol.data_received(self.raw)

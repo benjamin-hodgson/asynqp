@@ -1,4 +1,5 @@
 import abc
+import datetime
 import functools
 import operator
 from . import serialisation
@@ -187,6 +188,20 @@ class Table(FieldType):
         return cls(serialisation.read_table(stream))
 
 
+class Timestamp(FieldType):
+    @classmethod
+    def isvalid(cls, value):
+        return isinstance(value, datetime.datetime)
+
+    def write(self, stream):
+        stamp = int(self.value.timestamp())
+        stream.write(serialisation.pack_long_long(stamp))
+
+    @classmethod
+    def read(cls, stream):
+        return cls(serialisation.read_long_long(stream))
+
+
 FIELD_TYPES = {
     'bit': Bit,
     'octet': Octet,
@@ -195,5 +210,6 @@ FIELD_TYPES = {
     'longlong': LongLong,
     'table': Table,
     'longstr': LongStr,
-    'shortstr': ShortStr
+    'shortstr': ShortStr,
+    'timestamp': Timestamp
 }

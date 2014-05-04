@@ -1,5 +1,6 @@
 from unittest import mock
 import asynqp
+from asynqp import protocol
 from .base_contexts import ProtocolContext, MockLoopContext
 
 
@@ -28,7 +29,7 @@ class WhenHeartbeatIsDisabled(ProtocolContext, MockLoopContext):
 class WhenItIsTimeToHeartbeat(MockLoopContext):
     def given_a_heartbeat_monitor(self):
         self.protocol = mock.Mock(spec=asynqp.AMQP)
-        self.heartbeat_monitor = asynqp.HeartbeatMonitor(self.protocol, self.loop, 5)
+        self.heartbeat_monitor = protocol.HeartbeatMonitor(self.protocol, self.loop, 5)
 
     def when_the_event_loop_comes_a_knockin(self):
         self.heartbeat_monitor.send_heartbeat()
@@ -43,7 +44,7 @@ class WhenItIsTimeToHeartbeat(MockLoopContext):
 class WhenResettingTheHeartbeatTimeout(MockLoopContext):
     def given_a_heartbeat_monitor(self):
         self.protocol = mock.Mock(spec=asynqp.AMQP)
-        self.heartbeat_monitor = asynqp.HeartbeatMonitor(self.protocol, self.loop, 5)
+        self.heartbeat_monitor = protocol.HeartbeatMonitor(self.protocol, self.loop, 5)
         self.heartbeat_monitor.monitor_heartbeat()
         self.loop.reset_mock()
 
@@ -60,7 +61,7 @@ class WhenResettingTheHeartbeatTimeout(MockLoopContext):
 class WhenTheHeartbeatTimesOut(MockLoopContext):
     def given_a_heartbeat_monitor(self):
         self.protocol = mock.Mock(spec=asynqp.AMQP)
-        self.heartbeat_monitor = asynqp.HeartbeatMonitor(self.protocol, self.loop, 5)
+        self.heartbeat_monitor = protocol.HeartbeatMonitor(self.protocol, self.loop, 5)
 
     def when_the_heartbeat_times_out(self):
         self.heartbeat_monitor.heartbeat_timed_out()

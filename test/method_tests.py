@@ -1,6 +1,8 @@
 import asynqp
 from unittest import mock
 from asynqp import spec
+from asynqp import frames
+from asynqp import amqptypes
 from .base_contexts import ProtocolContext
 
 
@@ -9,7 +11,13 @@ class WhenConnectionStartArrives(ProtocolContext):
         self.handler = mock.Mock()
         self.dispatcher.add_handler(0, self.handler)
 
-        self.raw = b"\x01\x00\x00\x00\x00\x01\x50\x00\x0A\x00\x0A\x00\t\x00\x00\x01%\x0ccapabilitiesF\x00\x00\x00X\x12publisher_confirmst\x01\x1aexchange_exchange_bindingst\x01\nbasic.nackt\x01\x16consumer_cancel_notifyt\x01\tcopyrightS\x00\x00\x00'Copyright (C) 2007-2013 GoPivotal, Inc.\x0binformationS\x00\x00\x005Licensed under the MPL.  See http://www.rabbitmq.com/\x08platformS\x00\x00\x00\nErlang/OTP\x07productS\x00\x00\x00\x08RabbitMQ\x07versionS\x00\x00\x00\x053.1.5\x00\x00\x00\x0eAMQPLAIN PLAIN\x00\x00\x00\x0Ben_US en_GB\xCE"
+        self.raw = (b"\x01\x00\x00\x00\x00\x01\x50\x00\x0A\x00\x0A\x00\t\x00\x00\x01"
+                    b"%\x0ccapabilitiesF\x00\x00\x00X\x12publisher_confirmst\x01\x1aexchange_exchange_bindings"
+                    b"t\x01\nbasic.nackt\x01\x16consumer_cancel_notifyt\x01\tcopyrightS\x00\x00\x00'Copyright "
+                    b"(C) 2007-2013 GoPivotal, Inc.\x0binformationS\x00\x00\x005Licensed under the MPL. "
+                    b" See http://www.rabbitmq.com/\x08platformS\x00\x00\x00\nErlang/OTP\x07productS\x00\x00\x00\x08"
+                    b"RabbitMQ\x07versionS\x00\x00\x00\x053.1.5"
+                    b"\x00\x00\x00\x0eAMQPLAIN PLAIN\x00\x00\x00\x0Ben_US en_GB\xCE")
 
         expected_method = spec.ConnectionStart(0, 9, {
             'capabilities': {'publisher_confirms': True,
@@ -40,7 +48,10 @@ class WhenSendingConnectionStartOK(ProtocolContext):
         self.protocol.send_frame(self.frame)
 
     def it_should_send_the_correct_bytestring(self):
-        self.transport.write.assert_called_once_with(b'\x01\x00\x00\x00\x00\x00>\x00\n\x00\x0b\x00\x00\x00\x15\x08somecrapS\x00\x00\x00\x07aboutme\x08AMQPLAIN\x00\x00\x00\x0e\x04authS\x00\x00\x00\x04info\x05en_US\xce')
+        expected_bytes = (b'\x01\x00\x00\x00\x00\x00>\x00\n\x00\x0b\x00\x00\x00\x15\x08somecrapS'
+                          b'\x00\x00\x00\x07aboutme\x08AMQPLAIN\x00\x00\x00\x0e\x04'
+                          b'authS\x00\x00\x00\x04info\x05en_US\xce')
+        self.transport.write.assert_called_once_with(expected_bytes)
 
 
 class WhenConnectionTuneArrives(ProtocolContext):
@@ -85,10 +96,28 @@ class WhenSendingConnectionOpen(ProtocolContext):
 
 class WhenSendingQueueDeclare(ProtocolContext):
     def given_a_method_to_send(self):
-        self.method = spec.QueueDeclare(0, 'a', True, False, True, False, True, {})
+        self.method = spec.QueueDeclare(0, 'a', False, False, False, True, False, {})
 
     def when_I_send_the_method(self):
         self.protocol.send_method(1, self.method)
 
     def it_should_write_the_correct_bytestring(self):
-        self.transport.write.assert_called_once_with(b'\x01\x00\x01\x00\x00\x00\x0D\x00\x32\x00\x0A\x00\x00\x01a\x15\x00\x00\x00\x00\xCE')
+        self.transport.write.assert_called_once_with(b'\x01\x00\x01\x00\x00\x00\x0D\x00\x32\x00\x0A\x00\x00\x01a\x08\x00\x00\x00\x00\xCE')
+
+
+class WhenSendingContentHeader(ProtocolContext):
+    def given_a_content_header_frame(self):
+        payload = frames.ContentHeaderPayload(50, 100, [amqptypes.Octet(3), None, amqptypes.Table({'some': 'value'})])
+        self.frame = frames.ContentHeaderFrame(1, payload)
+
+    def when_I_send_the_frame(self):
+        self.protocol.send_frame(self.frame)
+
+    def it_should_write_the_correct_bytestring(self):
+        self.transport.write.assert_called_once_with(
+            b'\x02\x00\x01\x00\x00\x00\x22'  # regular frame header
+            b'\x00\x32\x00\x00'  # class id 50; weight is always 0
+            b'\x00\x00\x00\x00\x00\x00\x00\x64'  # body length 100
+            b'\xA0\x00'  # property_flags 0b1010000000000000
+            b'\x03\x00\x00\x00\x0F\x04someS\x00\x00\x00\x05value'  # property list
+            b'\xCE')

@@ -61,7 +61,7 @@ class Channel(object):
             the new Exchange object.
         """
         if name == '':
-            return exchange.Exchange(self.sender, '', 'direct', True, False, False)
+            return exchange.Exchange(self.sender, name, 'direct', True, False, False)
 
         if not VALID_EXCHANGE_NAME_RE.match(name):
             raise ValueError("Invalid exchange name.\n"
@@ -178,6 +178,10 @@ class ChannelMethodSender(object):
 
     def send_QueueBind(self, queue_name, exchange_name, routing_key):
         self.protocol.send_method(self.channel_id, spec.QueueBind(0, queue_name, exchange_name, routing_key, False, {}))
+
+    def send_BasicPublish(self, exchange_name, routing_key, mandatory, immediate):
+        method = spec.BasicPublish(0, exchange_name, routing_key, mandatory, immediate)
+        self.protocol.send_method(self.channel_id, method)
 
     def send_Close(self, status_code, message, class_id, method_id):
         self.protocol.send_method(self.channel_id, spec.ChannelClose(0, 'Channel closed by application', 0, 0))

@@ -1,8 +1,12 @@
 import asyncio
+import uuid
 from asyncio import test_utils
+from datetime import datetime
+from unittest import mock
+import asynqp
 from asynqp import spec
 from asynqp import frames
-from .base_contexts import OpenChannelContext
+from .base_contexts import OpenChannelContext, ExchangeContext
 
 
 class WhenDeclaringAnExchange(OpenChannelContext):
@@ -76,7 +80,7 @@ class WhenIUseAnIllegalExchangeName(OpenChannelContext):
     @classmethod
     def examples_of_bad_words(cls):
         yield "amq.starts.with.amq."
-        yield "contains'illegal^$ymbols"
+        yield "contains'illegal$ymbols"
 
     def because_I_try_to_declare_the_exchange(self, name):
         task = asyncio.async(self.channel.declare_exchange(name, 'direct'))
@@ -85,3 +89,51 @@ class WhenIUseAnIllegalExchangeName(OpenChannelContext):
 
     def it_should_throw_ValueError(self):
         assert isinstance(self.exception, ValueError)
+
+
+class WhenPublishingAShortMessage(ExchangeContext):
+    def given_a_message(self):
+        self.correlation_id = str(uuid.uuid4())
+        self.message_id = str(uuid.uuid4())
+        self.timestamp = datetime(2014, 5, 4)
+        self.msg = asynqp.Message(
+            'body',
+            content_type='application/json',
+            content_encoding='utf-8',
+            headers={},
+            delivery_mode=2,
+            priority=5,
+            correlation_id=self.correlation_id,
+            reply_to='me',
+            expiration='tomorrow',
+            message_id=self.message_id,
+            timestamp=self.timestamp,
+            type='telegram',
+            user_id='benjamin',
+            app_id='asynqptests'
+        )
+
+    def when_I_publish_the_message(self):
+        self.exchange.publish(self.msg, 'routing.key', mandatory=True)
+
+    def it_should_send_a_BasicPublish_method_followed_by_a_header_and_the_body(self):
+        expected_method = spec.BasicPublish(0, self.exchange.name, 'routing.key', True, False)
+        header_payload = frames.ContentHeaderPayload(60, 4, [
+            'application/json',
+            'utf-8',
+            {}, 2, 5,
+            self.correlation_id,
+            'me', 'tomorrow',
+            self.message_id,
+            self.timestamp,
+            'telegram',
+            'benjamin',
+            'asynqptests'
+        ])
+        expected_header = frames.ContentHeaderFrame(self.channel.channel_id, header_payload)
+        expected_body = frames.ContentBodyFrame(self.channel.channel_id, b'body')
+        assert self.protocol.mock_calls == [
+            mock.call.send_method(self.channel.channel_id, expected_method),
+            mock.call.send_frame(expected_header),
+            mock.call.send_frame(expected_body)
+        ]
