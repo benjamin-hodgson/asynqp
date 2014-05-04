@@ -18,11 +18,14 @@ class MockLoopContext(LoopContext):
 class ConnectionContext(LoopContext):
     def given_a_connection(self):
         self.protocol = mock.Mock(spec=asynqp.AMQP)
+        self.protocol.transport = mock.Mock()
         self.protocol.send_frame._is_coroutine = False  # :(
+
         self.dispatcher = asynqp.Dispatcher(self.loop)
         self.connection_info = asynqp.ConnectionInfo('guest', 'guest', '/')
-        self.connection = asynqp.Connection(self.loop, self.protocol, self.dispatcher, self.connection_info)
-        self.protocol.transport = mock.Mock()
+        handler = asynqp.ConnectionFrameHandler(self.protocol, self.dispatcher, self.loop, self.connection_info)
+        self.dispatcher.add_handler(0, handler)
+        self.connection = handler.connection
 
 
 class OpenConnectionContext(ConnectionContext):
@@ -65,7 +68,7 @@ class QueueContext(OpenChannelContext):
         queue_name = 'my.nice.queue'
         task = asyncio.async(self.channel.declare_queue(queue_name, durable=True, exclusive=True, auto_delete=True), loop=self.loop)
         test_utils.run_briefly(self.loop)
-        frame = asynqp.frames.MethodFrame(self.channel.channel_id, spec.QueueDeclareOK(queue_name, 123, 456))
+        frame = asynqp.frames.MethodFrame(self.channel.id, spec.QueueDeclareOK(queue_name, 123, 456))
         self.dispatcher.dispatch(frame)
         test_utils.run_briefly(self.loop)
         self.queue = task.result()
@@ -78,7 +81,7 @@ class ExchangeContext(OpenChannelContext):
         task = asyncio.async(self.channel.declare_exchange('my.nice.exchange', 'fanout', durable=True, auto_delete=False, internal=False),
                              loop=self.loop)
         test_utils.run_briefly(self.loop)
-        frame = asynqp.frames.MethodFrame(self.channel.channel_id, spec.ExchangeDeclareOK())
+        frame = asynqp.frames.MethodFrame(self.channel.id, spec.ExchangeDeclareOK())
         self.dispatcher.dispatch(frame)
         test_utils.run_briefly(self.loop)
         self.exchange = task.result()

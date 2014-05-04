@@ -15,10 +15,10 @@ class Queue(object):
     Methods:
         queue.bind(exchange, routing_key): Bind a queue to an exchange. This method is a coroutine.
     """
-    def __init__(self, loop, sender, handler, name, durable, exclusive, auto_delete):
+    def __init__(self, channel, loop, sender, name, durable, exclusive, auto_delete):
+        self.channel = channel
         self.loop = loop
         self.sender = sender
-        self.handler = handler
         self.name = name
         self.durable = durable
         self.exclusive = exclusive
@@ -38,7 +38,7 @@ class Queue(object):
         Return value:
             The newly created binding object
         """
-        self.handler.queue_bind_future = fut = asyncio.Future(loop=self.loop)
+        self.channel.queue_bind_future = fut = asyncio.Future(loop=self.loop)
         self.sender.send_QueueBind(self.name, exchange.name, routing_key)
         yield from fut
         return QueueBinding(self, exchange)

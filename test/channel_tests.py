@@ -27,7 +27,7 @@ class WhenChannelOpenOKArrives(OpenConnectionContext):
         self.result = self.task.result()
 
     def it_should_have_the_correct_channel_id(self):
-        assert self.result.channel_id == 1
+        assert self.result.id == 1
 
 
 class WhenOpeningASecondChannel(OpenChannelContext):
@@ -39,7 +39,7 @@ class WhenOpeningASecondChannel(OpenChannelContext):
         self.protocol.send_method.assert_called_once_with(2, expected)
 
     def it_should_have_the_correct_channel_id(self):
-        assert self.result.channel_id == 2
+        assert self.result.id == 2
 
 
 class WhenTheApplicationClosesAChannel(OpenChannelContext):

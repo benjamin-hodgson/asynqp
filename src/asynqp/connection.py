@@ -1,6 +1,6 @@
 import asyncio
 import sys
-from .channel import Channel
+from . import channel
 from . import spec
 from .exceptions import AMQPError
 
@@ -26,27 +26,23 @@ class Connection(object):
     if you need to perform multiple concurrent tasks you should open multiple Channels.
 
     Attributes:
-        connection.opened: a Future which is done when the handshake to open the connection has finished
         connection.closed: a Future which is done when the handshake to close the connection has finished
 
     Methods:
         connection.open_channel: Open a new channel on this connection. This method is a coroutine.
         connection.close: Close the connection. This method is a coroutine.
     """
-    def __init__(self, loop, protocol, dispatcher, connection_info):
+    def __init__(self, loop, protocol, sender, dispatcher):
         self.loop = loop
         self.protocol = protocol
+        self.sender = sender
         self.dispatcher = dispatcher
 
-        self.sender = ConnectionMethodSender(protocol)
-
-        self.handler = ConnectionFrameHandler(protocol, loop, connection_info)
-        self.opened = self.handler.opened
-        self.closed = self.handler.closed
+        self.closing = asyncio.Future(loop=loop)
+        self.closing.add_done_callback(self.dispatcher.closing.set_result)  # bit hacky
+        self.closed = asyncio.Future(loop=loop)
 
         self.next_channel_num = CONNECTION_CHANNEL + 1
-        self.handler.closing.add_done_callback(self.dispatcher.closing.set_result)  # bit hacky
-        self.dispatcher.add_handler(CONNECTION_CHANNEL, self.handler)
 
     @asyncio.coroutine
     def open_channel(self):
@@ -57,13 +53,14 @@ class Connection(object):
         Return value:
             The new Channel object.
         """
-        channel = Channel(self.protocol, self.next_channel_num, self.dispatcher, loop=self.loop)
+        handler = channel.ChannelFrameHandler(self.protocol, self.next_channel_num, self.loop)
+        self.dispatcher.add_handler(self.next_channel_num, handler)
 
         self.sender.send_ChannelOpen(self.next_channel_num)
         self.next_channel_num += 1
 
-        yield from channel.opened
-        return channel
+        yield from handler.opened
+        return handler.channel
 
     @asyncio.coroutine
     def close(self):
@@ -71,20 +68,19 @@ class Connection(object):
         Close the connection by handshaking with the server.
         This method is a coroutine
         """
-        self.handler.closing.set_result(True)
+        self.closing.set_result(True)
         self.sender.send_Close(0, 'Connection closed by application', 0, 0)
         yield from self.closed
 
 
 class ConnectionFrameHandler(object):
-    def __init__(self, protocol, loop, connection_info):
-        self.protocol = protocol
+    def __init__(self, protocol, dispatcher, loop, connection_info):
         self.sender = ConnectionMethodSender(protocol)
-        self.loop = loop
+        self.connection = Connection(loop, protocol, self.sender, dispatcher)
+
+        self.protocol = protocol
         self.connection_info = connection_info
         self.opened = asyncio.Future(loop=loop)
-        self.closing = asyncio.Future(loop=loop)
-        self.closed = asyncio.Future(loop=loop)
 
     def handle(self, frame):
         method_type = type(frame.payload)
@@ -116,12 +112,12 @@ class ConnectionFrameHandler(object):
         self.opened.set_result(True)
 
     def handle_ConnectionClose(self, frame):
-        self.closing.set_result(True)
+        self.connection.closing.set_result(True)
         self.sender.send_CloseOK()
 
     def handle_ConnectionCloseOK(self, frame):
         self.protocol.transport.close()
-        self.closed.set_result(True)
+        self.connection.closed.set_result(True)
 
 
 class ConnectionMethodSender(object):

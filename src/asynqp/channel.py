@@ -1,5 +1,6 @@
 import asyncio
 import re
+from . import frames
 from . import spec
 from . import queue
 from . import exchange
@@ -20,8 +21,7 @@ class Channel(object):
     though it is also acceptable to open several connections for a single thread.
 
     Attributes:
-        channel.channel_id: the numerical ID of the channel
-        channel.opened: a Future which is done when the handshake to open the channel has finished
+        channel.id: the numerical ID of the channel
         channel.closing: a Future which is done when the handshake to close the channel has been initiated
         channel.closed: a Future which is done when the handshake to close the channel has finished
 
@@ -29,17 +29,17 @@ class Channel(object):
         channel.declare_queue(name='', **kwargs): Declare a queue on the broker. This method is a coroutine.
         channel.close(): Close the channel. This method is a coroutine.
     """
-    def __init__(self, protocol, channel_id, dispatcher, loop):
-        self.channel_id = channel_id
+    def __init__(self, id, sender, loop):
+        self.id = id
+        self.sender = sender
         self.loop = loop
 
-        self.sender = ChannelMethodSender(channel_id, protocol)
+        self.closing = asyncio.Future(loop=loop)
+        self.closed = asyncio.Future(loop=loop)
 
-        self.handler = ChannelFrameHandler(channel_id, self.sender, loop)
-        self.opened = self.handler.opened
-        self.closing = self.handler.closing
-        self.closed = self.handler.closed
-        dispatcher.add_handler(channel_id, self.handler)
+        self.queue_declare_futures = {}
+        self.exchange_declare_future = None
+        self.queue_bind_future = None  # not ideal
 
     @asyncio.coroutine
     def declare_exchange(self, name, type, *, durable=True, auto_delete=False, internal=False):
@@ -68,10 +68,10 @@ class Channel(object):
                              "Valid names consist of letters, digits, hyphen, underscore, period, or colon, "
                              "and do not begin with 'amq.'")
 
-        self.handler.exchange_declare_future = fut = asyncio.Future(loop=self.loop)
+        self.exchange_declare_future = asyncio.Future(loop=self.loop)
 
         self.sender.send_ExchangeDeclare(name, type, durable, auto_delete, internal)
-        yield from fut
+        yield from self.exchange_declare_future
         return exchange.Exchange(self.sender, name, type, durable, auto_delete, internal)
 
     @asyncio.coroutine
@@ -101,10 +101,10 @@ class Channel(object):
                              "Valid names consist of letters, digits, hyphen, underscore, period, or colon, "
                              "and do not begin with 'amq.'")
 
-        self.handler.queue_declare_futures[name] = fut = asyncio.Future(loop=self.loop)
+        self.queue_declare_futures[name] = asyncio.Future(loop=self.loop)
         self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete)
-        name = yield from fut
-        return queue.Queue(self.loop, self.sender, self.handler, name, durable, exclusive, auto_delete)
+        name = yield from self.queue_declare_futures[name]
+        return queue.Queue(self, self.loop, self.sender, name, durable, exclusive, auto_delete)
 
     @asyncio.coroutine
     def close(self):
@@ -118,27 +118,21 @@ class Channel(object):
 
 
 class ChannelFrameHandler(object):
-    def __init__(self, channel_id, sender, loop):
-        self.channel_id = channel_id
-        self.sender = sender
-
+    def __init__(self, protocol, channel_id, loop):
+        self.sender = ChannelMethodSender(channel_id, protocol)
+        self.channel = Channel(channel_id, self.sender, loop)
         self.opened = asyncio.Future(loop=loop)
-        self.closing = asyncio.Future(loop=loop)
-        self.closed = asyncio.Future(loop=loop)
-
-        self.queue_declare_futures = {}
-        self.exchange_declare_future = None
 
     def handle(self, frame):
         method_type = type(frame.payload)
         handle_name = method_type.__name__
-        if self.closing.done() and method_type not in (spec.ChannelClose, spec.ChannelCloseOK):
+        if self.channel.closing.done() and method_type not in (spec.ChannelClose, spec.ChannelCloseOK):
             return
 
         try:
             handler = getattr(self, 'handle_' + handle_name)
         except AttributeError as e:
-            raise AMQPError('No handler defined for {} on channel {}'.format(handle_name, self.channel_id)) from e
+            raise AMQPError('No handler defined for {} on channel {}'.format(handle_name, self.channel.id)) from e
         else:
             handler(frame)
 
@@ -147,21 +141,21 @@ class ChannelFrameHandler(object):
 
     def handle_QueueDeclareOK(self, frame):
         name = frame.payload.queue
-        fut = self.queue_declare_futures.get(name, self.queue_declare_futures.get('', None))
+        fut = self.channel.queue_declare_futures.get(name, self.channel.queue_declare_futures.get('', None))
         fut.set_result(name)
 
     def handle_ExchangeDeclareOK(self, frame):
-        self.exchange_declare_future.set_result(None)
+        self.channel.exchange_declare_future.set_result(None)
 
     def handle_QueueBindOK(self, frame):
-        self.queue_bind_future.set_result(None)
+        self.channel.queue_bind_future.set_result(None)
 
     def handle_ChannelClose(self, frame):
-        self.closing.set_result(True)
+        self.channel.closing.set_result(True)
         self.sender.send_CloseOK()
 
     def handle_ChannelCloseOK(self, frame):
-        self.closed.set_result(True)
+        self.channel.closed.set_result(True)
 
 
 class ChannelMethodSender(object):
@@ -182,6 +176,15 @@ class ChannelMethodSender(object):
     def send_BasicPublish(self, exchange_name, routing_key, mandatory, immediate):
         method = spec.BasicPublish(0, exchange_name, routing_key, mandatory, immediate)
         self.protocol.send_method(self.channel_id, method)
+
+    def send_content(self, message):
+        header_payload = message.header_payload(spec.BasicPublish.method_type[0])
+        header_frame = frames.ContentHeaderFrame(self.channel_id, header_payload)
+        self.protocol.send_frame(header_frame)
+
+        for payload in message.frame_payloads(100):
+            frame = frames.ContentBodyFrame(self.channel_id, payload)
+            self.protocol.send_frame(frame)
 
     def send_Close(self, status_code, message, class_id, method_id):
         self.protocol.send_method(self.channel_id, spec.ChannelClose(0, 'Channel closed by application', 0, 0))

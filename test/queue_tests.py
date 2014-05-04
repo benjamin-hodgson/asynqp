@@ -12,7 +12,7 @@ class WhenDeclaringAQueue(OpenChannelContext):
 
     def it_should_send_a_QueueDeclare_method(self):
         expected_method = spec.QueueDeclare(0, 'my.nice.queue', False, True, True, True, False, {})
-        self.protocol.send_method.assert_called_once_with(self.channel.channel_id, expected_method)
+        self.protocol.send_method.assert_called_once_with(self.channel.id, expected_method)
 
 
 class WhenQueueDeclareOKArrives(OpenChannelContext):
@@ -22,7 +22,7 @@ class WhenQueueDeclareOKArrives(OpenChannelContext):
         test_utils.run_briefly(self.loop)
 
     def when_QueueDeclareOK_arrives(self):
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.channel_id, spec.QueueDeclareOK(self.queue_name, 123, 456)))
+        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, spec.QueueDeclareOK(self.queue_name, 123, 456)))
         test_utils.run_briefly(self.loop)
         self.result = self.task.result()
 
@@ -44,7 +44,7 @@ class WhenIDeclareTwoQueues(QueueContext):
         self.expected_queue_name = 'another.queue'
         task = asyncio.async(self.channel.declare_queue(self.expected_queue_name, durable=True, exclusive=True, auto_delete=True), loop=self.loop)
         test_utils.run_briefly(self.loop)
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.channel_id, spec.QueueDeclareOK(self.expected_queue_name, 123, 456)))
+        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, spec.QueueDeclareOK(self.expected_queue_name, 123, 456)))
         test_utils.run_briefly(self.loop)
         self.result = task.result()
 
@@ -65,8 +65,8 @@ class WhenIDeclareTwoQueuesConcurrently(OpenChannelContext):
         test_utils.run_briefly(self.loop)
 
     def because_both_QueueDeclareOK_frames_arrive(self):
-        frame1 = frames.MethodFrame(self.channel.channel_id, spec.QueueDeclareOK(self.queue_name1, 123, 456))
-        frame2 = frames.MethodFrame(self.channel.channel_id, spec.QueueDeclareOK(self.queue_name2, 123, 456))
+        frame1 = frames.MethodFrame(self.channel.id, spec.QueueDeclareOK(self.queue_name1, 123, 456))
+        frame2 = frames.MethodFrame(self.channel.id, spec.QueueDeclareOK(self.queue_name2, 123, 456))
         self.dispatcher.dispatch(frame1)
         self.dispatcher.dispatch(frame2)
 
@@ -87,7 +87,7 @@ class WhenILetTheServerPickTheQueueName(OpenChannelContext):
         self.queue_name = 'randomly.generated.name'
 
     def when_QueueDeclareOK_arrives(self):
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.channel_id, spec.QueueDeclareOK(self.queue_name, 123, 456)))
+        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, spec.QueueDeclareOK(self.queue_name, 123, 456)))
         test_utils.run_briefly(self.loop)
         self.result = self.task.result()
 
@@ -117,7 +117,7 @@ class WhenBindingAQueueToAnExchange(QueueContext, ExchangeContext):
 
     def it_should_send_QueueBind(self):
         expected_method = spec.QueueBind(0, self.queue.name, self.exchange.name, 'routing.key', False, {})
-        self.protocol.send_method.assert_called_once_with(self.channel.channel_id, expected_method)
+        self.protocol.send_method.assert_called_once_with(self.channel.id, expected_method)
 
 
 class WhenQueueBindOKArrives(QueueContext, ExchangeContext):
@@ -126,7 +126,7 @@ class WhenQueueBindOKArrives(QueueContext, ExchangeContext):
         test_utils.run_briefly(self.loop)
 
     def when_QueueBindOK_arrives(self):
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.channel_id, spec.QueueBindOK()))
+        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, spec.QueueBindOK()))
         test_utils.run_briefly(self.loop)
         self.binding = self.task.result()
 

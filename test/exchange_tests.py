@@ -17,7 +17,7 @@ class WhenDeclaringAnExchange(OpenChannelContext):
 
     def it_should_send_ExchangeDeclare(self):
         expected_method = spec.ExchangeDeclare(0, 'my.nice.exchange', 'fanout', False, True, False, False, False, {})
-        self.protocol.send_method.assert_called_once_with(self.channel.channel_id, expected_method)
+        self.protocol.send_method.assert_called_once_with(self.channel.id, expected_method)
 
 
 class WhenExchangeDeclareOKArrives(OpenChannelContext):
@@ -27,7 +27,7 @@ class WhenExchangeDeclareOKArrives(OpenChannelContext):
         test_utils.run_briefly(self.loop)
 
     def when_the_reply_arrives(self):
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.channel_id, spec.ExchangeDeclareOK()))
+        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, spec.ExchangeDeclareOK()))
         test_utils.run_briefly(self.loop)
         self.result = self.task.result()
 
@@ -130,10 +130,10 @@ class WhenPublishingAShortMessage(ExchangeContext):
             'benjamin',
             'asynqptests'
         ])
-        expected_header = frames.ContentHeaderFrame(self.channel.channel_id, header_payload)
-        expected_body = frames.ContentBodyFrame(self.channel.channel_id, b'body')
+        expected_header = frames.ContentHeaderFrame(self.channel.id, header_payload)
+        expected_body = frames.ContentBodyFrame(self.channel.id, b'body')
         assert self.protocol.mock_calls == [
-            mock.call.send_method(self.channel.channel_id, expected_method),
+            mock.call.send_method(self.channel.id, expected_method),
             mock.call.send_frame(expected_header),
             mock.call.send_frame(expected_body)
         ]
