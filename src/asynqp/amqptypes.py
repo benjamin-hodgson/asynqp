@@ -189,6 +189,19 @@ class Table(FieldType):
 
 
 class Timestamp(FieldType):
+    def __init__(self, value):
+        if isinstance(value, int):
+            value = datetime.datetime.fromtimestamp(value)
+        super().__init__(value)
+
+    def __eq__(self, other):
+        if isinstance(other, type(self.value)):
+            return abs(self.value - other) < datetime.timedelta(seconds=1)
+        try:
+            return abs(self.value - other.value) < datetime.timedelta(seconds=1)
+        except (AttributeError, TypeError):
+            return NotImplemented
+
     @classmethod
     def isvalid(cls, value):
         return isinstance(value, datetime.datetime)

@@ -1,5 +1,7 @@
 import asyncio
 from asyncio import test_utils
+from datetime import datetime
+import asynqp
 from asynqp import frames
 from asynqp import spec
 from .base_contexts import OpenChannelContext, QueueContext, ExchangeContext
@@ -159,10 +161,24 @@ class WhenBasicGetEmptyArrives(QueueContext):
         assert self.task.result() is None
 
 
-# class WhenBasicGetOKArrives(QueueContext):
-#     def given_I_asked_for_a_message(self):
-#         self.task = asyncio.async(self.queue.get(no_ack=False))
-#         test_utils.run_briefly(self.loop)
+class WhenBasicGetOKArrives(QueueContext):
+    def given_I_asked_for_a_message(self):
+        self.expected_message = asynqp.Message('body', timestamp=datetime(2014, 5, 5))
+        self.task = asyncio.async(self.queue.get(no_ack=False))
+        test_utils.run_briefly(self.loop)
 
-#     def when_BasicGetOK_arrives(self):
-#         self.dispatcher.dispatch(frames.MethodFrame)
+    def when_BasicGetOK_arrives_with_content(self):
+        method = spec.BasicGetOK(123, False, 'my.exchange', 'routing.key', 0)
+        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
+        test_utils.run_briefly(self.loop)
+
+        header = self.expected_message.header_payload(spec.BasicGet.method_type[0])
+        self.dispatcher.dispatch(frames.ContentHeaderFrame(self.channel.id, header))
+        test_utils.run_briefly(self.loop)
+
+        body = self.expected_message.frame_payloads(100)[0]
+        self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
+        test_utils.run_briefly(self.loop)
+
+    def it_should_return_the_expected_message(self):
+        assert self.task.result() == self.expected_message

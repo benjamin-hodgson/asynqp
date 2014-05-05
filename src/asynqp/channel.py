@@ -1,9 +1,11 @@
 import asyncio
 import re
+from . import amqptypes
 from . import frames
 from . import spec
 from . import queue
 from . import exchange
+from . import message
 from .exceptions import AMQPError
 
 
@@ -40,6 +42,7 @@ class Channel(object):
         self.queue_declare_futures = {}
         self.exchange_declare_future = None
         self.queue_bind_future = None  # not ideal
+        self.basic_get_future = None
 
     @asyncio.coroutine
     def declare_exchange(self, name, type, *, durable=True, auto_delete=False, internal=False):
@@ -122,8 +125,16 @@ class ChannelFrameHandler(object):
         self.sender = ChannelMethodSender(channel_id, protocol)
         self.channel = Channel(channel_id, self.sender, loop)
         self.opened = asyncio.Future(loop=loop)
+        self.message_builder = None
 
     def handle(self, frame):
+        if isinstance(frame, frames.ContentHeaderFrame):
+            self.handle_ContentHeader(frame)
+            return
+        if isinstance(frame, frames.ContentBodyFrame):
+            self.handle_ContentBody(frame)
+            return
+
         method_type = type(frame.payload)
         handle_name = method_type.__name__
         if self.channel.closing.done() and method_type not in (spec.ChannelClose, spec.ChannelCloseOK):
@@ -151,7 +162,20 @@ class ChannelFrameHandler(object):
         self.channel.queue_bind_future.set_result(None)
 
     def handle_BasicGetEmpty(self, frame):
-        pass
+        self.channel.basic_get_future.set_result(None)
+
+    def handle_BasicGetOK(self, frame):
+        payload = frame.payload
+        self.message_builder = message.MessageBuilder(payload.delivery_tag, payload.redelivered, payload.exchange, payload.routing_key)
+
+    def handle_ContentHeader(self, frame):
+        self.message_builder.set_header(frame.payload)
+
+    def handle_ContentBody(self, frame):
+        self.message_builder.add_body_chunk(frame.payload)
+        if self.message_builder.done():
+            self.channel.basic_get_future.set_result(self.message_builder.build())
+            self.message_builder = None
 
     def handle_ChannelClose(self, frame):
         self.channel.closing.set_result(True)
@@ -183,16 +207,16 @@ class ChannelMethodSender(object):
     def send_BasicGet(self, queue_name, no_ack):
         self.protocol.send_method(self.channel_id, spec.BasicGet(0, queue_name, no_ack))
 
-    def send_content(self, message):
-        header_payload = message.header_payload(spec.BasicPublish.method_type[0])
+    def send_content(self, msg):
+        header_payload = msg.header_payload(spec.BasicPublish.method_type[0])
         header_frame = frames.ContentHeaderFrame(self.channel_id, header_payload)
         self.protocol.send_frame(header_frame)
 
-        for payload in message.frame_payloads(100):
+        for payload in msg.frame_payloads(100):
             frame = frames.ContentBodyFrame(self.channel_id, payload)
             self.protocol.send_frame(frame)
 
-    def send_Close(self, status_code, message, class_id, method_id):
+    def send_Close(self, status_code, msg, class_id, method_id):
         self.protocol.send_method(self.channel_id, spec.ChannelClose(0, 'Channel closed by application', 0, 0))
 
     def send_CloseOK(self):

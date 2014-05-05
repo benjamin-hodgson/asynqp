@@ -1,14 +1,18 @@
 from io import BytesIO
 from . import spec
 from . import serialisation
+from . import message
 
 
 def read(frame_type, channel_id, raw_payload):
     if frame_type == MethodFrame.frame_type:
         method = spec.read_method(raw_payload)
         return MethodFrame(channel_id, method)
-    elif frame_type == HeartbeatFrame.frame_type:
-        return HeartbeatFrame()
+    if frame_type == ContentHeaderFrame.frame_type:
+        payload = message.ContentHeaderPayload.read(raw_payload)
+        return ContentHeaderFrame(channel_id, payload)
+    if frame_type == ContentBodyFrame.frame_type:
+        return ContentBodyFrame(channel_id, raw_payload)
 
 
 class Frame(object):
@@ -57,34 +61,3 @@ class HeartbeatFrame(Frame):
 
     def __init__(self):
         pass
-
-
-class ContentHeaderPayload(object):
-    def __init__(self, class_id, body_length, properties):
-        self.class_id = class_id
-        self.body_length = body_length
-        self.properties = properties
-
-    def __eq__(self, other):
-        return (self.class_id == other.class_id
-                and self.body_length == other.body_length
-                and self.properties == other.properties)
-
-    def write(self, stream):
-        stream.write(serialisation.pack_short(self.class_id))
-        stream.write(serialisation.pack_short(0))  # weight
-        stream.write(serialisation.pack_long_long(self.body_length))
-
-        bytesio = BytesIO()
-
-        property_flags = 0
-        bitshift = 15
-
-        for val in self.properties:
-            if val is not None:
-                property_flags |= (1 << bitshift)
-                val.write(bytesio)
-            bitshift -= 1
-
-        stream.write(serialisation.pack_short(property_flags))
-        stream.write(bytesio.getvalue())

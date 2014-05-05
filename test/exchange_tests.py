@@ -6,6 +6,7 @@ from unittest import mock
 import asynqp
 from asynqp import spec
 from asynqp import frames
+from asynqp import message
 from .base_contexts import OpenChannelContext, ExchangeContext
 
 
@@ -118,7 +119,7 @@ class WhenPublishingAShortMessage(ExchangeContext):
 
     def it_should_send_a_BasicPublish_method_followed_by_a_header_and_the_body(self):
         expected_method = spec.BasicPublish(0, self.exchange.name, 'routing.key', True, False)
-        header_payload = frames.ContentHeaderPayload(60, 4, [
+        header_payload = message.ContentHeaderPayload(60, 4, [
             'application/json',
             'utf-8',
             {}, 2, 5,

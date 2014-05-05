@@ -58,3 +58,24 @@ class WhenDeclaringAnExchange(ChannelContext):
 
     def it_should_have_the_correct_name(self):
         assert self.exchange.name == 'my.exchange'
+
+
+class WhenPublishingAndGettingAShortMessage(ChannelContext):
+    def given_I_published_a_message(self):
+        self.loop.run_until_complete(asyncio.wait_for(self.setup(), 0.2))
+
+    def when_I_get_the_message(self):
+        self.result = self.loop.run_until_complete(asyncio.wait_for(self.queue.get(), 0.2))
+
+    def it_should_return_my_message(self):
+        assert self.result == self.message
+
+    @asyncio.coroutine
+    def setup(self):
+        self.queue = yield from self.channel.declare_queue('my.queue', exclusive=True)
+        self.exchange = yield from self.channel.declare_exchange('my.exchange', 'fanout')
+
+        yield from self.queue.bind(self.exchange, 'doesntmatter')
+
+        self.message = asynqp.Message('here is the body')
+        self.exchange.publish(self.message, 'routingkey')

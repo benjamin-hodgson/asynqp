@@ -44,6 +44,11 @@ def read_table(stream):
     return _read_table(stream)[0]
 
 
+@rethrow_as(struct.error, AMQPError('failed to read a table'))
+def read_bool(stream):
+    return _read_bool(stream)[0]
+
+
 def _read_table(stream):
     # TODO: more value types
     TABLE_VALUE_PARSERS = {

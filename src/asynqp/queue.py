@@ -28,7 +28,8 @@ class Queue(object):
     def bind(self, exchange, routing_key):
         """
         Bind a queue to an exchange, with the supplied routing key.
-        This action 'subscribes' the queue to the routing key; the meaning of this varies with the exchange type.
+        This action 'subscribes' the queue to the routing key; the precise meaning of this
+        varies with the exchange type.
         This method is a coroutine.
 
         Arguments:
@@ -45,7 +46,21 @@ class Queue(object):
 
     @asyncio.coroutine
     def get(self, *, no_ack=False):
+        """
+        Synchronously get a message from the queue.
+        This method is a coroutine.
+
+        Arguments:
+            no_ack: if True, the broker does not require acknowledgement of receipt of the message.
+                    default: False
+
+        Return value:
+            an instance of asynqp.Message, or None if there were no messages on the queue.
+        """
+        self.channel.basic_get_future = asyncio.Future(loop=self.loop)
         self.sender.send_BasicGet(self.name, no_ack)
+        result = yield from self.channel.basic_get_future
+        return result
 
 
 class QueueBinding(object):

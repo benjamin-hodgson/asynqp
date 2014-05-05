@@ -3,6 +3,7 @@ from unittest import mock
 from asynqp import spec
 from asynqp import frames
 from asynqp import amqptypes
+from asynqp import message
 from .base_contexts import ProtocolContext
 
 
@@ -11,7 +12,8 @@ class WhenConnectionStartArrives(ProtocolContext):
         self.handler = mock.Mock()
         self.dispatcher.add_handler(0, self.handler)
 
-        self.raw = (b"\x01\x00\x00\x00\x00\x01\x50\x00\x0A\x00\x0A\x00\t\x00\x00\x01"
+        self.raw = (b"\x01\x00\x00\x00\x00\x01\x50"  # type, channel, size
+                    b"\x00\x0A\x00\x0A\x00\t\x00\x00\x01"
                     b"%\x0ccapabilitiesF\x00\x00\x00X\x12publisher_confirmst\x01\x1aexchange_exchange_bindings"
                     b"t\x01\nbasic.nackt\x01\x16consumer_cancel_notifyt\x01\tcopyrightS\x00\x00\x00'Copyright "
                     b"(C) 2007-2013 GoPivotal, Inc.\x0binformationS\x00\x00\x005Licensed under the MPL. "
@@ -107,7 +109,7 @@ class WhenSendingQueueDeclare(ProtocolContext):
 
 class WhenSendingContentHeader(ProtocolContext):
     def given_a_content_header_frame(self):
-        payload = frames.ContentHeaderPayload(50, 100, [amqptypes.Octet(3), None, amqptypes.Table({'some': 'value'})])
+        payload = message.ContentHeaderPayload(50, 100, [amqptypes.Octet(3), None, amqptypes.Table({'some': 'value'})])
         self.frame = frames.ContentHeaderFrame(1, payload)
 
     def when_I_send_the_frame(self):
@@ -121,3 +123,54 @@ class WhenSendingContentHeader(ProtocolContext):
             b'\xA0\x00'  # property_flags 0b1010000000000000
             b'\x03\x00\x00\x00\x0F\x04someS\x00\x00\x00\x05value'  # property list
             b'\xCE')
+
+
+class WhenAContentHeaderArrives(ProtocolContext):
+    def given_a_content_header_frame(self):
+        self.handler = mock.Mock()
+        self.dispatcher.add_handler(1, self.handler)
+
+        self.raw = (
+            b'\x02\x00\x01\x00\x00\x00\x25'  # regular frame header
+            b'\x00\x32\x00\x00'  # class id 50; weight is always 0
+            b'\x00\x00\x00\x00\x00\x00\x00\x64'  # body length 100
+            b'\xA0\x00'  # property_flags 0b1010000000000000
+            b'\x03yes\x00\x00\x00\x0F\x04someS\x00\x00\x00\x05value'  # property list
+            b'\xCE')
+
+        expected_payload = message.ContentHeaderPayload(50, 100, [
+            amqptypes.ShortStr('yes'), None, amqptypes.Table({'some': 'value'}),
+            None, None, None, None, None, None, None, None, None, None])
+        self.expected_frame = frames.ContentHeaderFrame(1, expected_payload)
+
+    def when_the_frame_arrives(self):
+        self.protocol.data_received(self.raw)
+
+    def it_should_deserialise_it_to_a_ContentHeaderFrame(self):
+        self.handler.handle.assert_called_once_with(self.expected_frame)
+
+
+class WhenBasicGetOKArrives(ProtocolContext):
+    def given_a_frame(self):
+        self.handler = mock.Mock()
+        self.dispatcher.add_handler(1, self.handler)
+
+        self.raw = (
+            b'\x01\x00\x01\x00\x00\x00\x22'  # type, channel, size
+            b'\x00\x3C\x00\x47'  # 60, 71
+            b'\x00\x00\x00\x00\x00\x00\x00\x01'  # delivery tag
+            b'\x00'  # not redelivered
+            b'\x08exchange'
+            b'\x07routing'
+            b'\x00\x00\x00\x00'  # no more messages
+            b'\xCE')
+
+        expected_method = spec.BasicGetOK(1, False, 'exchange', 'routing', 0)
+        self.expected_frame = frames.MethodFrame(1, expected_method)
+
+    def when_the_frame_arrives(self):
+        self.protocol.data_received(self.raw)
+
+    def it_should_deserialise_it_to_the_correct_method(self):
+        self.handler.handle.assert_called_once_with(self.expected_frame)
+

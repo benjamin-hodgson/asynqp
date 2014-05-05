@@ -1,12 +1,9 @@
 import asyncio
-import json
-from collections import OrderedDict
-from datetime import datetime
 from . import frames
-from . import amqptypes
 from .connection import Connection, ConnectionInfo, ConnectionFrameHandler
 from .exceptions import AMQPError
 from .protocol import AMQP, Dispatcher
+from .message import Message
 
 
 @asyncio.coroutine
@@ -42,66 +39,3 @@ def connect(host='localhost', port=5672, username='guest', password='guest', vir
 
     yield from handler.opened
     return handler.connection
-
-
-class Message(object):
-    def __init__(self, body, *,
-                 headers=None,
-                 content_type=None,
-                 content_encoding='utf-8',
-                 delivery_mode=None,
-                 priority=None,
-                 correlation_id=None,
-                 reply_to=None,
-                 expiration=None,
-                 message_id=None,
-                 timestamp=None,
-                 type=None,
-                 user_id=None,
-                 app_id=None):
-        self.properties = OrderedDict()
-
-        if isinstance(body, dict):
-            body = json.dumps(body)
-            if not content_type:
-                content_type = 'application/json'
-        elif not content_type:
-            content_type = 'application/octet-stream'
-
-        if isinstance(body, bytes):
-            self.body = body
-        else:
-            self.body = body.encode(content_encoding)
-
-        for amqptype, name, value in [(amqptypes.ShortStr, "content_type", content_type),
-                                      (amqptypes.ShortStr, "content_encoding", content_encoding),
-                                      (amqptypes.Table, "headers", headers),
-                                      (amqptypes.Octet, "delivery_mode", delivery_mode),
-                                      (amqptypes.Octet, "priority", priority),
-                                      (amqptypes.ShortStr, "correlation_id", correlation_id),
-                                      (amqptypes.ShortStr, "reply_to", reply_to),
-                                      (amqptypes.ShortStr, "expiration", expiration),
-                                      (amqptypes.ShortStr, "message_id", message_id),
-                                      (amqptypes.Timestamp, "timestamp", timestamp if timestamp is not None else datetime.now()),
-                                      (amqptypes.ShortStr, "type", type),
-                                      (amqptypes.ShortStr, "user_id", user_id),
-                                      (amqptypes.ShortStr, "app_id", app_id)]:
-            if value is not None:
-                value = amqptype(value)
-            self.properties[name] = value
-
-    def __getattr__(self, name):
-        return self.properties[name]
-
-    def header_payload(self, class_id):
-        return frames.ContentHeaderPayload(class_id, len(self.body), list(self.properties.values()))
-
-    # the total frame size will be 8 bytes larger than frame_body_size
-    def frame_payloads(self, frame_body_size):
-        frames = []
-        remaining = self.body
-        while remaining:
-            frame = remaining[:frame_body_size]
-            remaining = remaining[frame_body_size:]
-            frames.append(frame)
-        return frames

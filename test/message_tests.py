@@ -2,7 +2,7 @@ import json
 import uuid
 from datetime import datetime
 import asynqp
-from asynqp import frames
+from asynqp import message
 
 
 class WhenGettingTheContentHeader:
@@ -31,7 +31,7 @@ class WhenGettingTheContentHeader:
         self.payload = self.message.header_payload(50)
 
     def it_should_return_the_frames(self):
-        assert self.payload == frames.ContentHeaderPayload(50, 4, [
+        assert self.payload == message.ContentHeaderPayload(50, 4, [
             'application/json',
             'utf-8',
             {}, 2, 5,
