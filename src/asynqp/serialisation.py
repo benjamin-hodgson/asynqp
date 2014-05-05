@@ -134,12 +134,12 @@ def pack_long_string(string):
 
 def pack_table(d):
     bytes = b''
-    for key in d:
-        if not isinstance(d[key], str):
+    for key, value in d.items():
+        if not isinstance(value, str):
             raise NotImplementedError()
         bytes += pack_short_string(key)
-        bytes += b'S'
-        bytes += pack_long_string(d[key])
+        bytes += b'S'  # todo: more values
+        bytes += pack_long_string(value)
     return pack_long(len(bytes)) + bytes
 
 

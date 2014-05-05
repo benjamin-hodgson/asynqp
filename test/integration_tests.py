@@ -62,7 +62,7 @@ class WhenDeclaringAnExchange(ChannelContext):
 
 class WhenPublishingAndGettingAShortMessage(ChannelContext):
     def given_I_published_a_message(self):
-        self.loop.run_until_complete(asyncio.wait_for(self.setup(), 0.2))
+        self.loop.run_until_complete(asyncio.wait_for(self.setup(), 0.4))
 
     def when_I_get_the_message(self):
         self.result = self.loop.run_until_complete(asyncio.wait_for(self.queue.get(), 0.2))

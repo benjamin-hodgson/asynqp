@@ -1,7 +1,4 @@
-import abc
 import datetime
-import functools
-import operator
 from . import serialisation
 
 
@@ -11,7 +8,7 @@ MAX_LONG = 0xFFFFFFFF
 MAX_LONG_LONG = 0xFFFFFFFFFFFFFFFF
 
 
-class FieldType(abc.ABC):
+class Bit(object):
     def __init__(self, value):
         if isinstance(value, type(self)):
             value = value.value  # ha!
@@ -27,64 +24,6 @@ class FieldType(abc.ABC):
         except AttributeError:
             return NotImplemented
 
-    def __repr__(self):
-        return "{}({})".format(type(self).__name__, self.value)
-
-    @classmethod
-    @abc.abstractmethod
-    def isvalid(cls, value):
-        pass
-
-    @abc.abstractmethod
-    def write(self, stream):
-        pass
-
-    @classmethod
-    @abc.abstractmethod
-    def read(cls, stream):
-        pass
-
-    def operate(self, func, other):
-        if isinstance(other, type(self.value)):
-            return type(self)(func(self.value, other))
-        try:
-            return type(self)(func(self.value, other.value))
-        except (AttributeError, TypeError):
-            return NotImplemented
-
-
-class HashableFieldType(FieldType):
-    def __hash__(self):
-        return hash(self.value)
-
-
-@functools.total_ordering
-class OrderedFieldType(FieldType):
-    __lt__ = functools.partialmethod(FieldType.operate, operator.lt)
-
-
-class NumericFieldType(OrderedFieldType, HashableFieldType):
-    __add__ = functools.partialmethod(FieldType.operate, operator.add)
-    __sub__ = functools.partialmethod(FieldType.operate, operator.sub)
-    __mul__ = functools.partialmethod(FieldType.operate, operator.mul)
-    __truediv__ = functools.partialmethod(FieldType.operate, operator.truediv)
-    __floordiv__ = functools.partialmethod(FieldType.operate, operator.floordiv)
-
-
-class IntegralFieldType(NumericFieldType):
-    def __int__(self):
-        return int(self.value)
-
-    def __index__(self):
-        return operator.index(self.value)
-
-
-class StringFieldType(HashableFieldType):
-    def __str__(self):
-        return str(self.value)
-
-
-class Bit(IntegralFieldType):
     @classmethod
     def isvalid(cls, value):
         return isinstance(value, bool)
@@ -97,122 +36,122 @@ class Bit(IntegralFieldType):
         return cls(serialisation.read_bool(stream))
 
 
-class Octet(IntegralFieldType):
-    @classmethod
-    def isvalid(cls, value):
-        return isinstance(value, int) and 0 <= value <= MAX_OCTET
+class Octet(int):
+    def __new__(cls, value):
+        if not (0 <= value <= MAX_OCTET):
+            raise TypeError('{} is not a valid value for type {}'.format(value, type(cls).__name__))
+        return super().__new__(cls, value)
 
     def write(self, stream):
-        stream.write(serialisation.pack_octet(self.value))
+        stream.write(serialisation.pack_octet(self))
 
     @classmethod
     def read(cls, stream):
         return cls(serialisation.read_octet(stream))
 
 
-class Short(IntegralFieldType):
-    @classmethod
-    def isvalid(cls, value):
-        return isinstance(value, int) and 0 <= value <= MAX_SHORT
+class Short(int):
+    def __new__(cls, value):
+        if not (0 <= value <= MAX_SHORT):
+            raise TypeError('{} is not a valid value for type {}'.format(value, type(cls).__name__))
+        return super().__new__(cls, value)
 
     def write(self, stream):
-        stream.write(serialisation.pack_short(self.value))
+        stream.write(serialisation.pack_short(self))
 
     @classmethod
     def read(cls, stream):
         return cls(serialisation.read_short(stream))
 
 
-class Long(IntegralFieldType):
-    @classmethod
-    def isvalid(cls, value):
-        return isinstance(value, int) and 0 <= value <= MAX_LONG
+class Long(int):
+    def __new__(cls, value):
+        if not (0 <= value <= MAX_LONG):
+            raise TypeError('{} is not a valid value for type {}'.format(value, type(cls).__name__))
+        return super().__new__(cls, value)
 
     def write(self, stream):
-        stream.write(serialisation.pack_long(self.value))
+        stream.write(serialisation.pack_long(self))
 
     @classmethod
     def read(cls, stream):
         return cls(serialisation.read_long(stream))
 
 
-class LongLong(IntegralFieldType):
-    @classmethod
-    def isvalid(cls, value):
-        return isinstance(value, int) and 0 <= value <= MAX_LONG_LONG
+class LongLong(int):
+    def __new__(cls, value):
+        if not (0 <= value <= MAX_LONG_LONG):
+            raise TypeError('{} is not a valid value for type {}'.format(value, type(cls).__name__))
+        return super().__new__(cls, value)
 
     def write(self, stream):
-        stream.write(serialisation.pack_long_long(self.value))
+        stream.write(serialisation.pack_long_long(self))
 
     @classmethod
     def read(cls, stream):
         return cls(serialisation.read_long_long(stream))
 
 
-class ShortStr(StringFieldType):
-    @classmethod
-    def isvalid(cls, value):
-        return isinstance(value, str) and len(value) <= MAX_OCTET
+class ShortStr(str):
+    def __new__(cls, value):
+        if len(value) > MAX_OCTET:
+            raise TypeError('{} is not a valid value for type {}'.format(value, type(cls).__name__))
+        return super().__new__(cls, value)
+
+    def __hash__(self):
+        return super().__hash__()
 
     def write(self, stream):
-        stream.write(serialisation.pack_short_string(self.value))
+        stream.write(serialisation.pack_short_string(self))
 
     @classmethod
     def read(cls, stream):
         return cls(serialisation.read_short_string(stream))
 
 
-class LongStr(StringFieldType):
-    @classmethod
-    def isvalid(cls, value):
-        return isinstance(value, str) and len(value) <= MAX_LONG
+class LongStr(str):
+    def __new__(cls, value):
+        if len(value) > MAX_LONG:
+            raise TypeError('{} is not a valid value for type {}'.format(value, type(cls).__name__))
+        return super().__new__(cls, value)
 
     def write(self, stream):
-        stream.write(serialisation.pack_long_string(self.value))
+        stream.write(serialisation.pack_long_string(self))
 
     @classmethod
     def read(cls, stream):
         return cls(serialisation.read_long_string(stream))
 
 
-class Table(FieldType):
-    @classmethod
-    def isvalid(cls, value):
-        return isinstance(value, dict)
-
+class Table(dict):
     def write(self, stream):
-        stream.write(serialisation.pack_table(self.value))
+        stream.write(serialisation.pack_table(self))
 
     @classmethod
     def read(cls, stream):
         return cls(serialisation.read_table(stream))
 
 
-class Timestamp(FieldType):
-    def __init__(self, value):
-        if isinstance(value, int):
-            value = datetime.datetime.fromtimestamp(value)
-        super().__init__(value)
+class Timestamp(datetime.datetime):
+    def __new__(cls, *args, **kwargs):
+        if kwargs or len(args) > 1:
+            return super().__new__(cls, *args, **kwargs)
+
+        value, = args
+        if isinstance(value, datetime.datetime):
+            return super().__new__(cls, value.year, value.month, value.day, value.hour, value.minute, value.second)
+        raise TypeError("Could not construct a timestamp")
 
     def __eq__(self, other):
-        if isinstance(other, type(self.value)):
-            return abs(self.value - other) < datetime.timedelta(seconds=1)
-        try:
-            return abs(self.value - other.value) < datetime.timedelta(seconds=1)
-        except (AttributeError, TypeError):
-            return NotImplemented
-
-    @classmethod
-    def isvalid(cls, value):
-        return isinstance(value, datetime.datetime)
+        return abs(self - other) < datetime.timedelta(seconds=1)
 
     def write(self, stream):
-        stamp = int(self.value.timestamp())
+        stamp = int(self.timestamp())
         stream.write(serialisation.pack_long_long(stamp))
 
     @classmethod
     def read(cls, stream):
-        return cls(serialisation.read_long_long(stream))
+        return cls.fromtimestamp(serialisation.read_long_long(stream))
 
 
 FIELD_TYPES = {

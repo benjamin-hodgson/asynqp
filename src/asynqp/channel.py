@@ -1,6 +1,5 @@
 import asyncio
 import re
-from . import amqptypes
 from . import frames
 from . import spec
 from . import queue

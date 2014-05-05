@@ -51,7 +51,7 @@ class WhenIPassInADictWithNoContentHeader:
         self.message = asynqp.Message(self.body)
 
     def it_should_jsonify_the_dict(self):
-        assert json.loads(self.message.body.decode(self.message.content_encoding.value)) == self.body
+        assert json.loads(self.message.body.decode(self.message.content_encoding)) == self.body
 
     def it_should_set_the_content_type_for_me(self):
         assert self.message.content_type == 'application/json'
@@ -63,7 +63,7 @@ class WhenIPassInADictWithAContentTypeHeader:
         self.message = asynqp.Message(self.body, content_type='application/vnd.my.mime.type')
 
     def it_should_jsonify_the_dict(self):
-        assert json.loads(self.message.body.decode(self.message.content_encoding.value)) == self.body
+        assert json.loads(self.message.body.decode(self.message.content_encoding)) == self.body
 
     def it_should_not_set_the_content_type_for_me(self):
         assert self.message.content_type == 'application/vnd.my.mime.type'

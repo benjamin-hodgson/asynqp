@@ -61,7 +61,7 @@ class IncomingMethod(Method):
 
         args = []
         for fieldname, fieldcls in cls.field_info.items():
-            args.append(fieldcls.read(stream).value)
+            args.append(fieldcls.read(stream))
 
         return cls(*args)
 
