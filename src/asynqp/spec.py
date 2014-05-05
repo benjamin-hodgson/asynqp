@@ -109,7 +109,8 @@ def get_classes(tree):
 
             doc = build_docstring(method, fields)
 
-            class_methods[method.attrib['name'].capitalize().replace('-ok', 'OK')] = (int(method_id), fields, method_support, doc)
+            method_name = method.attrib['name'].capitalize().replace('-ok', 'OK').replace('-empty', 'Empty')
+            class_methods[method_name] = (int(method_id), fields, method_support, doc)
 
         classes[class_elem.attrib['name'].capitalize()] = (int(class_id), class_methods)
 

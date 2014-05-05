@@ -135,3 +135,34 @@ class WhenQueueBindOKArrives(QueueContext, ExchangeContext):
 
     def and_the_returned_binding_should_have_the_correct_exchange(self):
         assert self.binding.exchange is self.exchange
+
+
+class WhenIAskForAMessage(QueueContext):
+    def when_I_get_a_message(self):
+        asyncio.async(self.queue.get(no_ack=False))
+        test_utils.run_briefly(self.loop)
+
+    def it_should_send_BasicGet(self):
+        self.protocol.send_method.assert_called_once_with(self.channel.id, spec.BasicGet(0, self.queue.name, False))
+
+
+class WhenBasicGetEmptyArrives(QueueContext):
+    def given_I_asked_for_a_message(self):
+        self.task = asyncio.async(self.queue.get(no_ack=False))
+        test_utils.run_briefly(self.loop)
+
+    def when_BasicGetEmpty_arrives(self):
+        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, spec.BasicGetEmpty('')))
+        test_utils.run_briefly(self.loop)
+
+    def it_should_return_None(self):
+        assert self.task.result() is None
+
+
+# class WhenBasicGetOKArrives(QueueContext):
+#     def given_I_asked_for_a_message(self):
+#         self.task = asyncio.async(self.queue.get(no_ack=False))
+#         test_utils.run_briefly(self.loop)
+
+#     def when_BasicGetOK_arrives(self):
+#         self.dispatcher.dispatch(frames.MethodFrame)

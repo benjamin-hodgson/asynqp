@@ -43,6 +43,10 @@ class Queue(object):
         yield from fut
         return QueueBinding(self, exchange)
 
+    @asyncio.coroutine
+    def get(self, *, no_ack=False):
+        self.sender.send_BasicGet(self.name, no_ack)
+
 
 class QueueBinding(object):
     def __init__(self, queue, exchange):

@@ -150,6 +150,9 @@ class ChannelFrameHandler(object):
     def handle_QueueBindOK(self, frame):
         self.channel.queue_bind_future.set_result(None)
 
+    def handle_BasicGetEmpty(self, frame):
+        pass
+
     def handle_ChannelClose(self, frame):
         self.channel.closing.set_result(True)
         self.sender.send_CloseOK()
@@ -176,6 +179,9 @@ class ChannelMethodSender(object):
     def send_BasicPublish(self, exchange_name, routing_key, mandatory, immediate):
         method = spec.BasicPublish(0, exchange_name, routing_key, mandatory, immediate)
         self.protocol.send_method(self.channel_id, method)
+
+    def send_BasicGet(self, queue_name, no_ack):
+        self.protocol.send_method(self.channel_id, spec.BasicGet(0, queue_name, no_ack))
 
     def send_content(self, message):
         header_payload = message.header_payload(spec.BasicPublish.method_type[0])
