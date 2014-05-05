@@ -160,6 +160,9 @@ class ChannelFrameHandler(object):
     def handle_QueueBindOK(self, frame):
         self.channel.queue_bind_future.set_result(None)
 
+    def handle_QueueDeleteOK(self, frame):
+        self.channel.queue_delete_future.set_result(None)
+
     def handle_BasicGetEmpty(self, frame):
         self.channel.basic_get_future.set_result(None)
 
@@ -199,6 +202,9 @@ class ChannelMethodSender(object):
 
     def send_QueueBind(self, queue_name, exchange_name, routing_key):
         self.protocol.send_method(self.channel_id, spec.QueueBind(0, queue_name, exchange_name, routing_key, False, {}))
+
+    def send_QueueDelete(self, queue_name, if_unused, if_empty):
+        self.protocol.send_method(self.channel_id, spec.QueueDelete(0, queue_name, if_unused, if_empty, False))
 
     def send_BasicPublish(self, exchange_name, routing_key, mandatory, immediate):
         method = spec.BasicPublish(0, exchange_name, routing_key, mandatory, immediate)

@@ -1,4 +1,5 @@
 import asyncio
+from . import spec
 
 
 class Queue(object):
@@ -23,6 +24,7 @@ class Queue(object):
         self.durable = durable
         self.exclusive = exclusive
         self.auto_delete = auto_delete
+        self.deleted = False
 
     @asyncio.coroutine
     def bind(self, exchange, routing_key):
@@ -61,6 +63,17 @@ class Queue(object):
         self.sender.send_BasicGet(self.name, no_ack)
         result = yield from self.channel.basic_get_future
         return result
+
+    @asyncio.coroutine
+    def delete(self, *, if_unused=False, if_empty=False):
+        """
+        Delete the queue.
+        This method is a coroutine.
+        """
+        self.sender.send_QueueDelete(self.name, if_unused, if_empty)
+        self.channel.queue_delete_future = asyncio.Future(loop=self.loop)
+        yield from self.channel.queue_delete_future
+        self.deleted = True
 
 
 class QueueBinding(object):

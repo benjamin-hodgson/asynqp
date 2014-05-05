@@ -182,3 +182,26 @@ class WhenBasicGetOKArrives(QueueContext):
 
     def it_should_return_the_expected_message(self):
         assert self.task.result() == self.expected_message
+
+
+class WhenDeletingAQueue(QueueContext):
+    def because_I_delete_the_queue(self):
+        asyncio.async(self.queue.delete(if_unused=False, if_empty=False))
+        test_utils.run_briefly(self.loop)
+
+    def it_should_send_a_QueueDelete_method(self):
+        self.protocol.send_method.assert_called_once_with(self.channel.id, spec.QueueDelete(0, self.queue.name, False, False, False))
+
+
+class WhenQueueDeleteOKArrives(QueueContext):
+    def given_I_deleted_a_queue(self):
+        asyncio.async(self.queue.delete(if_unused=False, if_empty=False), loop=self.loop)
+        test_utils.run_briefly(self.loop)
+
+    def when_QueueDeleteOK_arrives(self):
+        method = spec.QueueDeleteOK(123)
+        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
+        test_utils.run_briefly(self.loop)
+
+    def it_should_be_deleted(self):
+        assert self.queue.deleted

@@ -154,7 +154,6 @@ class WhenPublishingALongMessage(ExchangeContext):
         expected_body1 = frames.ContentBodyFrame(self.channel.id, self.body1)
         expected_body2 = frames.ContentBodyFrame(self.channel.id, self.body2)
         self.protocol.send_frame.assert_has_calls([
-            mock.ANY,
             mock.call(expected_body1),
             mock.call(expected_body2)
-        ])
+        ], any_order=False)

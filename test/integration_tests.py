@@ -51,6 +51,9 @@ class WhenDeclaringAQueue(ChannelContext):
     def it_should_have_the_correct_queue_name(self):
         assert self.queue.name == 'my.queue'
 
+    def cleanup_the_queue(self):
+        self.loop.run_until_complete(self.queue.delete())
+
 
 class WhenDeclaringAnExchange(ChannelContext):
     def when_I_declare_an_exchange(self):
@@ -69,6 +72,9 @@ class WhenPublishingAndGettingAShortMessage(ChannelContext):
 
     def it_should_return_my_message(self):
         assert self.result == self.message
+
+    def cleanup_the_queue(self):
+        self.loop.run_until_complete(self.queue.delete())
 
     @asyncio.coroutine
     def setup(self):
