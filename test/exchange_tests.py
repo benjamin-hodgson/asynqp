@@ -138,3 +138,23 @@ class WhenPublishingAShortMessage(ExchangeContext):
             mock.call.send_frame(expected_header),
             mock.call.send_frame(expected_body)
         ]
+
+
+class WhenPublishingALongMessage(ExchangeContext):
+    def given_a_message(self):
+        self.body1 = b"a" * (self.frame_max - 8)
+        self.body2 = b"b" * (self.frame_max - 8)
+        self.body = self.body1 + self.body2
+        self.msg = asynqp.Message(self.body)
+
+    def when_I_publish_the_message(self):
+        self.exchange.publish(self.msg, 'routing.key')
+
+    def it_should_send_two_body_frames(self):
+        expected_body1 = frames.ContentBodyFrame(self.channel.id, self.body1)
+        expected_body2 = frames.ContentBodyFrame(self.channel.id, self.body2)
+        self.protocol.send_frame.assert_has_calls([
+            mock.ANY,
+            mock.call(expected_body1),
+            mock.call(expected_body2)
+        ])

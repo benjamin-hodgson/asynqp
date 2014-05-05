@@ -12,7 +12,7 @@ class Bit(object):
     def __init__(self, value):
         if isinstance(value, type(self)):
             value = value.value  # ha!
-        if not self.isvalid(value):
+        if not isinstance(value, bool):
             raise TypeError('{} is not a valid value for type {}'.format(value, type(self).__name__))
         self.value = value
 
@@ -24,12 +24,8 @@ class Bit(object):
         except AttributeError:
             return NotImplemented
 
-    @classmethod
-    def isvalid(cls, value):
-        return isinstance(value, bool)
-
-    def write(self, stream):
-        raise NotImplementedError
+    def __bool__(self):
+        return self.value
 
     @classmethod
     def read(cls, stream):

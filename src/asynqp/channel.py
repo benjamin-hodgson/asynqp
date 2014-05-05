@@ -120,8 +120,8 @@ class Channel(object):
 
 
 class ChannelFrameHandler(object):
-    def __init__(self, protocol, channel_id, loop):
-        self.sender = ChannelMethodSender(channel_id, protocol)
+    def __init__(self, protocol, channel_id, loop, connection_info):
+        self.sender = ChannelMethodSender(channel_id, protocol, connection_info)
         self.channel = Channel(channel_id, self.sender, loop)
         self.opened = asyncio.Future(loop=loop)
         self.message_builder = None
@@ -185,9 +185,10 @@ class ChannelFrameHandler(object):
 
 
 class ChannelMethodSender(object):
-    def __init__(self, channel_id, protocol):
+    def __init__(self, channel_id, protocol, connection_info):
         self.channel_id = channel_id
         self.protocol = protocol
+        self.connection_info = connection_info
 
     def send_ExchangeDeclare(self, name, type, durable, auto_delete, internal):
         method = spec.ExchangeDeclare(0, name, type, False, durable, auto_delete, internal, False, {})
@@ -211,7 +212,7 @@ class ChannelMethodSender(object):
         header_frame = frames.ContentHeaderFrame(self.channel_id, header_payload)
         self.protocol.send_frame(header_frame)
 
-        for payload in msg.frame_payloads(100):
+        for payload in msg.frame_payloads(self.connection_info.frame_max - 8):
             frame = frames.ContentBodyFrame(self.channel_id, payload)
             self.protocol.send_frame(frame)
 

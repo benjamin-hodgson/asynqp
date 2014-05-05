@@ -32,11 +32,12 @@ class Connection(object):
         connection.open_channel: Open a new channel on this connection. This method is a coroutine.
         connection.close: Close the connection. This method is a coroutine.
     """
-    def __init__(self, loop, protocol, sender, dispatcher):
+    def __init__(self, loop, protocol, sender, dispatcher, connection_info):
         self.loop = loop
         self.protocol = protocol
         self.sender = sender
         self.dispatcher = dispatcher
+        self.connection_info = connection_info
 
         self.closing = asyncio.Future(loop=loop)
         self.closing.add_done_callback(self.dispatcher.closing.set_result)  # bit hacky
@@ -53,7 +54,7 @@ class Connection(object):
         Return value:
             The new Channel object.
         """
-        handler = channel.ChannelFrameHandler(self.protocol, self.next_channel_num, self.loop)
+        handler = channel.ChannelFrameHandler(self.protocol, self.next_channel_num, self.loop, self.connection_info)
         self.dispatcher.add_handler(self.next_channel_num, handler)
 
         self.sender.send_ChannelOpen(self.next_channel_num)
@@ -76,7 +77,7 @@ class Connection(object):
 class ConnectionFrameHandler(object):
     def __init__(self, protocol, dispatcher, loop, connection_info):
         self.sender = ConnectionMethodSender(protocol)
-        self.connection = Connection(loop, protocol, self.sender, dispatcher)
+        self.connection = Connection(loop, protocol, self.sender, dispatcher, connection_info)
 
         self.protocol = protocol
         self.connection_info = connection_info
@@ -104,6 +105,7 @@ class ConnectionFrameHandler(object):
         )
 
     def handle_ConnectionTune(self, frame):  # just agree with whatever the server wants. Make this configurable in future
+        self.connection_info.frame_max = frame.payload.frame_max
         self.sender.send_TuneOK(frame.payload.channel_max, frame.payload.frame_max, frame.payload.heartbeat)
         self.sender.send_Open(self.connection_info.virtual_host)
         self.protocol.start_heartbeat(frame.payload.heartbeat)

@@ -33,7 +33,8 @@ class OpenConnectionContext(ConnectionContext):
         start_frame = asynqp.frames.MethodFrame(0, spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US'))
         self.dispatcher.dispatch(start_frame)
 
-        tune_frame = asynqp.frames.MethodFrame(0, spec.ConnectionTune(0, 131072, 600))
+        self.frame_max = 131072
+        tune_frame = asynqp.frames.MethodFrame(0, spec.ConnectionTune(0, self.frame_max, 600))
         self.dispatcher.dispatch(tune_frame)
 
         open_ok_frame = asynqp.frames.MethodFrame(0, spec.ConnectionOpenOK(''))
