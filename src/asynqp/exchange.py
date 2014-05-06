@@ -1,5 +1,10 @@
+import asyncio
+from . import spec
+
+
 class Exchange(object):
-    def __init__(self, sender, name, type, durable, auto_delete, internal):
+    def __init__(self, synchroniser, sender, name, type, durable, auto_delete, internal):
+        self.synchroniser = synchroniser
         self.sender = sender
         self.name = name
         self.type = type
@@ -8,5 +13,10 @@ class Exchange(object):
         self.internal = internal
 
     def publish(self, message, routing_key, *, mandatory=True):
-        self.sender.send_BasicPublish(self.name, routing_key, mandatory, False)
-        self.sender.send_content(message)
+        self.sender.send_BasicPublish(self.name, routing_key, mandatory, message)
+
+    @asyncio.coroutine
+    def delete(self, *, if_unused=True):
+        with (yield from self.synchroniser.sync(spec.ExchangeDeleteOK)) as fut:
+            self.sender.send_ExchangeDelete(self.name, if_unused)
+            yield from fut

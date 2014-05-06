@@ -157,3 +157,25 @@ class WhenPublishingALongMessage(ExchangeContext):
             mock.call(expected_body1),
             mock.call(expected_body2)
         ], any_order=False)
+
+
+class WhenDeletingAnExchange(ExchangeContext):
+    def when_I_delete_the_exchange(self):
+        asyncio.async(self.exchange.delete(if_unused=True), loop=self.loop)
+        test_utils.run_briefly(self.loop)
+
+    def it_should_send_ExchangeDelete(self):
+        self.protocol.send_method.assert_called_once_with(self.channel.id, spec.ExchangeDelete(0, self.exchange.name, True, False))
+
+
+class WhenExchangeDeleteOKArrives(ExchangeContext):
+    def given_I_deleted_the_exchange(self):
+        asyncio.async(self.exchange.delete(if_unused=True), loop=self.loop)
+        test_utils.run_briefly(self.loop)
+
+    def when_confirmation_arrives(self):
+        frame = frames.MethodFrame(self.channel.id, spec.ExchangeDeleteOK())
+        self.dispatcher.dispatch(frame)
+
+    def it_should_be_ok(self):
+        pass

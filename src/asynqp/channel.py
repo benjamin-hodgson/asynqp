@@ -56,7 +56,7 @@ class Channel(object):
             the new Exchange object.
         """
         if name == '':
-            return exchange.Exchange(self.sender, name, 'direct', True, False, False)
+            return exchange.Exchange(self.synchroniser, self.sender, name, 'direct', True, False, False)
 
         if not VALID_EXCHANGE_NAME_RE.match(name):
             raise ValueError("Invalid exchange name.\n"
@@ -66,7 +66,7 @@ class Channel(object):
         with (yield from self.synchroniser.sync(spec.ExchangeDeclareOK)) as fut:
             self.sender.send_ExchangeDeclare(name, type, durable, auto_delete, internal)
             yield from fut
-            return exchange.Exchange(self.sender, name, type, durable, auto_delete, internal)
+            return exchange.Exchange(self.synchroniser, self.sender, name, type, durable, auto_delete, internal)
 
     @asyncio.coroutine
     def declare_queue(self, name='', *, durable=True, exclusive=False, auto_delete=False):
@@ -154,6 +154,9 @@ class ChannelFrameHandler(object):
     def handle_ExchangeDeclareOK(self, frame):
         self.synchroniser.succeed()
 
+    def handle_ExchangeDeleteOK(self, frame):
+        self.synchroniser.succeed()
+
     def handle_QueueBindOK(self, frame):
         self.synchroniser.succeed()
 
@@ -197,18 +200,26 @@ class ChannelMethodSender(object):
         method = spec.ExchangeDeclare(0, name, type, False, durable, auto_delete, internal, False, {})
         self.protocol.send_method(self.channel_id, method)
 
+    def send_ExchangeDelete(self, name, if_unused):
+        method = spec.ExchangeDelete(0, name, if_unused, False)
+        self.protocol.send_method(self.channel_id, method)
+
     def send_QueueDeclare(self, name, durable, exclusive, auto_delete):
-        self.protocol.send_method(self.channel_id, spec.QueueDeclare(0, name, False, durable, exclusive, auto_delete, False, {}))
+        method = spec.QueueDeclare(0, name, False, durable, exclusive, auto_delete, False, {})
+        self.protocol.send_method(self.channel_id, method)
 
     def send_QueueBind(self, queue_name, exchange_name, routing_key):
-        self.protocol.send_method(self.channel_id, spec.QueueBind(0, queue_name, exchange_name, routing_key, False, {}))
+        method = spec.QueueBind(0, queue_name, exchange_name, routing_key, False, {})
+        self.protocol.send_method(self.channel_id, method)
 
     def send_QueueDelete(self, queue_name, if_unused, if_empty):
-        self.protocol.send_method(self.channel_id, spec.QueueDelete(0, queue_name, if_unused, if_empty, False))
-
-    def send_BasicPublish(self, exchange_name, routing_key, mandatory, immediate):
-        method = spec.BasicPublish(0, exchange_name, routing_key, mandatory, immediate)
+        method = spec.QueueDelete(0, queue_name, if_unused, if_empty, False)
         self.protocol.send_method(self.channel_id, method)
+
+    def send_BasicPublish(self, exchange_name, routing_key, mandatory, message):
+        method = spec.BasicPublish(0, exchange_name, routing_key, mandatory, False)
+        self.protocol.send_method(self.channel_id, method)
+        self.send_content(message)
 
     def send_BasicGet(self, queue_name, no_ack):
         self.protocol.send_method(self.channel_id, spec.BasicGet(0, queue_name, no_ack))

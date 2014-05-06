@@ -8,7 +8,7 @@ class ConnectionContext:
         self.connection = self.loop.run_until_complete(asyncio.wait_for(asynqp.connect(), 0.2))
 
     def cleanup_the_connection(self):
-        self.loop.run_until_complete(self.connection.close())
+        self.loop.run_until_complete(asyncio.wait_for(self.connection.close(), 0.2))
 
 
 class ChannelContext(ConnectionContext):
@@ -16,7 +16,7 @@ class ChannelContext(ConnectionContext):
         self.channel = self.loop.run_until_complete(asyncio.wait_for(self.connection.open_channel(), 0.2))
 
     def cleanup_the_channel(self):
-        self.loop.run_until_complete(self.channel.close())
+        self.loop.run_until_complete(asyncio.wait_for(self.channel.close(), 0.2))
 
 
 class WhenConnectingToRabbit:
@@ -30,7 +30,7 @@ class WhenConnectingToRabbit:
         assert self.connection is not None
 
     def cleanup_the_connection(self):
-        self.loop.run_until_complete(self.connection.close())
+        self.loop.run_until_complete(asyncio.wait_for(self.connection.close(), 0.2))
 
 
 class WhenOpeningAChannel(ConnectionContext):
@@ -41,7 +41,7 @@ class WhenOpeningAChannel(ConnectionContext):
         assert self.channel is not None
 
     def cleanup_the_channel(self):
-        self.loop.run_until_complete(self.channel.close())
+        self.loop.run_until_complete(asyncio.wait_for(self.channel.close(), 0.2))
 
 
 class WhenDeclaringAQueue(ChannelContext):
@@ -52,7 +52,7 @@ class WhenDeclaringAQueue(ChannelContext):
         assert self.queue.name == 'my.queue'
 
     def cleanup_the_queue(self):
-        self.loop.run_until_complete(self.queue.delete())
+        self.loop.run_until_complete(asyncio.wait_for(self.queue.delete(), 0.2))
 
 
 class WhenDeclaringAnExchange(ChannelContext):
@@ -61,6 +61,9 @@ class WhenDeclaringAnExchange(ChannelContext):
 
     def it_should_have_the_correct_name(self):
         assert self.exchange.name == 'my.exchange'
+
+    def cleanup_the_exchange(self):
+        self.loop.run_until_complete(asyncio.wait_for(self.exchange.delete(), 0.2))
 
 
 class WhenPublishingAndGettingAShortMessage(ChannelContext):
@@ -74,7 +77,7 @@ class WhenPublishingAndGettingAShortMessage(ChannelContext):
         assert self.result == self.message
 
     def cleanup_the_queue(self):
-        self.loop.run_until_complete(self.queue.delete())
+        self.loop.run_until_complete(asyncio.wait_for(self.teardown(), 0.2))
 
     @asyncio.coroutine
     def setup(self):
@@ -85,3 +88,8 @@ class WhenPublishingAndGettingAShortMessage(ChannelContext):
 
         self.message = asynqp.Message('here is the body')
         self.exchange.publish(self.message, 'routingkey')
+
+    @asyncio.coroutine
+    def teardown(self):
+        yield from self.queue.delete()
+        yield from self.exchange.delete()
