@@ -41,44 +41,21 @@ class WhenQueueDeclareOKArrives(OpenChannelContext):
         assert self.result.auto_delete
 
 
-class WhenIDeclareTwoQueues(QueueContext):
-    def when_I_declare_another_queue(self):
-        self.expected_queue_name = 'another.queue'
-        task = asyncio.async(self.channel.declare_queue(self.expected_queue_name, durable=True, exclusive=True, auto_delete=True), loop=self.loop)
-        test_utils.run_briefly(self.loop)
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, spec.QueueDeclareOK(self.expected_queue_name, 123, 456)))
-        test_utils.run_briefly(self.loop)
-        self.result = task.result()
-
-    def it_should_have_the_correct_queue_name(self):
-        assert self.result.name == self.expected_queue_name
-
-
 class WhenIDeclareTwoQueuesConcurrently(OpenChannelContext):
-    def given_I_declared_two_queues(self):
+    def given_I_am_awaiting_QueueDeclareOK(self):
         self.queue_name1 = 'my.nice.queue'
         self.task1 = asyncio.async(self.channel.declare_queue(self.queue_name1, durable=True, exclusive=True, auto_delete=True),
                                    loop=self.loop)
+        test_utils.run_briefly(self.loop)
+        self.protocol.reset_mock()
 
-        self.queue_name2 = 'another.queue'
-        self.task2 = asyncio.async(self.channel.declare_queue(self.queue_name2, durable=True, exclusive=True, auto_delete=True),
-                                   loop=self.loop)
-
+    def when_I_declare_another_queue(self):
+        asyncio.async(self.channel.declare_queue('another.queue', durable=True, exclusive=True, auto_delete=True),
+                      loop=self.loop)
         test_utils.run_briefly(self.loop)
 
-    def because_both_QueueDeclareOK_frames_arrive(self):
-        frame1 = frames.MethodFrame(self.channel.id, spec.QueueDeclareOK(self.queue_name1, 123, 456))
-        frame2 = frames.MethodFrame(self.channel.id, spec.QueueDeclareOK(self.queue_name2, 123, 456))
-        self.dispatcher.dispatch(frame1)
-        self.dispatcher.dispatch(frame2)
-
-        test_utils.run_briefly(self.loop)
-
-    def it_should_return_the_first_queue(self):
-        assert self.task1.result().name == self.queue_name1
-
-    def it_should_return_the_second_queue(self):
-        assert self.task2.result().name == self.queue_name2
+    def it_should_not_send_a_second_QueueDeclare_method(self):
+        assert not self.protocol.method_calls
 
 
 class WhenILetTheServerPickTheQueueName(OpenChannelContext):

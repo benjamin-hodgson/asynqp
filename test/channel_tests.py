@@ -2,6 +2,7 @@ import asyncio
 import asynqp
 from asyncio import test_utils
 from asynqp import spec
+from . import util
 from .base_contexts import OpenConnectionContext, OpenChannelContext
 
 
@@ -89,15 +90,36 @@ class WhenAnotherMethodArrivesAfterTheServerClosedTheChannel(OpenChannelContext)
         assert not self.protocol.send_frame.called
 
 
-class WhenChannelCloseOKArrives(OpenChannelContext):
-    def given_the_user_has_called_close(self):
-        self.task = asyncio.async(self.channel.close())
+class WhenAnUnexpectedSynchronousMethodArrives(OpenChannelContext):
+    def given_we_are_awaiting_QueueDeclareOK(self):
+        self.task = asyncio.async(self.channel.declare_queue('my.nice.queue', durable=True, exclusive=True, auto_delete=True), loop=self.loop)
         test_utils.run_briefly(self.loop)
+        self.protocol.reset_mock()
 
-    def when_channel_close_ok_arrives(self):
-        close_ok_frame = asynqp.frames.MethodFrame(1, spec.ChannelCloseOK())
-        self.dispatcher.dispatch(close_ok_frame)
+    def when_the_wrong_method_arrives(self):
+        open_ok_frame = asynqp.frames.MethodFrame(1, spec.ChannelOpenOK(''))
+        self.dispatcher.dispatch(open_ok_frame)
         test_utils.run_briefly(self.loop)
 
     def it_should_close_the_channel(self):
-        assert self.channel.closed.done()
+        self.protocol.send_method.assert_called_once_with(1, util.any(spec.ChannelClose))
+
+    def it_should_throw(self):
+        assert isinstance(self.task.exception(), asynqp.AMQPError)
+
+
+class WhenAnAsyncMethodArrivesWhileWeAwaitASynchronousOne(OpenChannelContext):
+    def given_we_are_awaiting_QueueDeclareOK(self):
+        self.task = asyncio.async(self.channel.declare_queue('my.nice.queue', durable=True, exclusive=True, auto_delete=True), loop=self.loop)
+        test_utils.run_briefly(self.loop)
+        self.protocol.reset_mock()
+
+    def when_an_async_method_arrives(self):
+        frame = asynqp.frames.MethodFrame(1, spec.BasicDeliver('consumer', 2, False, 'exchange', 'routing_key'))
+        self.dispatcher.dispatch(frame)
+
+    def it_should_not_close_the_channel(self):
+        assert not self.protocol.send_method.called
+
+    def it_should_not_throw_an_exception(self):
+        assert not self.task.done()

@@ -13,7 +13,7 @@ class Bit(object):
         if isinstance(value, type(self)):
             value = value.value  # ha!
         if not isinstance(value, bool):
-            raise TypeError('{} is not a valid value for type {}'.format(value, type(self).__name__))
+            raise TypeError('Could not construct a Bit from value {}'.format(value))
         self.value = value
 
     def __eq__(self, other):
@@ -35,7 +35,7 @@ class Bit(object):
 class Octet(int):
     def __new__(cls, value):
         if not (0 <= value <= MAX_OCTET):
-            raise TypeError('{} is not a valid value for type {}'.format(value, type(cls).__name__))
+            raise TypeError('Could not construct an Octet from value {}'.format(value))
         return super().__new__(cls, value)
 
     def write(self, stream):
@@ -49,7 +49,7 @@ class Octet(int):
 class Short(int):
     def __new__(cls, value):
         if not (0 <= value <= MAX_SHORT):
-            raise TypeError('{} is not a valid value for type {}'.format(value, type(cls).__name__))
+            raise TypeError('Could not construct a Short from value {}'.format(value))
         return super().__new__(cls, value)
 
     def write(self, stream):
@@ -63,7 +63,7 @@ class Short(int):
 class Long(int):
     def __new__(cls, value):
         if not (0 <= value <= MAX_LONG):
-            raise TypeError('{} is not a valid value for type {}'.format(value, type(cls).__name__))
+            raise TypeError('Could not construct a Long from value {}'.format(value))
         return super().__new__(cls, value)
 
     def write(self, stream):
@@ -77,7 +77,7 @@ class Long(int):
 class LongLong(int):
     def __new__(cls, value):
         if not (0 <= value <= MAX_LONG_LONG):
-            raise TypeError('{} is not a valid value for type {}'.format(value, type(cls).__name__))
+            raise TypeError('Could not construct a LongLong from value {}'.format(value))
         return super().__new__(cls, value)
 
     def write(self, stream):
@@ -91,7 +91,7 @@ class LongLong(int):
 class ShortStr(str):
     def __new__(cls, value):
         if len(value) > MAX_OCTET:
-            raise TypeError('{} is not a valid value for type {}'.format(value, type(cls).__name__))
+            raise TypeError('Could not construct a ShortStr from value {}'.format(value))
         return super().__new__(cls, value)
 
     def __hash__(self):
@@ -108,7 +108,7 @@ class ShortStr(str):
 class LongStr(str):
     def __new__(cls, value):
         if len(value) > MAX_LONG:
-            raise TypeError('{} is not a valid value for type {}'.format(value, type(cls).__name__))
+            raise TypeError('Could not construct a LongStr from value {}'.format(value))
         return super().__new__(cls, value)
 
     def write(self, stream):
@@ -136,7 +136,7 @@ class Timestamp(datetime.datetime):
         value, = args
         if isinstance(value, datetime.datetime):
             return super().__new__(cls, value.year, value.month, value.day, value.hour, value.minute, value.second)
-        raise TypeError("Could not construct a timestamp")
+        raise TypeError("Could not construct a timestamp from value {}".format(value))
 
     def __eq__(self, other):
         return abs(self - other) < datetime.timedelta(seconds=1)

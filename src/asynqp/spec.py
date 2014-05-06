@@ -109,8 +109,10 @@ def get_classes(tree):
 
             doc = build_docstring(method, fields)
 
+            synchronous = 'synchronous' in method.attrib
+
             method_name = method.attrib['name'].capitalize().replace('-ok', 'OK').replace('-empty', 'Empty')
-            class_methods[method_name] = (int(method_id), fields, method_support, doc)
+            class_methods[method_name] = (int(method_id), fields, method_support, synchronous, doc)
 
         classes[class_elem.attrib['name'].capitalize()] = (int(class_id), class_methods)
 
@@ -137,7 +139,7 @@ def generate_methods(classes):
     methods = {}
 
     for class_name, (class_id, method_infos) in classes.items():
-        for method_name, (method_id, fields, method_support, method_doc) in method_infos.items():
+        for method_name, (method_id, fields, method_support, synchronous, method_doc) in method_infos.items():
             name = class_name + method_name
             method_type = (class_id, method_id)
 
@@ -152,7 +154,7 @@ def generate_methods(classes):
             # with strongly-typed fields as defined in the spec.
             # The write() and read() methods of the base classes traverse the fields
             # and generate the correct bytestring
-            cls = type(name, tuple(parents), {'method_type': method_type, 'field_info': fields})
+            cls = type(name, tuple(parents), {'method_type': method_type, 'field_info': fields, 'synchronous': synchronous})
             cls.__doc__ = method_doc
             methods[name] = methods[method_type] = cls
 

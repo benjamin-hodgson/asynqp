@@ -1,5 +1,6 @@
 import asyncio
 import re
+from contextlib import contextmanager
 from . import frames
 from . import spec
 from . import queue
@@ -23,25 +24,17 @@ class Channel(object):
 
     Attributes:
         channel.id: the numerical ID of the channel
-        channel.closing: a Future which is done when the handshake to close the channel has been initiated
-        channel.closed: a Future which is done when the handshake to close the channel has finished
 
     Methods:
         channel.declare_queue(name='', **kwargs): Declare a queue on the broker. This method is a coroutine.
         channel.close(): Close the channel. This method is a coroutine.
     """
-    def __init__(self, id, sender, loop):
+    def __init__(self, id, synchroniser, sender, loop):
         self.id = id
+        self.synchroniser = synchroniser
         self.sender = sender
         self.loop = loop
-
-        self.closing = asyncio.Future(loop=loop)
-        self.closed = asyncio.Future(loop=loop)
-
-        self.queue_declare_futures = {}
-        self.exchange_declare_future = None
-        self.queue_bind_future = None  # not ideal
-        self.basic_get_future = None
+        self.closing = False
 
     @asyncio.coroutine
     def declare_exchange(self, name, type, *, durable=True, auto_delete=False, internal=False):
@@ -70,11 +63,10 @@ class Channel(object):
                              "Valid names consist of letters, digits, hyphen, underscore, period, or colon, "
                              "and do not begin with 'amq.'")
 
-        self.exchange_declare_future = asyncio.Future(loop=self.loop)
-
-        self.sender.send_ExchangeDeclare(name, type, durable, auto_delete, internal)
-        yield from self.exchange_declare_future
-        return exchange.Exchange(self.sender, name, type, durable, auto_delete, internal)
+        with (yield from self.synchroniser.sync(spec.ExchangeDeclareOK)) as fut:
+            self.sender.send_ExchangeDeclare(name, type, durable, auto_delete, internal)
+            yield from fut
+            return exchange.Exchange(self.sender, name, type, durable, auto_delete, internal)
 
     @asyncio.coroutine
     def declare_queue(self, name='', *, durable=True, exclusive=False, auto_delete=False):
@@ -103,10 +95,10 @@ class Channel(object):
                              "Valid names consist of letters, digits, hyphen, underscore, period, or colon, "
                              "and do not begin with 'amq.'")
 
-        self.queue_declare_futures[name] = asyncio.Future(loop=self.loop)
-        self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete)
-        name = yield from self.queue_declare_futures[name]
-        return queue.Queue(self, self.loop, self.sender, name, durable, exclusive, auto_delete)
+        with (yield from self.synchroniser.sync(spec.QueueDeclareOK)) as fut:
+            self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete)
+            name = yield from fut
+            return queue.Queue(self.synchroniser, self.loop, self.sender, name, durable, exclusive, auto_delete)
 
     @asyncio.coroutine
     def close(self):
@@ -114,15 +106,40 @@ class Channel(object):
         Close the channel by handshaking with the server.
         This method is a coroutine.
         """
-        self.closing.set_result(True)
-        self.sender.send_Close(0, 'Channel closed by application', 0, 0)
-        yield from self.closed
+        with (yield from self.synchroniser.sync(spec.ChannelCloseOK)) as fut:
+            self.closing = True
+            self.sender.send_Close(0, 'Channel closed by application', 0, 0)
+            yield from fut
+
+
+class Synchroniser(object):
+    def __init__(self, loop):
+        self.expected_methods = []
+        self.method_returned = None
+        self.loop = loop
+        self.lock = asyncio.Lock(loop=loop)
+
+    def sync(self, *expected_methods):
+        yield from self.lock.acquire()
+        return self.manager(expected_methods)
+
+    @contextmanager
+    def manager(self, expected_methods):
+        self.expected_methods = expected_methods
+        self.method_returned = asyncio.Future(loop=self.loop)
+        try:
+            yield self.method_returned
+        finally:
+            self.expected_methods = []
+            self.method_returned = None
+            self.lock.release()
 
 
 class ChannelFrameHandler(object):
     def __init__(self, protocol, channel_id, loop, connection_info):
         self.sender = ChannelMethodSender(channel_id, protocol, connection_info)
-        self.channel = Channel(channel_id, self.sender, loop)
+        self.synchroniser = Synchroniser(loop)
+        self.channel = Channel(channel_id, self.synchroniser, self.sender, loop)
         self.opened = asyncio.Future(loop=loop)
         self.message_builder = None
 
@@ -135,10 +152,18 @@ class ChannelFrameHandler(object):
             return
 
         method_type = type(frame.payload)
-        handle_name = method_type.__name__
-        if self.channel.closing.done() and method_type not in (spec.ChannelClose, spec.ChannelCloseOK):
+        if self.channel.closing and method_type not in (spec.ChannelClose, spec.ChannelCloseOK):
             return
 
+        expected = self.synchroniser.expected_methods
+        if method_type.synchronous and expected and method_type not in expected:
+            msg = 'Expected one of {} but got {}'.format([cls.__name__ for cls in expected], method_type.__name__)
+
+            self.sender.send_Close(spec.UNEXPECTED_FRAME, msg, *frame.payload.method_type)
+            self.synchroniser.method_returned.set_exception(AMQPError(msg))
+            return
+
+        handle_name = method_type.__name__
         try:
             handler = getattr(self, 'handle_' + handle_name)
         except AttributeError as e:
@@ -150,25 +175,26 @@ class ChannelFrameHandler(object):
         self.opened.set_result(True)
 
     def handle_QueueDeclareOK(self, frame):
-        name = frame.payload.queue
-        fut = self.channel.queue_declare_futures.get(name, self.channel.queue_declare_futures.get('', None))
-        fut.set_result(name)
+        self.synchroniser.method_returned.set_result(frame.payload.queue)
 
     def handle_ExchangeDeclareOK(self, frame):
-        self.channel.exchange_declare_future.set_result(None)
+        self.synchroniser.method_returned.set_result(None)
 
     def handle_QueueBindOK(self, frame):
-        self.channel.queue_bind_future.set_result(None)
+        self.synchroniser.method_returned.set_result(None)
 
     def handle_QueueDeleteOK(self, frame):
-        self.channel.queue_delete_future.set_result(None)
+        self.synchroniser.method_returned.set_result(None)
 
     def handle_BasicGetEmpty(self, frame):
-        self.channel.basic_get_future.set_result(None)
+        self.synchroniser.method_returned.set_result(None)
 
     def handle_BasicGetOK(self, frame):
         payload = frame.payload
         self.message_builder = message.MessageBuilder(payload.delivery_tag, payload.redelivered, payload.exchange, payload.routing_key)
+
+    def handle_BasicDeliver(self, frame):
+        pass
 
     def handle_ContentHeader(self, frame):
         self.message_builder.set_header(frame.payload)
@@ -176,15 +202,15 @@ class ChannelFrameHandler(object):
     def handle_ContentBody(self, frame):
         self.message_builder.add_body_chunk(frame.payload)
         if self.message_builder.done():
-            self.channel.basic_get_future.set_result(self.message_builder.build())
+            self.synchroniser.method_returned.set_result(self.message_builder.build())
             self.message_builder = None
 
     def handle_ChannelClose(self, frame):
-        self.channel.closing.set_result(True)
+        self.channel.closing = True
         self.sender.send_CloseOK()
 
     def handle_ChannelCloseOK(self, frame):
-        self.channel.closed.set_result(True)
+        self.synchroniser.method_returned.set_result(True)
 
 
 class ChannelMethodSender(object):
@@ -223,7 +249,7 @@ class ChannelMethodSender(object):
             self.protocol.send_frame(frame)
 
     def send_Close(self, status_code, msg, class_id, method_id):
-        self.protocol.send_method(self.channel_id, spec.ChannelClose(0, 'Channel closed by application', 0, 0))
+        self.protocol.send_method(self.channel_id, spec.ChannelClose(status_code, msg, class_id, method_id))
 
     def send_CloseOK(self):
         self.protocol.send_method(self.channel_id, spec.ChannelCloseOK())

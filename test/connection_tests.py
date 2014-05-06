@@ -8,12 +8,9 @@ from .base_contexts import MockLoopContext, ConnectionContext
 
 
 class WhenRespondingToConnectionStart(ConnectionContext):
-    def given_a_start_frame_from_the_server(self):
+    def when_ConnectionStart_arrives(self):
         start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
-        self.start_frame = asynqp.frames.MethodFrame(0, start_method)
-
-    def because_the_start_frame_arrives(self):
-        self.dispatcher.dispatch(self.start_frame)
+        self.dispatcher.dispatch(asynqp.frames.MethodFrame(0, start_method))
 
     def it_should_send_start_ok(self):
         expected_method = spec.ConnectionStartOK(
@@ -26,16 +23,14 @@ class WhenRespondingToConnectionStart(ConnectionContext):
 
 
 class WhenRespondingToConnectionTune(ConnectionContext, MockLoopContext):
-    def given_a_tune_frame_from_the_server(self):
-        self.tune_frame = asynqp.frames.MethodFrame(0, spec.ConnectionTune(0, 131072, 600))
-
-    def when_the_tune_frame_arrives(self):
-        self.dispatcher.dispatch(self.tune_frame)
+    def when_ConnectionTune_arrives(self):
+        tune_frame = asynqp.frames.MethodFrame(0, spec.ConnectionTune(0, 131072, 600))
+        self.dispatcher.dispatch(tune_frame)
 
     def it_should_send_tune_ok_followed_by_open(self):
         tune_ok = spec.ConnectionTuneOK(0, 131072, 600)
-        open = spec.ConnectionOpen('/', '', False)
-        self.protocol.send_method.assert_has_calls([mock.call(0, tune_ok), mock.call(0, open)])
+        open_method = spec.ConnectionOpen('/', '', False)
+        self.protocol.send_method.assert_has_calls([mock.call(0, tune_ok), mock.call(0, open_method)])
 
     def it_should_start_heartbeating(self):
         self.protocol.start_heartbeat.assert_called_once_with(600)
