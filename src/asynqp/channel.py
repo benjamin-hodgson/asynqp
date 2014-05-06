@@ -123,6 +123,16 @@ class Synchroniser(object):
         yield from self.lock.acquire()
         return self.manager(expected_methods)
 
+    def is_expected(self, frame):
+        method_type = type(frame.payload)
+        return (not method_type.synchronous) or (not self.expected_methods) or (method_type in self.expected_methods)
+
+    def succeed(self, result):
+        self.method_returned.set_result(result)
+
+    def fail(self, exception):
+        self.method_returned.set_exception(exception)
+
     @contextmanager
     def manager(self, expected_methods):
         self.expected_methods = expected_methods
@@ -156,11 +166,11 @@ class ChannelFrameHandler(object):
             return
 
         expected = self.synchroniser.expected_methods
-        if method_type.synchronous and expected and method_type not in expected:
+        if not self.synchroniser.is_expected(frame):
             msg = 'Expected one of {} but got {}'.format([cls.__name__ for cls in expected], method_type.__name__)
 
             self.sender.send_Close(spec.UNEXPECTED_FRAME, msg, *frame.payload.method_type)
-            self.synchroniser.method_returned.set_exception(AMQPError(msg))
+            self.synchroniser.fail(AMQPError(msg))
             return
 
         handle_name = method_type.__name__
@@ -175,19 +185,19 @@ class ChannelFrameHandler(object):
         self.opened.set_result(True)
 
     def handle_QueueDeclareOK(self, frame):
-        self.synchroniser.method_returned.set_result(frame.payload.queue)
+        self.synchroniser.succeed(frame.payload.queue)
 
     def handle_ExchangeDeclareOK(self, frame):
-        self.synchroniser.method_returned.set_result(None)
+        self.synchroniser.succeed(None)
 
     def handle_QueueBindOK(self, frame):
-        self.synchroniser.method_returned.set_result(None)
+        self.synchroniser.succeed(None)
 
     def handle_QueueDeleteOK(self, frame):
-        self.synchroniser.method_returned.set_result(None)
+        self.synchroniser.succeed(None)
 
     def handle_BasicGetEmpty(self, frame):
-        self.synchroniser.method_returned.set_result(None)
+        self.synchroniser.succeed(None)
 
     def handle_BasicGetOK(self, frame):
         payload = frame.payload
@@ -202,7 +212,7 @@ class ChannelFrameHandler(object):
     def handle_ContentBody(self, frame):
         self.message_builder.add_body_chunk(frame.payload)
         if self.message_builder.done():
-            self.synchroniser.method_returned.set_result(self.message_builder.build())
+            self.synchroniser.succeed(self.message_builder.build())
             self.message_builder = None
 
     def handle_ChannelClose(self, frame):
@@ -210,7 +220,7 @@ class ChannelFrameHandler(object):
         self.sender.send_CloseOK()
 
     def handle_ChannelCloseOK(self, frame):
-        self.synchroniser.method_returned.set_result(True)
+        self.synchroniser.succeed(True)
 
 
 class ChannelMethodSender(object):
