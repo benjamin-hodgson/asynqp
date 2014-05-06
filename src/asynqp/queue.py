@@ -65,10 +65,16 @@ class Queue(object):
             return result
 
     @asyncio.coroutine
-    def delete(self, *, if_unused=False, if_empty=False):
+    def delete(self, *, if_unused=True, if_empty=True):
         """
         Delete the queue.
         This method is a coroutine.
+
+        Arguments:
+            if_unused: If true, the queue will only be deleted
+                       if it has no consumers. Default: True
+            if_empty: If true, the queue will only be deleted if
+                      it has no unacknowledged messages. Default: True
         """
         with (yield from self.synchroniser.sync(spec.QueueDeleteOK)) as fut:
             self.sender.send_QueueDelete(self.name, if_unused, if_empty)
