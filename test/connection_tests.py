@@ -85,8 +85,8 @@ class WhenAConnectionThatWasClosedByTheApplicationReceivesAMethod(ConnectionCont
 
 class WhenTheApplicationClosesTheConnection(ConnectionContext):
     def when_I_close_the_connection(self):
-        coro = self.connection.close()
-        next(coro)
+        asyncio.async(self.connection.close())
+        test_utils.run_briefly(self.loop)
 
     def it_should_send_ConnectionClose_with_no_exception(self):
         expected = spec.ConnectionClose(0, 'Connection closed by application', 0, 0)
@@ -95,7 +95,8 @@ class WhenTheApplicationClosesTheConnection(ConnectionContext):
 
 class WhenRecievingConnectionCloseOK(ConnectionContext):
     def given_a_connection_that_I_closed(self):
-        self.connection.close()
+        asyncio.async(self.connection.close())
+        test_utils.run_briefly(self.loop)
 
     def when_connection_close_ok_arrives(self):
         frame = asynqp.frames.MethodFrame(0, spec.ConnectionCloseOK())

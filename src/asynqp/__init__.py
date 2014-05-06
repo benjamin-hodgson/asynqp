@@ -1,6 +1,5 @@
 import asyncio
-from . import frames
-from .connection import Connection, ConnectionInfo, ConnectionFrameHandler
+from .connection import ConnectionInfo, ConnectionFrameHandler
 from .exceptions import AMQPError
 from .protocol import AMQP, Dispatcher
 from .message import Message

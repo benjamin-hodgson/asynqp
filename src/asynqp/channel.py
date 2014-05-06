@@ -1,11 +1,11 @@
 import asyncio
 import re
-from contextlib import contextmanager
 from . import frames
 from . import spec
 from . import queue
 from . import exchange
 from . import message
+from .util import Synchroniser
 from .exceptions import AMQPError
 
 
@@ -112,45 +112,11 @@ class Channel(object):
             yield from fut
 
 
-class Synchroniser(object):
-    def __init__(self, loop):
-        self.expected_methods = []
-        self.method_returned = None
-        self.loop = loop
-        self.lock = asyncio.Lock(loop=loop)
-
-    def sync(self, *expected_methods):
-        yield from self.lock.acquire()
-        return self.manager(expected_methods)
-
-    def is_expected(self, frame):
-        method_type = type(frame.payload)
-        return (not method_type.synchronous) or (not self.expected_methods) or (method_type in self.expected_methods)
-
-    def succeed(self, result):
-        self.method_returned.set_result(result)
-
-    def fail(self, exception):
-        self.method_returned.set_exception(exception)
-
-    @contextmanager
-    def manager(self, expected_methods):
-        self.expected_methods = expected_methods
-        self.method_returned = asyncio.Future(loop=self.loop)
-        try:
-            yield self.method_returned
-        finally:
-            self.expected_methods = []
-            self.method_returned = None
-            self.lock.release()
-
-
 class ChannelFrameHandler(object):
     def __init__(self, protocol, channel_id, loop, connection_info):
-        self.sender = ChannelMethodSender(channel_id, protocol, connection_info)
         self.synchroniser = Synchroniser(loop)
+        self.sender = ChannelMethodSender(channel_id, protocol, connection_info)
         self.channel = Channel(channel_id, self.synchroniser, self.sender, loop)
-        self.opened = asyncio.Future(loop=loop)
         self.message_builder = None
 
     def handle(self, frame):
@@ -161,19 +127,17 @@ class ChannelFrameHandler(object):
             self.handle_ContentBody(frame)
             return
 
-        method_type = type(frame.payload)
-        if self.channel.closing and method_type not in (spec.ChannelClose, spec.ChannelCloseOK):
+        method_cls = type(frame.payload)
+        if self.channel.closing and method_cls not in (spec.ChannelClose, spec.ChannelCloseOK):
             return
 
-        expected = self.synchroniser.expected_methods
-        if not self.synchroniser.is_expected(frame):
-            msg = 'Expected one of {} but got {}'.format([cls.__name__ for cls in expected], method_type.__name__)
-
-            self.sender.send_Close(spec.UNEXPECTED_FRAME, msg, *frame.payload.method_type)
-            self.synchroniser.fail(AMQPError(msg))
+        try:
+            self.synchroniser.check_expected(frame)
+        except AMQPError:
+            self.sender.send_Close(spec.UNEXPECTED_FRAME, "got a bad message", *frame.payload.method_type)
             return
 
-        handle_name = method_type.__name__
+        handle_name = method_cls.__name__
         try:
             handler = getattr(self, 'handle_' + handle_name)
         except AttributeError as e:
@@ -182,22 +146,22 @@ class ChannelFrameHandler(object):
             handler(frame)
 
     def handle_ChannelOpenOK(self, frame):
-        self.opened.set_result(True)
+        self.synchroniser.succeed()
 
     def handle_QueueDeclareOK(self, frame):
         self.synchroniser.succeed(frame.payload.queue)
 
     def handle_ExchangeDeclareOK(self, frame):
-        self.synchroniser.succeed(None)
+        self.synchroniser.succeed()
 
     def handle_QueueBindOK(self, frame):
-        self.synchroniser.succeed(None)
+        self.synchroniser.succeed()
 
     def handle_QueueDeleteOK(self, frame):
-        self.synchroniser.succeed(None)
+        self.synchroniser.succeed()
 
     def handle_BasicGetEmpty(self, frame):
-        self.synchroniser.succeed(None)
+        self.synchroniser.succeed()
 
     def handle_BasicGetOK(self, frame):
         payload = frame.payload
@@ -220,7 +184,7 @@ class ChannelFrameHandler(object):
         self.sender.send_CloseOK()
 
     def handle_ChannelCloseOK(self, frame):
-        self.synchroniser.succeed(True)
+        self.synchroniser.succeed()
 
 
 class ChannelMethodSender(object):
