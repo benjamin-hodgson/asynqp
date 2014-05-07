@@ -1,8 +1,12 @@
+import asyncio
 import json
 import uuid
 from datetime import datetime
 import asynqp
 from asynqp import message
+from asynqp import spec
+from asynqp import frames
+from .base_contexts import QueueContext
 
 
 class WhenGettingTheContentHeader:
@@ -116,3 +120,32 @@ class WhenGettingFramesForALongMessage:
 
     def it_should_split_the_body_into_frames(self):
         assert self.frames == [b'much ', b'longe', b'r bod', b'y']
+
+
+class WhenIAcknowledgeADeliveredMessage(QueueContext):
+    def given_I_received_a_message(self):
+        self.delivery_tag = 12487
+
+        msg = asynqp.Message('body', timestamp=datetime(2014, 5, 5))
+        task = asyncio.async(self.queue.get())
+        self.go()
+        method = spec.BasicGetOK(self.delivery_tag, False, 'my.exchange', 'routing.key', 0)
+        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
+        self.go()
+
+        header = msg.header_payload(spec.BasicGet.method_type[0])
+        self.dispatcher.dispatch(frames.ContentHeaderFrame(self.channel.id, header))
+        self.go()
+
+        body = msg.frame_payloads(100)[0]
+        self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
+        self.go()
+
+        self.msg = task.result()
+        self.protocol.reset_mock()
+
+    def when_I_ack_the_message(self):
+        self.msg.ack()
+
+    def it_should_send_BasicAck(self):
+        self.protocol.send_method.assert_called_once_with(self.channel.id, spec.BasicAck(self.delivery_tag, False))

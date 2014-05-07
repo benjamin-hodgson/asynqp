@@ -107,6 +107,19 @@ class Message(object):
         return frames
 
 
+class IncomingMessage(Message):
+    def __init__(self, *args, sender, delivery_tag, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.sender = sender
+        self.delivery_tag = delivery_tag
+
+    def ack(self):
+        """
+        Acknowledge the message.
+        """
+        self.sender.send_BasicAck(self.delivery_tag)
+
+
 class ContentHeaderPayload(object):
     def __init__(self, class_id, body_length, properties):
         self.class_id = class_id
@@ -157,14 +170,16 @@ class ContentHeaderPayload(object):
 
 
 class MessageBuilder(object):
-    def __init__(self, delivery_tag, redelivered, exchange_name, routing_key, consumer_tag=None):
+    def __init__(self, sender, delivery_tag, redelivered, exchange_name, routing_key, consumer_tag=None):
+        self.sender = sender
+        self.delivery_tag = delivery_tag
         self.body = b''
         self.consumer_tag = consumer_tag
 
     def set_header(self, header):
         self.body_length = header.body_length
         self.properties = {}
-        for name, prop in zip(Message.property_types, header.properties):
+        for name, prop in zip(IncomingMessage.property_types, header.properties):
             self.properties[name] = prop
 
     def add_body_chunk(self, chunk):
@@ -174,4 +189,4 @@ class MessageBuilder(object):
         return len(self.body) == self.body_length
 
     def build(self):
-        return Message(self.body, **self.properties)
+        return IncomingMessage(self.body, sender=self.sender, delivery_tag=self.delivery_tag, **self.properties)

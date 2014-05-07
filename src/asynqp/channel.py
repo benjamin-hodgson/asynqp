@@ -7,7 +7,6 @@ from . import queue
 from . import exchange
 from . import message
 from .util import Synchroniser
-from .exceptions import AMQPError
 
 
 VALID_QUEUE_NAME_RE = re.compile(r'^(?!amq\.)(\w|[-.:])*$', flags=re.A)
@@ -179,14 +178,27 @@ class ChannelFrameHandler(bases.FrameHandler):
     def handle_BasicGetOK(self, frame):
         self.synchroniser.change_expected(frames.ContentHeaderFrame)
         payload = frame.payload
-        self.message_builder = message.MessageBuilder(payload.delivery_tag, payload.redelivered, payload.exchange, payload.routing_key)
+        self.message_builder = message.MessageBuilder(
+            self.sender,
+            payload.delivery_tag,
+            payload.redelivered,
+            payload.exchange,
+            payload.routing_key
+        )
 
     def handle_BasicConsumeOK(self, frame):
         self.synchroniser.succeed(frame.payload.consumer_tag)
 
     def handle_BasicDeliver(self, frame):
         payload = frame.payload
-        self.message_builder = message.MessageBuilder(payload.delivery_tag, payload.redelivered, payload.exchange, payload.routing_key, payload.consumer_tag)
+        self.message_builder = message.MessageBuilder(
+            self.sender,
+            payload.delivery_tag,
+            payload.redelivered,
+            payload.exchange,
+            payload.routing_key,
+            payload.consumer_tag
+        )
 
     def handle_ContentHeaderFrame(self, frame):
         self.synchroniser.change_expected(frames.ContentBodyFrame)
@@ -195,11 +207,12 @@ class ChannelFrameHandler(bases.FrameHandler):
     def handle_ContentBodyFrame(self, frame):
         self.message_builder.add_body_chunk(frame.payload)
         if self.message_builder.done():
-            if self.synchroniser.is_waiting():
-                self.synchroniser.succeed(self.message_builder.build())
-            else:
+            msg = self.message_builder.build()
+            if self.synchroniser.is_waiting():  # someone asked for it with BasicGet
+                self.synchroniser.succeed(msg)
+            else:  # it's being delivered to a consumer
                 consumer_tag = self.message_builder.consumer_tag
-                self.consumers.deliver(consumer_tag, self.message_builder.build())
+                self.consumers.deliver(consumer_tag, msg)
             self.message_builder = None
 
     def handle_ChannelClose(self, frame):
@@ -242,6 +255,9 @@ class ChannelMethodSender(bases.Sender):
 
     def send_BasicGet(self, queue_name, no_ack):
         self.send_method(spec.BasicGet(0, queue_name, no_ack))
+
+    def send_BasicAck(self, delivery_tag):
+        self.send_method(spec.BasicAck(delivery_tag, False))
 
     def send_Close(self, status_code, msg, class_id, method_id):
         self.send_method(spec.ChannelClose(status_code, msg, class_id, method_id))
