@@ -3,7 +3,10 @@ asynqp
 
 [![Build Status](https://travis-ci.org/benjamin-hodgson/asynqp.svg?branch=master)](https://travis-ci.org/benjamin-hodgson/asynqp)
 
-AMQP (aka [RabbitMQ](rabbitmq.com)) client library for Python 3.4's new [asyncio](https://docs.python.org/3.4/library/asyncio.html) module.
+`asynqp` is an AMQP (aka [RabbitMQ](rabbitmq.com)) client library for
+Python 3.4's new [`asyncio`](https://docs.python.org/3.4/library/asyncio.html) module.
+
+`asynqp` features a simple API which makes common tasks easy; you don't have to manage queue and exchange names yourself.
 
 
 Example
@@ -46,4 +49,20 @@ def send_and_receive():
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     loop.run_until_complete(send_and_receive())
+```
+
+
+Installation
+------------
+
+`asynqp` is [on the Cheese Shop](https://pypi.python.org/pypi/asynqp), so you can install it using Pip:
+```
+pip install asynqp
+```
+
+If you want the latest development version, you can install it from source:
+```
+git clone https://github.com/benjamin-hodgson/asynqp.git
+cd asynqp
+python setup.py install
 ```
