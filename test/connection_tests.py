@@ -1,15 +1,21 @@
 import asyncio
 import sys
 import asynqp
-from asynqp import spec
 from unittest import mock
-from .base_contexts import MockLoopContext, ConnectionContext
+from asynqp import spec
+from asynqp.connection import open_connection
+from .base_contexts import ConnectionContext, OpenConnectionContext
 
 
 class WhenRespondingToConnectionStart(ConnectionContext):
+    def given_I_wrote_the_protocol_header(self):
+        asyncio.async(open_connection(self.loop, self.protocol, self.dispatcher, self.connection_info))
+        self.go()
+
     def when_ConnectionStart_arrives(self):
         start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
         self.dispatcher.dispatch(asynqp.frames.MethodFrame(0, start_method))
+        self.go()
 
     def it_should_send_start_ok(self):
         expected_method = spec.ConnectionStartOK(
@@ -21,7 +27,14 @@ class WhenRespondingToConnectionStart(ConnectionContext):
         self.protocol.send_method.assert_called_once_with(0, expected_method)
 
 
-class WhenRespondingToConnectionTune(ConnectionContext, MockLoopContext):
+class WhenRespondingToConnectionTune(ConnectionContext):
+    def given_a_started_connection(self):
+        asyncio.async(open_connection(self.loop, self.protocol, self.dispatcher, self.connection_info))
+        self.go()
+        start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
+        self.dispatcher.dispatch(asynqp.frames.MethodFrame(0, start_method))
+        self.go()
+
     def when_ConnectionTune_arrives(self):
         tune_frame = asynqp.frames.MethodFrame(0, spec.ConnectionTune(0, 131072, 600))
         self.dispatcher.dispatch(tune_frame)
@@ -35,37 +48,34 @@ class WhenRespondingToConnectionTune(ConnectionContext, MockLoopContext):
         self.protocol.start_heartbeat.assert_called_once_with(600)
 
 
-class WhenRespondingToConnectionClose(ConnectionContext):
-    def given_a_close_frame_from_the_server(self):
-        self.close_frame = asynqp.frames.MethodFrame(0, spec.ConnectionClose(123, 'you muffed up', 10, 20))
-
+class WhenRespondingToConnectionClose(OpenConnectionContext):
     def when_the_close_frame_arrives(self):
-        self.dispatcher.dispatch(self.close_frame)
+        close_frame = asynqp.frames.MethodFrame(0, spec.ConnectionClose(123, 'you muffed up', 10, 20))
+        self.dispatcher.dispatch(close_frame)
 
     def it_should_send_close_ok(self):
         expected = spec.ConnectionCloseOK()
         self.protocol.send_method.assert_called_once_with(0, expected)
 
 
-class WhenAConnectionThatWasClosedByTheServerReceivesAMethod(ConnectionContext):
+class WhenAConnectionThatWasClosedByTheServerReceivesAMethod(OpenConnectionContext):
     def given_a_closed_connection(self):
         close_frame = asynqp.frames.MethodFrame(0, spec.ConnectionClose(123, 'you muffed up', 10, 20))
         self.dispatcher.dispatch(close_frame)
         self.go()
-
-        start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
-        self.start_frame = asynqp.frames.MethodFrame(0, start_method)
         self.mock_handler = mock.Mock()
 
     def when_another_frame_arrives(self):
-        with mock.patch.dict(self.dispatcher.handlers, {0: self.mock_handler}):
-            self.dispatcher.dispatch(self.start_frame)
+        unexpected_frame = asynqp.frames.MethodFrame(1, spec.BasicDeliver('', 1, False, '', ''))
+
+        with mock.patch.dict(self.dispatcher.handlers, {1: self.mock_handler}):
+            self.dispatcher.dispatch(unexpected_frame)
 
     def it_MUST_be_discarded(self):
         assert not self.mock_handler.method_calls
 
 
-class WhenAConnectionThatWasClosedByTheApplicationReceivesAMethod(ConnectionContext):
+class WhenAConnectionThatWasClosedByTheApplicationReceivesAMethod(OpenConnectionContext):
     def given_a_closed_connection(self):
         asyncio.async(self.connection.close())
         self.go()
@@ -82,7 +92,7 @@ class WhenAConnectionThatWasClosedByTheApplicationReceivesAMethod(ConnectionCont
         assert not self.mock_handler.method_calls
 
 
-class WhenTheApplicationClosesTheConnection(ConnectionContext):
+class WhenTheApplicationClosesTheConnection(OpenConnectionContext):
     def when_I_close_the_connection(self):
         asyncio.async(self.connection.close())
         self.go()
@@ -92,7 +102,7 @@ class WhenTheApplicationClosesTheConnection(ConnectionContext):
         self.protocol.send_method.assert_called_once_with(0, expected)
 
 
-class WhenRecievingConnectionCloseOK(ConnectionContext):
+class WhenRecievingConnectionCloseOK(OpenConnectionContext):
     def given_a_connection_that_I_closed(self):
         asyncio.async(self.connection.close())
         self.go()

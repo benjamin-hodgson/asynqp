@@ -2,6 +2,7 @@ import asyncio
 import asynqp
 from asyncio import test_utils
 from asynqp import spec
+from asynqp.connection import open_connection
 from unittest import mock
 
 
@@ -26,23 +27,28 @@ class ConnectionContext(LoopContext):
 
         self.dispatcher = asynqp.Dispatcher(self.loop)
         self.connection_info = asynqp.ConnectionInfo('guest', 'guest', '/')
-        handler = asynqp.ConnectionFrameHandler(self.protocol, self.dispatcher, self.loop, self.connection_info)
-        self.dispatcher.add_handler(0, handler)
-        self.connection = handler.connection
 
 
 class OpenConnectionContext(ConnectionContext):
     def given_an_open_connection(self):
+        task = asyncio.async(open_connection(self.loop, self.protocol, self.dispatcher, self.connection_info))
+        self.go()
+
         start_frame = asynqp.frames.MethodFrame(0, spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US'))
         self.dispatcher.dispatch(start_frame)
+        self.go()
 
         self.frame_max = 131072
         tune_frame = asynqp.frames.MethodFrame(0, spec.ConnectionTune(0, self.frame_max, 600))
         self.dispatcher.dispatch(tune_frame)
+        self.go()
 
         open_ok_frame = asynqp.frames.MethodFrame(0, spec.ConnectionOpenOK(''))
         self.dispatcher.dispatch(open_ok_frame)
         self.protocol.reset_mock()
+        self.go()
+
+        self.connection = task.result()
 
 
 class ProtocolContext(LoopContext):
