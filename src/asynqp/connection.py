@@ -1,8 +1,9 @@
 import asyncio
 import sys
 from . import channel
+from . import bases
 from . import spec
-from .util import Synchroniser, Sender
+from .util import Synchroniser
 from .exceptions import AMQPError
 
 
@@ -73,7 +74,7 @@ def open_connection(loop, protocol, dispatcher, connection_info):
     with (yield from synchroniser.sync(spec.ConnectionStart)) as fut:
         sender = ConnectionMethodSender(protocol)
         connection = Connection(loop, protocol, synchroniser, sender, dispatcher, connection_info)
-        handler = ConnectionFrameHandler(protocol, synchroniser, sender, connection, connection_info)
+        handler = ConnectionFrameHandler(synchroniser, sender, protocol, connection, connection_info)
         try:
             dispatcher.add_handler(0, handler)
             protocol.send_protocol_header()
@@ -84,21 +85,12 @@ def open_connection(loop, protocol, dispatcher, connection_info):
         return connection
 
 
-class ConnectionFrameHandler(object):
-    def __init__(self, protocol, synchroniser, sender, connection, connection_info):
+class ConnectionFrameHandler(bases.FrameHandler):
+    def __init__(self, synchroniser, sender, protocol, connection, connection_info):
+        super().__init__(synchroniser, sender)
         self.protocol = protocol
-        self.synchroniser = synchroniser
-        self.sender = sender
         self.connection = connection
         self.connection_info = connection_info
-
-    def handle(self, frame):
-        try:
-            self.synchroniser.check_expected(frame)
-        except AMQPError:
-            self.sender.send_Close(spec.UNEXPECTED_FRAME, "got an unexpected frame", *frame.payload.method_type)
-            return
-        getattr(self, 'handle_' + type(frame.payload).__name__)(frame)
 
     def handle_ConnectionStart(self, frame):
         self.synchroniser.change_expected(spec.ConnectionTune)
@@ -132,7 +124,7 @@ class ConnectionFrameHandler(object):
         self.synchroniser.succeed()
 
 
-class ConnectionMethodSender(Sender):
+class ConnectionMethodSender(bases.Sender):
     def __init__(self, protocol):
         super().__init__(0, protocol)
 

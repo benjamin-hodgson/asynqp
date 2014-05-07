@@ -14,15 +14,6 @@ def rethrow_as(expected_cls, to_throw):
     return decorator
 
 
-class Sender(object):
-    def __init__(self, channel_id, protocol):
-        self.channel_id = channel_id
-        self.protocol = protocol
-
-    def send_method(self, method):
-        self.protocol.send_method(self.channel_id, method)
-
-
 class Synchroniser(object):
     def __init__(self, loop, *defaults):
         self.loop = loop

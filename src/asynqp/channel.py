@@ -1,11 +1,12 @@
 import asyncio
 import re
+from . import bases
 from . import frames
 from . import spec
 from . import queue
 from . import exchange
 from . import message
-from .util import Synchroniser, Sender
+from .util import Synchroniser
 from .exceptions import AMQPError
 
 
@@ -130,7 +131,7 @@ class ChannelFactory(object):
             consumers = queue.Consumers(self.loop)
             channel = Channel(consumers, self.next_channel_id, synchroniser, sender, self.loop)
 
-            self.dispatcher.add_handler(self.next_channel_id, ChannelFrameHandler(synchroniser, channel, sender, consumers))
+            self.dispatcher.add_handler(self.next_channel_id, ChannelFrameHandler(synchroniser, sender, channel, consumers))
             try:
                 sender.send_ChannelOpen()
                 yield from fut
@@ -142,30 +143,17 @@ class ChannelFactory(object):
             return channel
 
 
-class ChannelFrameHandler(object):
-    def __init__(self, synchroniser, channel, sender, consumers):
-        self.synchroniser = synchroniser
+class ChannelFrameHandler(bases.FrameHandler):
+    def __init__(self, synchroniser, sender, channel, consumers):
+        super().__init__(synchroniser, sender)
         self.channel = channel
-        self.sender = sender
         self.consumers = consumers
         self.message_builder = None
 
     def handle(self, frame):
-        method_cls = type(frame.payload)
-        if self.channel.closing and method_cls is not spec.ChannelCloseOK:
+        if self.channel.closing and type(frame.payload) is not spec.ChannelCloseOK:
             return
-
-        try:
-            self.synchroniser.check_expected(frame)
-        except AMQPError:
-            self.sender.send_Close(spec.UNEXPECTED_FRAME, "got a bad message", *frame.payload.method_type)
-            return
-
-        try:
-            handler = getattr(self, 'handle_' + type(frame).__name__)
-        except AttributeError:
-            handler = getattr(self, 'handle_' + method_cls.__name__)
-        handler(frame)
+        super().handle(frame)
 
     def handle_ChannelOpenOK(self, frame):
         self.synchroniser.succeed()
@@ -222,7 +210,7 @@ class ChannelFrameHandler(object):
         self.synchroniser.succeed()
 
 
-class ChannelMethodSender(Sender):
+class ChannelMethodSender(bases.Sender):
     def __init__(self, channel_id, protocol, connection_info):
         super().__init__(channel_id, protocol)
         self.connection_info = connection_info
