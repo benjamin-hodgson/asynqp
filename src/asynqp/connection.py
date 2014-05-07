@@ -2,7 +2,7 @@ import asyncio
 import sys
 from . import channel
 from . import spec
-from .util import Synchroniser
+from .util import Synchroniser, Sender
 from .exceptions import AMQPError
 
 
@@ -69,14 +69,18 @@ class Connection(object):
 @asyncio.coroutine
 def open_connection(loop, protocol, dispatcher, connection_info):
     synchroniser = Synchroniser(loop)
-    sender = ConnectionMethodSender(protocol)
-    connection = Connection(loop, protocol, synchroniser, sender, dispatcher, connection_info)
-    handler = ConnectionFrameHandler(protocol, synchroniser, sender, connection, connection_info)
-    dispatcher.add_handler(0, handler)
 
     with (yield from synchroniser.sync(spec.ConnectionStart)) as fut:
-        protocol.send_protocol_header()
-        yield from fut
+        sender = ConnectionMethodSender(protocol)
+        connection = Connection(loop, protocol, synchroniser, sender, dispatcher, connection_info)
+        handler = ConnectionFrameHandler(protocol, synchroniser, sender, connection, connection_info)
+        try:
+            dispatcher.add_handler(0, handler)
+            protocol.send_protocol_header()
+            yield from fut
+        except:
+            dispatcher.remove_handler(0)
+            raise
         return connection
 
 
@@ -128,25 +132,23 @@ class ConnectionFrameHandler(object):
         self.synchroniser.succeed()
 
 
-class ConnectionMethodSender(object):
-    channel_id = 0
-
+class ConnectionMethodSender(Sender):
     def __init__(self, protocol):
-        self.protocol = protocol
+        super().__init__(0, protocol)
 
     def send_StartOK(self, client_properties, mechanism, response, locale):
         method = spec.ConnectionStartOK(client_properties, mechanism, response, locale)
-        self.protocol.send_method(self.channel_id, method)
+        self.send_method(method)
 
     def send_TuneOK(self, channel_max, frame_max, heartbeat):
-        self.protocol.send_method(self.channel_id, spec.ConnectionTuneOK(channel_max, frame_max, heartbeat))
+        self.send_method(spec.ConnectionTuneOK(channel_max, frame_max, heartbeat))
 
     def send_Open(self, virtual_host):
-        self.protocol.send_method(self.channel_id, spec.ConnectionOpen(virtual_host, '', False))
+        self.send_method(spec.ConnectionOpen(virtual_host, '', False))
 
     def send_Close(self, status_code, message, class_id, method_id):
         method = spec.ConnectionClose(status_code, message, class_id, method_id)
-        self.protocol.send_method(self.channel_id, method)
+        self.send_method(method)
 
     def send_CloseOK(self):
-        self.protocol.send_method(self.channel_id, spec.ConnectionCloseOK())
+        self.send_method(spec.ConnectionCloseOK())

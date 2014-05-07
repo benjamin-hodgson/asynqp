@@ -64,8 +64,11 @@ class Dispatcher(object):
         self.handlers = {}
         self.closing = asyncio.Future(loop=loop)
 
-    def add_handler(self, index, handler):
-        self.handlers[index] = handler
+    def add_handler(self, channel_id, handler):
+        self.handlers[channel_id] = handler
+
+    def remove_handler(self, channel_id):
+        del self.handlers[channel_id]
 
     def dispatch(self, frame):
         if isinstance(frame, frames.HeartbeatFrame):

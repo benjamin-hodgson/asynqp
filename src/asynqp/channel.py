@@ -5,7 +5,7 @@ from . import spec
 from . import queue
 from . import exchange
 from . import message
-from .util import Synchroniser
+from .util import Synchroniser, Sender
 from .exceptions import AMQPError
 
 
@@ -131,9 +131,13 @@ class ChannelFactory(object):
             channel = Channel(consumers, self.next_channel_id, synchroniser, sender, self.loop)
 
             self.dispatcher.add_handler(self.next_channel_id, ChannelFrameHandler(synchroniser, channel, sender, consumers))
+            try:
+                sender.send_ChannelOpen()
+                yield from fut
+            except:
+                self.dispatcher.remove_handler(self.next_channel_id)
+                raise
 
-            sender.send_ChannelOpen()
-            yield from fut
             self.next_channel_id += 1
             return channel
 
@@ -218,46 +222,44 @@ class ChannelFrameHandler(object):
         self.synchroniser.succeed()
 
 
-class ChannelMethodSender(object):
+class ChannelMethodSender(Sender):
     def __init__(self, channel_id, protocol, connection_info):
-        self.channel_id = channel_id
-        self.protocol = protocol
+        super().__init__(channel_id, protocol)
         self.connection_info = connection_info
 
     def send_ChannelOpen(self):
-        self.protocol.send_method(self.channel_id, spec.ChannelOpen(''))
+        self.send_method(spec.ChannelOpen(''))
 
     def send_ExchangeDeclare(self, name, type, durable, auto_delete, internal):
-        method = spec.ExchangeDeclare(0, name, type, False, durable, auto_delete, internal, False, {})
-        self.protocol.send_method(self.channel_id, method)
+        self.send_method(spec.ExchangeDeclare(0, name, type, False, durable, auto_delete, internal, False, {}))
 
     def send_ExchangeDelete(self, name, if_unused):
-        method = spec.ExchangeDelete(0, name, if_unused, False)
-        self.protocol.send_method(self.channel_id, method)
+        self.send_method(spec.ExchangeDelete(0, name, if_unused, False))
 
     def send_QueueDeclare(self, name, durable, exclusive, auto_delete):
-        method = spec.QueueDeclare(0, name, False, durable, exclusive, auto_delete, False, {})
-        self.protocol.send_method(self.channel_id, method)
+        self.send_method(spec.QueueDeclare(0, name, False, durable, exclusive, auto_delete, False, {}))
 
     def send_QueueBind(self, queue_name, exchange_name, routing_key):
-        method = spec.QueueBind(0, queue_name, exchange_name, routing_key, False, {})
-        self.protocol.send_method(self.channel_id, method)
+        self.send_method(spec.QueueBind(0, queue_name, exchange_name, routing_key, False, {}))
 
     def send_QueueDelete(self, queue_name, if_unused, if_empty):
-        method = spec.QueueDelete(0, queue_name, if_unused, if_empty, False)
-        self.protocol.send_method(self.channel_id, method)
+        self.send_method(spec.QueueDelete(0, queue_name, if_unused, if_empty, False))
 
     def send_BasicPublish(self, exchange_name, routing_key, mandatory, message):
-        method = spec.BasicPublish(0, exchange_name, routing_key, mandatory, False)
-        self.protocol.send_method(self.channel_id, method)
+        self.send_method(spec.BasicPublish(0, exchange_name, routing_key, mandatory, False))
         self.send_content(message)
 
     def send_BasicConsume(self, queue_name, no_local, no_ack, exclusive):
-        method = spec.BasicConsume(0, queue_name, '', no_local, no_ack, exclusive, False, {})
-        self.protocol.send_method(self.channel_id, method)
+        self.send_method(spec.BasicConsume(0, queue_name, '', no_local, no_ack, exclusive, False, {}))
 
     def send_BasicGet(self, queue_name, no_ack):
-        self.protocol.send_method(self.channel_id, spec.BasicGet(0, queue_name, no_ack))
+        self.send_method(spec.BasicGet(0, queue_name, no_ack))
+
+    def send_Close(self, status_code, msg, class_id, method_id):
+        self.send_method(spec.ChannelClose(status_code, msg, class_id, method_id))
+
+    def send_CloseOK(self):
+        self.send_method(spec.ChannelCloseOK())
 
     def send_content(self, msg):
         header_payload = msg.header_payload(spec.BasicPublish.method_type[0])
@@ -267,9 +269,3 @@ class ChannelMethodSender(object):
         for payload in msg.frame_payloads(self.connection_info.frame_max - 8):
             frame = frames.ContentBodyFrame(self.channel_id, payload)
             self.protocol.send_frame(frame)
-
-    def send_Close(self, status_code, msg, class_id, method_id):
-        self.protocol.send_method(self.channel_id, spec.ChannelClose(status_code, msg, class_id, method_id))
-
-    def send_CloseOK(self):
-        self.protocol.send_method(self.channel_id, spec.ChannelCloseOK())
