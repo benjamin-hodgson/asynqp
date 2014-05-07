@@ -14,6 +14,6 @@ deploy:
   provider: pypi
   user: benjamin.hodgson
   password:
-    secure: ZQlfUvD9D1CXLsYaXJb0Gg4PgcUPhDe2NGZY0CemQv7iTLfvjlUCPQS8ODofuzO7VwjCamrN6Iwe+w8216nBK8K03XqrB57tif/5FUJ9asDWjqJHRvIJgB/ad5Oi8b1ShMY5XRRLjLGB9c1oeHATjzPcC/c5NJ6COeZ1gbfwvv4=
+    secure: "bJA9NXYhqDgKiMX71YzU3Bq39NgfEi7R7cUoORs73/11ofJzvrFUsnmvw+n90FHru3b1AwZgOxHnlEOPZpQhgKol6BCBgv0HUscjA00dttXs7TO53/c8gqUIkhwlyEbn6+5++kEBTrrVZWjHrTfK6dWKbFA4LspTewvt4p8I9rQ="
   on:
     tags: true
