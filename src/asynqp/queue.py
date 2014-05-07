@@ -49,6 +49,22 @@ class Queue(object):
 
     @asyncio.coroutine
     def consume(self, callback, *, no_local=False, no_ack=False, exclusive=False):
+        """
+        Start a consumer on the queue. Messages will be delivered asynchronously to the consumer.
+        This method is a coroutine.
+
+        Arguments:
+            callback: a callback to be called when a message is delivered.
+                      The callback must accept a single argument (an instance of asynqp.Message).
+            no_local: If true, the server will not deliver messages that were
+                      published by this connection. Default: False
+            no_ack: If true, messages delivered to the consumer don't require acknowledgement.
+                    Default: False
+            exclusive: If true, only this consumer can access the queue. Default: False
+
+        Return value:
+            The newly created consumer object.
+        """
         with (yield from self.synchroniser.sync(spec.BasicConsumeOK)) as fut:
             self.sender.send_BasicConsume(self.name, no_local, no_ack, exclusive)
             tag = yield from fut
