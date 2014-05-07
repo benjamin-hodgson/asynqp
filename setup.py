@@ -10,10 +10,25 @@ setup(
     version='0.1',
     author="Benjamin Hodgson",
     author_email="benjamin.hodgson@huddle.net",
-    description="An AMQP (aka RabbitMQ) client library for asyncio.",
     url="https://github.com/benjamin-hodgson/asynqp",
-    packages=find_packages('src'),
+    description="An AMQP (aka RabbitMQ) client library for asyncio.",
     package_dir={'': 'src'},
+    packages=find_packages('src'),
     package_data={'asynqp': ['amqp0-9-1.xml']},
-    install_requires=["setuptools"]
+    install_requires=["setuptools"],
+    classifiers=[
+        "Development Status :: 3 - Alpha",
+        "Programming Language :: Python",
+        "Programming Language :: Python :: 3.4",
+        "License :: OSI Approved :: MIT License",
+        "Intended Audience :: Developers",
+        "Intended Audience :: Information Technology",
+        "Intended Audience :: Telecommunications Industry",
+        "Natural Language :: English",
+        "Operating System :: OS Independent",
+        "Topic :: Software Development",
+        "Topic :: Software Development :: Libraries",
+        "Topic :: Software Development :: Libraries :: Python Modules",
+        "Topic :: System :: Networking"
+    ]
 )
