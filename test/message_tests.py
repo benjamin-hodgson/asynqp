@@ -32,7 +32,7 @@ class WhenGettingTheContentHeader:
         )
 
     def when_I_ask_for_the_header(self):
-        self.payload = self.message.header_payload(50)
+        self.payload = message.get_header_payload(self.message, 50)
 
     def it_should_return_the_frames(self):
         assert self.payload == message.ContentHeaderPayload(50, 4, [
@@ -105,7 +105,7 @@ class WhenGettingFramesForAShortMessage:
         self.message = asynqp.Message('body')
 
     def when_I_get_the_frames(self):
-        self.frames = self.message.frame_payloads(100)
+        self.frames = message.get_frame_payloads(self.message, 100)
 
     def it_should_return_one_frame(self):
         assert self.frames == [b'body']
@@ -116,7 +116,7 @@ class WhenGettingFramesForALongMessage:
         self.message = asynqp.Message('much longer body')
 
     def because_the_message_is_longer_than_the_max_size(self):
-        self.frames = self.message.frame_payloads(5)
+        self.frames = message.get_frame_payloads(self.message, 5)
 
     def it_should_split_the_body_into_frames(self):
         assert self.frames == [b'much ', b'longe', b'r bod', b'y']
@@ -133,11 +133,11 @@ class WhenIAcknowledgeADeliveredMessage(QueueContext):
         self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
         self.go()
 
-        header = msg.header_payload(spec.BasicGet.method_type[0])
+        header = message.get_header_payload(msg, spec.BasicGet.method_type[0])
         self.dispatcher.dispatch(frames.ContentHeaderFrame(self.channel.id, header))
         self.go()
 
-        body = msg.frame_payloads(100)[0]
+        body = message.get_frame_payloads(msg, 100)[0]
         self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
         self.go()
 
@@ -149,3 +149,32 @@ class WhenIAcknowledgeADeliveredMessage(QueueContext):
 
     def it_should_send_BasicAck(self):
         self.protocol.send_method.assert_called_once_with(self.channel.id, spec.BasicAck(self.delivery_tag, False))
+
+
+class WhenIRejectADeliveredMessage(QueueContext):
+    def given_I_received_a_message(self):
+        self.delivery_tag = 12487
+
+        msg = asynqp.Message('body', timestamp=datetime(2014, 5, 5))
+        task = asyncio.async(self.queue.get())
+        self.go()
+        method = spec.BasicGetOK(self.delivery_tag, False, 'my.exchange', 'routing.key', 0)
+        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
+        self.go()
+
+        header = message.get_header_payload(msg, spec.BasicGet.method_type[0])
+        self.dispatcher.dispatch(frames.ContentHeaderFrame(self.channel.id, header))
+        self.go()
+
+        body = message.get_frame_payloads(msg, 100)[0]
+        self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
+        self.go()
+
+        self.msg = task.result()
+        self.protocol.reset_mock()
+
+    def when_I_reject_the_message(self):
+        self.msg.reject(requeue=True)
+
+    def it_should_send_BasicReject(self):
+        self.protocol.send_method.assert_called_once_with(self.channel.id, spec.BasicReject(self.delivery_tag, True))

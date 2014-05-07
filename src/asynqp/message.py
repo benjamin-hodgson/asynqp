@@ -93,18 +93,20 @@ class Message(object):
         except KeyError as e:
             raise AttributeError from e
 
-    def header_payload(self, class_id):
-        return ContentHeaderPayload(class_id, len(self.body), list(self.properties.values()))
 
-    # the total frame size will be 8 bytes larger than frame_body_size
-    def frame_payloads(self, frame_body_size):
-        frames = []
-        remaining = self.body
-        while remaining:
-            frame = remaining[:frame_body_size]
-            remaining = remaining[frame_body_size:]
-            frames.append(frame)
-        return frames
+def get_header_payload(message, class_id):
+    return ContentHeaderPayload(class_id, len(message.body), list(message.properties.values()))
+
+
+# NB: the total frame size will be 8 bytes larger than frame_body_size
+def get_frame_payloads(message, frame_body_size):
+    frames = []
+    remaining = message.body
+    while remaining:
+        frame = remaining[:frame_body_size]
+        remaining = remaining[frame_body_size:]
+        frames.append(frame)
+    return frames
 
 
 class IncomingMessage(Message):
@@ -118,6 +120,17 @@ class IncomingMessage(Message):
         Acknowledge the message.
         """
         self.sender.send_BasicAck(self.delivery_tag)
+
+    def reject(self, *, requeue=True):
+        """
+        Reject the message.
+
+        Arguments:
+            redeliver: if true, the broker will attempt to requeue the
+                       message and deliver it to an alternate consumer.
+                       Default: True.
+        """
+        self.sender.send_BasicReject(self.delivery_tag, requeue)
 
 
 class ContentHeaderPayload(object):

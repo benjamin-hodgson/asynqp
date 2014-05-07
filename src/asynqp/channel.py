@@ -259,6 +259,9 @@ class ChannelMethodSender(bases.Sender):
     def send_BasicAck(self, delivery_tag):
         self.send_method(spec.BasicAck(delivery_tag, False))
 
+    def send_BasicReject(self, delivery_tag, redeliver):
+        self.send_method(spec.BasicReject(delivery_tag, redeliver))
+
     def send_Close(self, status_code, msg, class_id, method_id):
         self.send_method(spec.ChannelClose(status_code, msg, class_id, method_id))
 
@@ -266,10 +269,10 @@ class ChannelMethodSender(bases.Sender):
         self.send_method(spec.ChannelCloseOK())
 
     def send_content(self, msg):
-        header_payload = msg.header_payload(spec.BasicPublish.method_type[0])
+        header_payload = message.get_header_payload(msg, spec.BasicPublish.method_type[0])
         header_frame = frames.ContentHeaderFrame(self.channel_id, header_payload)
         self.protocol.send_frame(header_frame)
 
-        for payload in msg.frame_payloads(self.connection_info.frame_max - 8):
+        for payload in message.get_frame_payloads(msg, self.connection_info.frame_max - 8):
             frame = frames.ContentBodyFrame(self.channel_id, payload)
             self.protocol.send_frame(frame)

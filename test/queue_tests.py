@@ -2,6 +2,7 @@ import asyncio
 from datetime import datetime
 from unittest import mock
 import asynqp
+from asynqp import message
 from asynqp import frames
 from asynqp import spec
 from .base_contexts import OpenChannelContext, QueueContext, ExchangeContext
@@ -149,11 +150,11 @@ class WhenBasicGetOKArrives(QueueContext):
         self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
         self.go()
 
-        header = self.expected_message.header_payload(spec.BasicGet.method_type[0])
+        header = message.get_header_payload(self.expected_message, spec.BasicGet.method_type[0])
         self.dispatcher.dispatch(frames.ContentHeaderFrame(self.channel.id, header))
         self.go()
 
-        body = self.expected_message.frame_payloads(100)[0]
+        body = message.get_frame_payloads(self.expected_message, 100)[0]
         self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
         self.go()
 
@@ -200,11 +201,11 @@ class WhenBasicDeliverArrives(QueueContext):
         self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
         self.go()
 
-        header = self.expected_message.header_payload(spec.BasicDeliver.method_type[0])
+        header = message.get_header_payload(self.expected_message, spec.BasicGet.method_type[0])
         self.dispatcher.dispatch(frames.ContentHeaderFrame(self.channel.id, header))
         self.go()
 
-        body = self.expected_message.frame_payloads(100)[0]
+        body = message.get_frame_payloads(self.expected_message, 100)[0]
         self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
         self.go()
 
