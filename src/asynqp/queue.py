@@ -15,9 +15,9 @@ class Queue(object):
 
     Methods:
         queue.bind(exchange, routing_key): Bind a queue to an exchange. This method is a coroutine.
-    """                # ew!
-    def __init__(self, handler, synchroniser, loop, sender, name, durable, exclusive, auto_delete):
-        self.handler = handler
+    """
+    def __init__(self, consumers, synchroniser, loop, sender, name, durable, exclusive, auto_delete):
+        self.consumers = consumers
         self.synchroniser = synchroniser
         self.loop = loop
         self.sender = sender
@@ -69,7 +69,7 @@ class Queue(object):
             self.sender.send_BasicConsume(self.name, no_local, no_ack, exclusive)
             tag = yield from fut
             consumer = Consumer(tag, callback)
-            self.handler.add_consumer(consumer)
+            self.consumers.add_consumer(consumer)
             return consumer
 
     @asyncio.coroutine
@@ -112,6 +112,18 @@ class QueueBinding(object):
     def __init__(self, queue, exchange):
         self.queue = queue
         self.exchange = exchange
+
+
+class Consumers(object):
+    def __init__(self, loop):
+        self.loop = loop
+        self.consumers = {}
+
+    def add_consumer(self, consumer):
+        self.consumers[consumer.tag] = consumer
+
+    def deliver(self, tag, msg):
+        self.loop.call_soon(self.consumers[tag].deliver, msg)
 
 
 class Consumer(object):

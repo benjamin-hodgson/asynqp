@@ -31,20 +31,16 @@ class Connection(object):
         connection.close: Close the connection. This method is a coroutine.
     """
     def __init__(self, loop, protocol, synchroniser, sender, dispatcher, connection_info):
-        self.loop = loop
-        self.protocol = protocol
         self.synchroniser = synchroniser
         self.sender = sender
-        self.dispatcher = dispatcher
-        self.connection_info = connection_info
-        self.next_channel_num = 1
+        self.channel_factory = channel.ChannelFactory(loop, protocol, dispatcher, connection_info)
 
         # this is ugly. when the connection is closing, all methods other than ConnectionCloseOK
         # should be ignored. at the moment this behaviour is part of the dispatcher
         # but this introduces an extra dependency between Connection and ConnectionFrameHandler which
         # i don't like
         self.closing = asyncio.Future(loop=loop)
-        self.closing.add_done_callback(lambda fut: self.dispatcher.closing.set_result(fut.result()))
+        self.closing.add_done_callback(lambda fut: dispatcher.closing.set_result(fut.result()))
 
     @asyncio.coroutine
     def open_channel(self):
@@ -55,15 +51,8 @@ class Connection(object):
         Return value:
             The new Channel object.
         """
-        handler = channel.ChannelFrameHandler(self.protocol, self.next_channel_num, self.loop, self.connection_info)
-        with (yield from handler.synchroniser.sync(spec.ChannelOpenOK)) as fut:
-            self.dispatcher.add_handler(self.next_channel_num, handler)
-
-            self.sender.send_ChannelOpen(self.next_channel_num)
-            self.next_channel_num += 1
-
-            yield from fut
-            return handler.channel
+        channel = (yield from self.channel_factory.open())
+        return channel
 
     @asyncio.coroutine
     def close(self):
@@ -161,6 +150,3 @@ class ConnectionMethodSender(object):
 
     def send_CloseOK(self):
         self.protocol.send_method(self.channel_id, spec.ConnectionCloseOK())
-
-    def send_ChannelOpen(self, channel_id):
-        self.protocol.send_method(channel_id, spec.ChannelOpen(''))

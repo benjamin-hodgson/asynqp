@@ -29,8 +29,8 @@ class Channel(object):
         channel.declare_queue(name='', **kwargs): Declare a queue on the broker. This method is a coroutine.
         channel.close(): Close the channel. This method is a coroutine.
     """
-    def __init__(self, handler, id, synchroniser, sender, loop):
-        self.handler = handler  # yuk
+    def __init__(self, consumers, id, synchroniser, sender, loop):
+        self.consumers = consumers
         self.id = id
         self.synchroniser = synchroniser
         self.sender = sender
@@ -99,7 +99,7 @@ class Channel(object):
         with (yield from self.synchroniser.sync(spec.QueueDeclareOK)) as fut:
             self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete)
             name = yield from fut
-            return queue.Queue(self.handler, self.synchroniser, self.loop, self.sender, name, durable, exclusive, auto_delete)
+            return queue.Queue(self.consumers, self.synchroniser, self.loop, self.sender, name, durable, exclusive, auto_delete)
 
     @asyncio.coroutine
     def close(self):
@@ -113,14 +113,38 @@ class Channel(object):
             yield from fut
 
 
-class ChannelFrameHandler(object):
-    def __init__(self, protocol, channel_id, loop, connection_info):
+class ChannelFactory(object):
+    def __init__(self, loop, protocol, dispatcher, connection_info):
         self.loop = loop
-        self.synchroniser = Synchroniser(loop, spec.ChannelClose)
-        self.sender = ChannelMethodSender(channel_id, protocol, connection_info)
-        self.channel = Channel(self, channel_id, self.synchroniser, self.sender, loop)
+        self.protocol = protocol
+        self.dispatcher = dispatcher
+        self.connection_info = connection_info
+        self.next_channel_id = 1
+
+    @asyncio.coroutine
+    def open(self):
+        synchroniser = Synchroniser(self.loop, spec.ChannelClose)
+
+        with (yield from synchroniser.sync(spec.ChannelOpenOK)) as fut:
+            sender = ChannelMethodSender(self.next_channel_id, self.protocol, self.connection_info)
+            consumers = queue.Consumers(self.loop)
+            channel = Channel(consumers, self.next_channel_id, synchroniser, sender, self.loop)
+
+            self.dispatcher.add_handler(self.next_channel_id, ChannelFrameHandler(synchroniser, channel, sender, consumers))
+
+            sender.send_ChannelOpen()
+            yield from fut
+            self.next_channel_id += 1
+            return channel
+
+
+class ChannelFrameHandler(object):
+    def __init__(self, synchroniser, channel, sender, consumers):
+        self.synchroniser = synchroniser
+        self.channel = channel
+        self.sender = sender
+        self.consumers = consumers
         self.message_builder = None
-        self.consumers = {}  # gross
 
     def handle(self, frame):
         method_cls = type(frame.payload)
@@ -183,7 +207,7 @@ class ChannelFrameHandler(object):
                 self.synchroniser.succeed(self.message_builder.build())
             else:
                 consumer_tag = self.message_builder.consumer_tag
-                self.loop.call_soon(self.consumers[consumer_tag].deliver, self.message_builder.build())
+                self.consumers.deliver(consumer_tag, self.message_builder.build())
             self.message_builder = None
 
     def handle_ChannelClose(self, frame):
@@ -193,15 +217,15 @@ class ChannelFrameHandler(object):
     def handle_ChannelCloseOK(self, frame):
         self.synchroniser.succeed()
 
-    def add_consumer(self, consumer):
-        self.consumers[consumer.tag] = consumer
-
 
 class ChannelMethodSender(object):
     def __init__(self, channel_id, protocol, connection_info):
         self.channel_id = channel_id
         self.protocol = protocol
         self.connection_info = connection_info
+
+    def send_ChannelOpen(self):
+        self.protocol.send_method(self.channel_id, spec.ChannelOpen(''))
 
     def send_ExchangeDeclare(self, name, type, durable, auto_delete, internal):
         method = spec.ExchangeDeclare(0, name, type, False, durable, auto_delete, internal, False, {})

@@ -2,7 +2,8 @@ import asyncio
 import asynqp
 from asyncio import test_utils
 from asynqp import spec
-from asynqp.connection import open_connection
+from asynqp import protocol
+from asynqp.connection import ConnectionInfo, open_connection
 from unittest import mock
 
 
@@ -20,13 +21,13 @@ class MockLoopContext(LoopContext):
 
 
 class ConnectionContext(LoopContext):
-    def given_a_connection(self):
-        self.protocol = mock.Mock(spec=asynqp.AMQP)
+    def given_the_pieces_i_need_for_a_connection(self):
+        self.protocol = mock.Mock(spec=protocol.AMQP)
         self.protocol.transport = mock.Mock()
         self.protocol.send_frame._is_coroutine = False  # :(
 
-        self.dispatcher = asynqp.Dispatcher(self.loop)
-        self.connection_info = asynqp.ConnectionInfo('guest', 'guest', '/')
+        self.dispatcher = protocol.Dispatcher(self.loop)
+        self.connection_info = ConnectionInfo('guest', 'guest', '/')
 
 
 class OpenConnectionContext(ConnectionContext):
@@ -54,8 +55,8 @@ class OpenConnectionContext(ConnectionContext):
 class ProtocolContext(LoopContext):
     def given_a_connected_protocol(self):
         self.transport = mock.Mock(spec=asyncio.Transport)
-        self.dispatcher = asynqp.Dispatcher(self.loop)
-        self.protocol = asynqp.AMQP(self.dispatcher, self.loop)
+        self.dispatcher = protocol.Dispatcher(self.loop)
+        self.protocol = protocol.AMQP(self.dispatcher, self.loop)
         self.protocol.connection_made(self.transport)
 
 

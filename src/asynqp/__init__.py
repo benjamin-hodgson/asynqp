@@ -1,7 +1,5 @@
 import asyncio
-from .connection import ConnectionInfo, open_connection
 from .exceptions import AMQPError
-from .protocol import AMQP, Dispatcher
 from .message import Message
 
 
@@ -24,13 +22,13 @@ def connect(host='localhost', port=5672, username='guest', password='guest', vir
         virtual_host - the AMQP virtual host to connect to.
             default: '/'
     """
-    if loop is None:
-        loop = asyncio.get_event_loop()
+    from .protocol import AMQP, Dispatcher
+    from .connection import ConnectionInfo, open_connection
+
+    loop = asyncio.get_event_loop() if loop is None else loop
 
     dispatcher = Dispatcher(loop)
     transport, protocol = yield from loop.create_connection(lambda: AMQP(dispatcher, loop), host=host, port=port)
 
-    connection_info = ConnectionInfo(username, password, virtual_host)
-
-    connection = yield from open_connection(loop, protocol, dispatcher, connection_info)
+    connection = yield from open_connection(loop, protocol, dispatcher, ConnectionInfo(username, password, virtual_host))
     return connection

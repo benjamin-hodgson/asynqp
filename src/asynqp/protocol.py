@@ -8,9 +8,8 @@ from .exceptions import AMQPError
 class AMQP(asyncio.Protocol):
     def __init__(self, dispatcher, loop):
         self.dispatcher = dispatcher
-        self.loop = loop
         self.partial_frame = b''
-        self.heartbeat_monitor = HeartbeatMonitor(self, self.loop, 0)
+        self.heartbeat_monitor = HeartbeatMonitor(self, loop, 0)
 
     def connection_made(self, transport):
         self.transport = transport
@@ -57,9 +56,7 @@ class AMQP(asyncio.Protocol):
         self.transport.write(b'AMQP\x00\x00\x09\x01')
 
     def start_heartbeat(self, heartbeat_interval):
-        self.heartbeat_monitor.heartbeat_interval = heartbeat_interval
-        self.heartbeat_monitor.send_heartbeat()
-        self.heartbeat_monitor.monitor_heartbeat()
+        self.heartbeat_monitor.start(heartbeat_interval)
 
 
 class Dispatcher(object):
@@ -85,6 +82,12 @@ class HeartbeatMonitor(object):
         self.loop = loop
         self.heartbeat_interval = heartbeat_interval
         self.heartbeat_timeout_callback = None
+
+    def start(self, interval):
+        if interval > 0:
+            self.heartbeat_interval = interval
+            self.send_heartbeat()
+            self.monitor_heartbeat()
 
     def send_heartbeat(self):
         if self.heartbeat_interval > 0:
