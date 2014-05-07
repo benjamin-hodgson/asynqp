@@ -157,8 +157,9 @@ class ContentHeaderPayload(object):
 
 
 class MessageBuilder(object):
-    def __init__(self, delivery_tag, redelivered, exchange_name, routing_key):
+    def __init__(self, delivery_tag, redelivered, exchange_name, routing_key, consumer_tag=None):
         self.body = b''
+        self.consumer_tag = consumer_tag
 
     def set_header(self, header):
         self.body_length = header.body_length

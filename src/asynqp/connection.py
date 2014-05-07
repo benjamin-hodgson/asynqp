@@ -91,17 +91,10 @@ class ConnectionFrameHandler(object):
             self.sender.send_Close(spec.UNEXPECTED_FRAME, "got a bad message", *frame.payload.method_type)
             return
 
-        method_type = type(frame.payload)
-        method_name = method_type.__name__
-
-        try:
-            handler = getattr(self, 'handle_' + method_name)
-        except AttributeError as e:
-            raise AMQPError('No handler defined for {} on the connection'.format(method_name)) from e
-        else:
-            handler(frame)
+        getattr(self, 'handle_' + type(frame.payload).__name__)(frame)
 
     def handle_ConnectionStart(self, frame):
+        self.synchroniser.change_expected(spec.ConnectionTune)
         self.sender.send_StartOK(
             {"product": "asynqp",
              "version": "0.1",  # todo: use pkg_resources to inspect the package
@@ -114,6 +107,8 @@ class ConnectionFrameHandler(object):
     def handle_ConnectionTune(self, frame):  # just agree with whatever the server wants. Make this configurable in future
         self.connection_info.frame_max = frame.payload.frame_max
         self.sender.send_TuneOK(frame.payload.channel_max, frame.payload.frame_max, frame.payload.heartbeat)
+
+        self.synchroniser.change_expected(spec.ConnectionOpenOK)
         self.sender.send_Open(self.connection_info.virtual_host)
         self.protocol.start_heartbeat(frame.payload.heartbeat)
 

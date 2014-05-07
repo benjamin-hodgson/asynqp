@@ -29,7 +29,8 @@ class Channel(object):
         channel.declare_queue(name='', **kwargs): Declare a queue on the broker. This method is a coroutine.
         channel.close(): Close the channel. This method is a coroutine.
     """
-    def __init__(self, id, synchroniser, sender, loop):
+    def __init__(self, handler, id, synchroniser, sender, loop):
+        self.handler = handler  # yuk
         self.id = id
         self.synchroniser = synchroniser
         self.sender = sender
@@ -98,7 +99,7 @@ class Channel(object):
         with (yield from self.synchroniser.sync(spec.QueueDeclareOK)) as fut:
             self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete)
             name = yield from fut
-            return queue.Queue(self.synchroniser, self.loop, self.sender, name, durable, exclusive, auto_delete)
+            return queue.Queue(self.handler, self.synchroniser, self.loop, self.sender, name, durable, exclusive, auto_delete)
 
     @asyncio.coroutine
     def close(self):
@@ -114,21 +115,16 @@ class Channel(object):
 
 class ChannelFrameHandler(object):
     def __init__(self, protocol, channel_id, loop, connection_info):
-        self.synchroniser = Synchroniser(loop)
+        self.loop = loop
+        self.synchroniser = Synchroniser(loop, spec.ChannelClose)
         self.sender = ChannelMethodSender(channel_id, protocol, connection_info)
-        self.channel = Channel(channel_id, self.synchroniser, self.sender, loop)
+        self.channel = Channel(self, channel_id, self.synchroniser, self.sender, loop)
         self.message_builder = None
+        self.consumers = {}  # gross
 
     def handle(self, frame):
-        if isinstance(frame, frames.ContentHeaderFrame):
-            self.handle_ContentHeader(frame)
-            return
-        if isinstance(frame, frames.ContentBodyFrame):
-            self.handle_ContentBody(frame)
-            return
-
         method_cls = type(frame.payload)
-        if self.channel.closing and method_cls not in (spec.ChannelClose, spec.ChannelCloseOK):
+        if self.channel.closing and method_cls is not spec.ChannelCloseOK:
             return
 
         try:
@@ -137,13 +133,11 @@ class ChannelFrameHandler(object):
             self.sender.send_Close(spec.UNEXPECTED_FRAME, "got a bad message", *frame.payload.method_type)
             return
 
-        handle_name = method_cls.__name__
         try:
-            handler = getattr(self, 'handle_' + handle_name)
-        except AttributeError as e:
-            raise AMQPError('No handler defined for {} on channel {}'.format(handle_name, self.channel.id)) from e
-        else:
-            handler(frame)
+            handler = getattr(self, 'handle_' + type(frame).__name__)
+        except AttributeError:
+            handler = getattr(self, 'handle_' + method_cls.__name__)
+        handler(frame)
 
     def handle_ChannelOpenOK(self, frame):
         self.synchroniser.succeed()
@@ -164,22 +158,32 @@ class ChannelFrameHandler(object):
         self.synchroniser.succeed()
 
     def handle_BasicGetEmpty(self, frame):
-        self.synchroniser.succeed()
+        self.synchroniser.succeed(None)
 
     def handle_BasicGetOK(self, frame):
+        self.synchroniser.change_expected(frames.ContentHeaderFrame)
         payload = frame.payload
         self.message_builder = message.MessageBuilder(payload.delivery_tag, payload.redelivered, payload.exchange, payload.routing_key)
 
-    def handle_BasicDeliver(self, frame):
-        pass
+    def handle_BasicConsumeOK(self, frame):
+        self.synchroniser.succeed(frame.payload.consumer_tag)
 
-    def handle_ContentHeader(self, frame):
+    def handle_BasicDeliver(self, frame):
+        payload = frame.payload
+        self.message_builder = message.MessageBuilder(payload.delivery_tag, payload.redelivered, payload.exchange, payload.routing_key, payload.consumer_tag)
+
+    def handle_ContentHeaderFrame(self, frame):
+        self.synchroniser.change_expected(frames.ContentBodyFrame)
         self.message_builder.set_header(frame.payload)
 
-    def handle_ContentBody(self, frame):
+    def handle_ContentBodyFrame(self, frame):
         self.message_builder.add_body_chunk(frame.payload)
         if self.message_builder.done():
-            self.synchroniser.succeed(self.message_builder.build())
+            if self.synchroniser.is_waiting():
+                self.synchroniser.succeed(self.message_builder.build())
+            else:
+                consumer_tag = self.message_builder.consumer_tag
+                self.loop.call_soon(self.consumers[consumer_tag].deliver, self.message_builder.build())
             self.message_builder = None
 
     def handle_ChannelClose(self, frame):
@@ -188,6 +192,9 @@ class ChannelFrameHandler(object):
 
     def handle_ChannelCloseOK(self, frame):
         self.synchroniser.succeed()
+
+    def add_consumer(self, consumer):
+        self.consumers[consumer.tag] = consumer
 
 
 class ChannelMethodSender(object):
@@ -220,6 +227,10 @@ class ChannelMethodSender(object):
         method = spec.BasicPublish(0, exchange_name, routing_key, mandatory, False)
         self.protocol.send_method(self.channel_id, method)
         self.send_content(message)
+
+    def send_BasicConsume(self, queue_name, no_local, no_ack, exclusive):
+        method = spec.BasicConsume(0, queue_name, '', no_local, no_ack, exclusive, False, {})
+        self.protocol.send_method(self.channel_id, method)
 
     def send_BasicGet(self, queue_name, no_ack):
         self.protocol.send_method(self.channel_id, spec.BasicGet(0, queue_name, no_ack))

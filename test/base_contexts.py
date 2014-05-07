@@ -9,6 +9,9 @@ class LoopContext:
     def given_an_event_loop(self):
         self.loop = asyncio.get_event_loop()
 
+    def go(self):
+        test_utils.run_briefly(self.loop)
+
 
 class MockLoopContext(LoopContext):
     def given_an_event_loop(self):
@@ -57,10 +60,10 @@ class OpenChannelContext(OpenConnectionContext):
 
     def open_channel(self, channel_id=1):
         task = asyncio.async(self.connection.open_channel(), loop=self.loop)
-        test_utils.run_briefly(self.loop)
+        self.go()
         open_ok_frame = asynqp.frames.MethodFrame(channel_id, spec.ChannelOpenOK(''))
         self.dispatcher.dispatch(open_ok_frame)
-        test_utils.run_briefly(self.loop)
+        self.go()
         return task.result()
 
 
@@ -68,10 +71,10 @@ class QueueContext(OpenChannelContext):
     def given_a_queue(self):
         queue_name = 'my.nice.queue'
         task = asyncio.async(self.channel.declare_queue(queue_name, durable=True, exclusive=True, auto_delete=True), loop=self.loop)
-        test_utils.run_briefly(self.loop)
+        self.go()
         frame = asynqp.frames.MethodFrame(self.channel.id, spec.QueueDeclareOK(queue_name, 123, 456))
         self.dispatcher.dispatch(frame)
-        test_utils.run_briefly(self.loop)
+        self.go()
         self.queue = task.result()
 
         self.protocol.reset_mock()
@@ -81,10 +84,10 @@ class ExchangeContext(OpenChannelContext):
     def given_an_exchange(self):
         task = asyncio.async(self.channel.declare_exchange('my.nice.exchange', 'fanout', durable=True, auto_delete=False, internal=False),
                              loop=self.loop)
-        test_utils.run_briefly(self.loop)
+        self.go()
         frame = asynqp.frames.MethodFrame(self.channel.id, spec.ExchangeDeclareOK())
         self.dispatcher.dispatch(frame)
-        test_utils.run_briefly(self.loop)
+        self.go()
         self.exchange = task.result()
 
         self.protocol.reset_mock()

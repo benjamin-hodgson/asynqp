@@ -1,4 +1,5 @@
 import asyncio
+from . import spec
 from .connection import ConnectionInfo, ConnectionFrameHandler
 from .exceptions import AMQPError
 from .protocol import AMQP, Dispatcher
@@ -34,7 +35,13 @@ def connect(host='localhost', port=5672, username='guest', password='guest', vir
     handler = ConnectionFrameHandler(protocol, dispatcher, loop, connection_info)
     dispatcher.add_handler(0, handler)
 
-    protocol.send_protocol_header()
+    # fixme: the tests mostly don't go through this function (because they don't want to mock the loop),
+    #        so the synchroniser is not in the waiting state when OpenOK arrives. So we can't call synchroniser.succeed().
+    #        The design of the code needs to change so that this call to sync() can be done independently
+    #        the call to create_connection(). I think pulling a ConnectionController, responsible for creating and coordinating the connection's components,
+    #        out of ConnectionFrameHandler would work.
+    with (yield from handler.synchroniser.sync(spec.ConnectionStart)) as fut:
+        protocol.send_protocol_header()
 
-    yield from handler.opened
-    return handler.connection
+        yield from handler.opened
+        return handler.connection
