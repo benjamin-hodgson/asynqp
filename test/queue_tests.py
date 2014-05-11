@@ -5,7 +5,7 @@ import asynqp
 from asynqp import message
 from asynqp import frames
 from asynqp import spec
-from .base_contexts import OpenChannelContext, QueueContext, ExchangeContext
+from .base_contexts import OpenChannelContext, QueueContext, ExchangeContext, BoundQueueContext
 
 
 class WhenDeclaringAQueue(OpenChannelContext):
@@ -115,6 +115,30 @@ class WhenQueueBindOKArrives(QueueContext, ExchangeContext):
 
     def and_the_returned_binding_should_have_the_correct_exchange(self):
         assert self.binding.exchange is self.exchange
+
+
+class WhenUnbindingAQueue(BoundQueueContext):
+    def when_I_unbind_the_queue(self):
+        asyncio.async(self.binding.unbind())
+        self.go()
+
+    def it_should_send_QueueUnbind(self):
+        expected_method = spec.QueueUnbind(0, self.queue.name, self.exchange.name, 'routing.key', {})
+        self.protocol.send_method.assert_called_once_with(self.channel.id, expected_method)
+
+
+class WhenQueueUnbindOKArrives(BoundQueueContext):
+    def given_I_unbound_the_queue(self):
+        self.task = asyncio.async(self.binding.unbind())
+        self.go()
+
+    def when_QueueUnbindOK_arrives(self):
+        frame = frames.Frame(self.channel.id, spec.QueueUnbindOK())
+        self.dispatcher.dispatch(frame)
+        self.go()
+
+    def it_should_be_ok(self):
+        assert self.task.result() is None
 
 
 class WhenIAskForAMessage(QueueContext):

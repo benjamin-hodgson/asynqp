@@ -45,7 +45,7 @@ class Queue(object):
         with (yield from self.synchroniser.sync(spec.QueueBindOK)) as fut:
             self.sender.send_QueueBind(self.name, exchange.name, routing_key)
             yield from fut
-            return QueueBinding(self, exchange)
+            return QueueBinding(self.sender, self.synchroniser, self, exchange, routing_key)
 
     @asyncio.coroutine
     def consume(self, callback, *, no_local=False, no_ack=False, exclusive=False):
@@ -109,9 +109,18 @@ class Queue(object):
 
 
 class QueueBinding(object):
-    def __init__(self, queue, exchange):
+    def __init__(self, sender, synchroniser, queue, exchange, routing_key):
+        self.sender = sender
+        self.synchroniser = synchroniser
         self.queue = queue
         self.exchange = exchange
+        self.routing_key = routing_key
+
+    @asyncio.coroutine
+    def unbind(self):
+        with (yield from self.synchroniser.sync(spec.QueueUnbindOK)) as fut:
+            self.sender.send_QueueUnbind(self.queue.name, self.exchange.name, self.routing_key)
+            yield from fut
 
 
 class Consumers(object):

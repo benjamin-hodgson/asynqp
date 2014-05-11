@@ -167,5 +167,5 @@ METHODS, CONSTANTS = load_spec()
 METHODS['ConnectionStartOK'].field_info['response'] = amqptypes.Table
 
 # Also pretty hacky
-globals().update(METHODS)
+globals().update({k: v for k, v in METHODS.items() if isinstance(k, str)})
 globals().update(CONSTANTS)

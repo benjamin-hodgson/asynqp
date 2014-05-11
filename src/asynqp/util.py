@@ -44,6 +44,7 @@ class Synchroniser(object):
         method_type = type(frame.payload)
         if not self.is_expected(frame):
             msg = 'Expected one of {} but got {}'.format([cls.__name__ for cls in (self.expected_methods | self.defaults)], method_type.__name__)
+
             self.fail(AMQPError(msg))
             raise AMQPError(msg)
 

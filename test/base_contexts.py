@@ -89,12 +89,24 @@ class QueueContext(OpenChannelContext):
 
 class ExchangeContext(OpenChannelContext):
     def given_an_exchange(self):
-        task = asyncio.async(self.channel.declare_exchange('my.nice.exchange', 'fanout', durable=True, auto_delete=False, internal=False),
+        self.exchange = self.make_exchange('my.nice.exchange')
+        self.protocol.reset_mock()
+
+    def make_exchange(self, name):
+        task = asyncio.async(self.channel.declare_exchange(name, 'fanout', durable=True, auto_delete=False, internal=False),
                              loop=self.loop)
         self.go()
         frame = asynqp.frames.MethodFrame(self.channel.id, spec.ExchangeDeclareOK())
         self.dispatcher.dispatch(frame)
         self.go()
-        self.exchange = task.result()
+        return task.result()
 
+
+class BoundQueueContext(QueueContext, ExchangeContext):
+    def given_a_bound_queue(self):
+        task = asyncio.async(self.queue.bind(self.exchange, 'routing.key'))
+        self.go()
+        self.dispatcher.dispatch(asynqp.frames.MethodFrame(self.channel.id, spec.QueueBindOK()))
+        self.go()
+        self.binding = task.result()
         self.protocol.reset_mock()
