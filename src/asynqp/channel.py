@@ -27,6 +27,7 @@ class Channel(object):
 
     Methods:
         channel.declare_queue(name='', **kwargs): Declare a queue on the broker. This method is a coroutine.
+        channel.declare_exchange(name, type): Declare an exchange on the broker. This method is a coroutine.
         channel.close(): Close the channel. This method is a coroutine.
     """
     def __init__(self, consumers, id, synchroniser, sender, loop):

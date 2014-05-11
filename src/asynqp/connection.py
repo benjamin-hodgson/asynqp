@@ -28,8 +28,8 @@ class Connection(object):
         connection.closed: a Future which is done when the handshake to close the connection has finished
 
     Methods:
-        connection.open_channel: Open a new channel on this connection. This method is a coroutine.
-        connection.close: Close the connection. This method is a coroutine.
+        connection.open_channel(): Open a new channel on this connection. This method is a coroutine.
+        connection.close(): Close the connection. This method is a coroutine.
     """
     def __init__(self, loop, protocol, synchroniser, sender, dispatcher, connection_info):
         self.synchroniser = synchroniser

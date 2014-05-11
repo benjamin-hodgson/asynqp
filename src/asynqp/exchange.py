@@ -3,6 +3,22 @@ from . import spec
 
 
 class Exchange(object):
+    """
+    An exchange is a 'routing node' to which messages can be published.
+    When a message is published to an exchange, the exchange determines which queues
+    to deliver the message to by inspecting the message's routing key and the exchange's bindings.
+    You can bind a queue to an exchange, to start receiving messages on the queue,
+    using queue.bind(exchange).
+
+    Attributes:
+        exchange.name: the name of the exchange.
+        exchange.type: the type of the exchange (usually one of 'fanout', 'direct', 'topic', or 'headers').
+
+    Methods:
+        exchange.publish(message, routing_key): Publish a message to the exchange,
+                                                to be asynchronously delivered to queues.
+        exchange.delete(): Delete the exchange. This method is a coroutine.
+    """
     def __init__(self, synchroniser, sender, name, type, durable, auto_delete, internal):
         self.synchroniser = synchroniser
         self.sender = sender

@@ -1,5 +1,6 @@
 import asyncio
 from . import spec
+from .exceptions import Deleted
 
 
 class Queue(object):
@@ -15,6 +16,11 @@ class Queue(object):
 
     Methods:
         queue.bind(exchange, routing_key): Bind a queue to an exchange. This method is a coroutine.
+        queue.consume(callback): Start a consumer on the queue, with a callback
+                                 function to be called when a message is delivered.
+                                 This method is a coroutine.
+        queue.get(): Synchronously get a message from the queue. This method is a coroutine.
+        queue.delete(): delete the queue. This method is a coroutine.
     """
     def __init__(self, consumers, synchroniser, loop, sender, name, durable, exclusive, auto_delete):
         self.consumers = consumers
@@ -40,8 +46,11 @@ class Queue(object):
             routing_key: the routing key under which to bind
 
         Return value:
-            The newly created binding object
+            The newly created instance of QueueBinding
         """
+        if self.deleted:
+            raise Deleted("Queue {} was deleted".format(self.name))
+
         with (yield from self.synchroniser.sync(spec.QueueBindOK)) as fut:
             self.sender.send_QueueBind(self.name, exchange.name, routing_key)
             yield from fut
@@ -51,6 +60,7 @@ class Queue(object):
     def consume(self, callback, *, no_local=False, no_ack=False, exclusive=False):
         """
         Start a consumer on the queue. Messages will be delivered asynchronously to the consumer.
+        The callback function will be called whenever a new message arrives on the queue.
         This method is a coroutine.
 
         Arguments:
@@ -65,6 +75,9 @@ class Queue(object):
         Return value:
             The newly created consumer object.
         """
+        if self.deleted:
+            raise Deleted("Queue {} was deleted".format(self.name))
+
         with (yield from self.synchroniser.sync(spec.BasicConsumeOK)) as fut:
             self.sender.send_BasicConsume(self.name, no_local, no_ack, exclusive)
             tag = yield from fut
@@ -85,6 +98,9 @@ class Queue(object):
         Return value:
             an instance of asynqp.Message, or None if there were no messages on the queue.
         """
+        if self.deleted:
+            raise Deleted("Queue {} was deleted".format(self.name))
+
         with (yield from self.synchroniser.sync(spec.BasicGetOK, spec.BasicGetEmpty)) as fut:
             self.sender.send_BasicGet(self.name, no_ack)
             result = yield from fut
@@ -102,6 +118,9 @@ class Queue(object):
             if_empty: If true, the queue will only be deleted if
                       it has no unacknowledged messages. Default: True
         """
+        if self.deleted:
+            raise Deleted("Queue {} was already deleted".format(self.name))
+
         with (yield from self.synchroniser.sync(spec.QueueDeleteOK)) as fut:
             self.sender.send_QueueDelete(self.name, if_unused, if_empty)
             yield from fut
@@ -109,18 +128,41 @@ class Queue(object):
 
 
 class QueueBinding(object):
+    """
+    Represents a binding between a queue and an exchange.
+    Once a queue has been bound to an exchange, messages published
+    to that exchange will be delivered to the queue. The delivery
+    may be conditional, depending on the type of the exchange.
+
+    Attributes:
+        binding.queue: the Queue instance which was bound
+        binding.exchange: the Exchange instance to which the queue was bound
+        binding.routing_key: the routing key used for the binding
+
+    Methods:
+        binding.unbind(): unbind the queue from the exchange. This method is a coroutine.
+    """
     def __init__(self, sender, synchroniser, queue, exchange, routing_key):
         self.sender = sender
         self.synchroniser = synchroniser
         self.queue = queue
         self.exchange = exchange
         self.routing_key = routing_key
+        self.deleted = False
 
     @asyncio.coroutine
     def unbind(self):
+        """
+        Unbind the queue from the exchange.
+        This method is a coroutine.
+        """
+        if self.deleted:
+            raise Deleted("Queue {} was already unbound from exchange {}".format(self.queue.name, self.exchange.name))
+
         with (yield from self.synchroniser.sync(spec.QueueUnbindOK)) as fut:
             self.sender.send_QueueUnbind(self.queue.name, self.exchange.name, self.routing_key)
             yield from fut
+            self.deleted = True
 
 
 class Consumers(object):

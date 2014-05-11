@@ -1,5 +1,5 @@
 import asyncio
-from .exceptions import AMQPError
+from .exceptions import AMQPError, Deleted
 from .message import Message
 
 

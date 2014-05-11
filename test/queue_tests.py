@@ -1,6 +1,7 @@
 import asyncio
 from datetime import datetime
 from unittest import mock
+from contexts import catch
 import asynqp
 from asynqp import message
 from asynqp import frames
@@ -141,6 +142,21 @@ class WhenQueueUnbindOKArrives(BoundQueueContext):
         assert self.task.result() is None
 
 
+class WhenIUnbindAQueueTwice(BoundQueueContext):
+    def given_an_unbound_queue(self):
+        asyncio.async(self.binding.unbind())
+        self.go()
+        self.dispatcher.dispatch(frames.Frame(self.channel.id, spec.QueueUnbindOK()))
+        self.go()
+
+    def when_I_unbind_the_queue_again(self):
+        self.task = asyncio.async(self.binding.unbind())
+        self.go()
+
+    def it_should_throw_Deleted(self):
+        assert isinstance(self.task.exception(), asynqp.Deleted)
+
+
 class WhenIAskForAMessage(QueueContext):
     def when_I_get_a_message(self):
         asyncio.async(self.queue.get(no_ack=False))
@@ -258,3 +274,18 @@ class WhenQueueDeleteOKArrives(QueueContext):
 
     def it_should_be_deleted(self):
         assert self.queue.deleted
+
+
+class WhenITryToUseADeletedQueue(QueueContext):
+    def given_a_deleted_queue(self):
+        asyncio.async(self.queue.delete(if_unused=False, if_empty=False), loop=self.loop)
+        self.go()
+        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, spec.QueueDeleteOK(123)))
+        self.go()
+
+    def when_I_try_to_use_the_queue(self):
+        self.task = asyncio.async(self.queue.get())
+        self.go()
+
+    def it_should_throw_Deleted(self):
+        assert isinstance(self.task.exception(), asynqp.Deleted)

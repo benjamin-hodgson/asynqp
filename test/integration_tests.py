@@ -36,7 +36,7 @@ class BoundQueueContext(ChannelContext):
     @asyncio.coroutine
     def teardown(self):
         yield from self.queue.delete(if_unused=False, if_empty=False)
-        yield from self.exchange.delete()
+        yield from self.exchange.delete(if_unused=False)
 
 
 class WhenConnectingToRabbit:
@@ -72,7 +72,7 @@ class WhenDeclaringAQueue(ChannelContext):
         assert self.queue.name == 'my.queue'
 
     def cleanup_the_queue(self):
-        self.loop.run_until_complete(asyncio.wait_for(self.queue.delete(), 0.2))
+        self.loop.run_until_complete(asyncio.wait_for(self.queue.delete(if_unused=False, if_empty=False), 0.2))
 
 
 class WhenDeclaringAnExchange(ChannelContext):
@@ -83,7 +83,7 @@ class WhenDeclaringAnExchange(ChannelContext):
         assert self.exchange.name == 'my.exchange'
 
     def cleanup_the_exchange(self):
-        self.loop.run_until_complete(asyncio.wait_for(self.exchange.delete(), 0.2))
+        self.loop.run_until_complete(asyncio.wait_for(self.exchange.delete(if_unused=False), 0.2))
 
 
 class WhenPublishingAndGettingAShortMessage(BoundQueueContext):
