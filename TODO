@@ -1,0 +1,47 @@
+API design issues
+
+    Public implementation-related fields in public classes
+    No public constructors - hard to subclass
+
+
+
+Unimplemented wire-protocol elements
+
+    Arbitrary tables
+
+
+
+Unimplemented methods:
+
+    Connection
+        secure/secure-ok
+
+    Channel
+        flow/flow-ok
+
+    Exchange
+        unbind/unbind-ok (Rabbit extension)
+
+    Basic
+        qos/qos-ok
+        cancel/cancel-ok
+        return
+        recover/recover-ok
+        nack (Rabbit extension)
+
+    Tx
+        select/select-ok
+        commit/commit-ok
+        rollback/rollback-ok
+
+    Confirm
+        select/select-ok
+
+
+
+Unimplemented functions
+
+    Customise connection-tune response
+    General exception handling
+    Passive declares
+    No-wait flags
