@@ -107,6 +107,16 @@ class Queue(object):
             return result
 
     @asyncio.coroutine
+    def purge(self):
+        """
+        Purge all undelivered messages from the queue.
+        This method is a coroutine.
+        """
+        with (yield from self.synchroniser.sync(spec.QueuePurgeOK)) as fut:
+            self.sender.send_QueuePurge(self.name)
+            yield from fut
+
+    @asyncio.coroutine
     def delete(self, *, if_unused=True, if_empty=True):
         """
         Delete the queue.

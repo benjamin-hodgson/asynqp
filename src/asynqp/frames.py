@@ -13,6 +13,8 @@ def read(frame_type, channel_id, raw_payload):
         return ContentHeaderFrame(channel_id, payload)
     if frame_type == ContentBodyFrame.frame_type:
         return ContentBodyFrame(channel_id, raw_payload)
+    if frame_type == HeartbeatFrame.frame_type:
+        return HeartbeatFrame()
 
 
 class Frame(object):

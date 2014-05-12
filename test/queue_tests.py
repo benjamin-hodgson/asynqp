@@ -253,6 +253,29 @@ class WhenBasicDeliverArrives(QueueContext):
         self.callback.assert_called_once_with(self.expected_message)
 
 
+class WhenIPurgeAQueue(QueueContext):
+    def because_I_purge_the_queue(self):
+        asyncio.async(self.queue.purge())
+        self.go()
+
+    def it_should_send_a_QueuePurge_method(self):
+        self.protocol.send_method.assert_called_once_with(self.channel.id, spec.QueuePurge(0, self.queue.name, False))
+
+
+class WhenQueuePurgeOKArrives(QueueContext):
+    def given_I_called_queue_purge(self):
+        self.task = asyncio.async(self.queue.purge())
+        self.go()
+
+    def when_QueuePurgeOK_arrives(self):
+        frame = frames.MethodFrame(self.channel.id, spec.QueuePurgeOK(123))
+        self.dispatcher.dispatch(frame)
+        self.go()
+
+    def it_should_return(self):
+        self.task.result()
+
+
 class WhenDeletingAQueue(QueueContext):
     def because_I_delete_the_queue(self):
         asyncio.async(self.queue.delete(if_unused=False, if_empty=False))

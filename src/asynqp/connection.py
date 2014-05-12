@@ -105,11 +105,12 @@ class ConnectionFrameHandler(bases.FrameHandler):
 
     def handle_ConnectionTune(self, frame):  # just agree with whatever the server wants. Make this configurable in future
         self.connection_info.frame_max = frame.payload.frame_max
-        self.sender.send_TuneOK(frame.payload.channel_max, frame.payload.frame_max, frame.payload.heartbeat)
+        heartbeat_interval = frame.payload.heartbeat
+        self.sender.send_TuneOK(frame.payload.channel_max, frame.payload.frame_max, heartbeat_interval)
 
         self.synchroniser.change_expected(spec.ConnectionOpenOK)
         self.sender.send_Open(self.connection_info.virtual_host)
-        self.protocol.start_heartbeat(frame.payload.heartbeat)
+        self.protocol.start_heartbeat(heartbeat_interval)
 
     def handle_ConnectionOpenOK(self, frame):
         self.synchroniser.succeed()

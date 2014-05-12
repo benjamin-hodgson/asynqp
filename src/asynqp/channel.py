@@ -173,6 +173,9 @@ class ChannelFrameHandler(bases.FrameHandler):
     def handle_QueueUnbindOK(self, frame):
         self.synchroniser.succeed()
 
+    def handle_QueuePurgeOK(self, frame):
+        self.synchroniser.succeed()
+
     def handle_QueueDeleteOK(self, frame):
         self.synchroniser.succeed()
 
@@ -250,6 +253,9 @@ class ChannelMethodSender(bases.Sender):
     def send_QueueUnbind(self, queue_name, exchange_name, routing_key):
         method = spec.QueueUnbind(0, queue_name, exchange_name, routing_key, {})
         self.protocol.send_method(self.channel_id, method)
+
+    def send_QueuePurge(self, queue_name):
+        self.send_method(spec.QueuePurge(0, queue_name, False))
 
     def send_QueueDelete(self, queue_name, if_unused, if_empty):
         self.send_method(spec.QueueDelete(0, queue_name, if_unused, if_empty, False))
