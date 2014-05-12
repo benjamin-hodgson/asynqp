@@ -38,7 +38,7 @@ def send_and_receive():
 
     # Synchronously get a message from the queue
     received_message = yield from queue.get()
-    print(received_message.body)
+    print(received_message.json())  # get JSON from incoming messages easily
 
     # Acknowledge a delivered message
     received_message.ack()

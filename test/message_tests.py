@@ -178,3 +178,15 @@ class WhenIRejectADeliveredMessage(QueueContext):
 
     def it_should_send_BasicReject(self):
         self.protocol.send_method.assert_called_once_with(self.channel.id, spec.BasicReject(self.delivery_tag, True))
+
+
+class WhenIGetJSONFromADeliveredMessage:
+    def given_a_message(self):
+        self.body = {'x': 123, 'y': ['json', 15, 'c00l']}
+        self.msg = asynqp.Message(self.body, timestamp=datetime(2014, 5, 5))
+
+    def when_I_get_the_json(self):
+        self.result = self.msg.json()
+
+    def it_should_give_me_the_body(self):
+        assert self.result == self.body

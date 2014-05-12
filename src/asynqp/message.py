@@ -93,6 +93,9 @@ class Message(object):
         except KeyError as e:
             raise AttributeError from e
 
+    def json(self):
+        return json.loads(self.body.decode('utf-8'))
+
 
 def get_header_payload(message, class_id):
     return ContentHeaderPayload(class_id, len(message.body), list(message.properties.values()))
