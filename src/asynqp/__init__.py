@@ -4,7 +4,7 @@ from .message import Message
 
 
 @asyncio.coroutine
-def connect(host='localhost', port=5672, username='guest', password='guest', virtual_host='/', *, loop=None):
+def connect(host='localhost', port=5672, username='guest', password='guest', virtual_host='/', *, loop=None, **kwargs):
     """
     Connect to an AMQP server on the given host and port.
     Log in to the given virtual host using the supplied credentials.
@@ -21,6 +21,8 @@ def connect(host='localhost', port=5672, username='guest', password='guest', vir
             default: 'guest'
         virtual_host - the AMQP virtual host to connect to.
             default: '/'
+
+    Further keyword arguments are passed on to the open_connection() method of the event loop.
     """
     from .protocol import AMQP, Dispatcher
     from .connection import ConnectionInfo, open_connection
@@ -28,7 +30,7 @@ def connect(host='localhost', port=5672, username='guest', password='guest', vir
     loop = asyncio.get_event_loop() if loop is None else loop
 
     dispatcher = Dispatcher(loop)
-    transport, protocol = yield from loop.create_connection(lambda: AMQP(dispatcher, loop), host=host, port=port)
+    transport, protocol = yield from loop.create_connection(lambda: AMQP(dispatcher, loop), host=host, port=port, **kwargs)
 
     connection = yield from open_connection(loop, protocol, dispatcher, ConnectionInfo(username, password, virtual_host))
     return connection

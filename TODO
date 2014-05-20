@@ -3,6 +3,7 @@ API design issues
     Public implementation-related fields in public classes
     No public constructors - hard to subclass
     Threading issues
+    Pluggable SASL authentication mechanism
 
 
 
