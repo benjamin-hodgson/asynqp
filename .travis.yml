@@ -10,7 +10,7 @@ install:
 
 script:
   - run-contexts -v
-  - ./doc/make html
+  - cd doc && make html
 
 deploy:
   provider: pypi
