@@ -8,32 +8,31 @@ from . import serialisation
 
 class Message(object):
     """
-    A basic message.
+    An AMQP Basic message.
 
     Some of the constructor parameters are ignored by the AMQP broker and are provided
     just for the convenience of user applications. They are marked "for applications"
     in the list below.
 
-    Constructor parameters:
-        body: bytestring, string or dictionary representing the body of the message.
-              Strings will be encoded according to the content_encoding parameter;
-              dicts will be converted to a string using JSON.
-    Keyword-only parameters:
-        headers: a dictionary of message headers
-        content_type: MIME content type
-        content_encoding: MIME encoding (default: utf-8)
-        delivery_mode: 1 for non-persistent, 2 for persistent
-        priority: message priority - integer between 0 and 9
-        correlation_id: correlation id of the message (for applications)
-        reply_to: reply-to address (for applications)
-        expiration: expiration specification (for applications)
-        message_id: unique id of the message (for applications)
-        timestamp: datetime of when the message was sent (default: datetime.now())
-        type: message type (for applications)
-        user_id: ID of the user sending the message (for applications)
-        app_id: ID of the application sending the message (for applications)
+    :param body: bytestring, string or dictionary representing the body of the message.
+        Strings will be encoded according to the content_encoding parameter;
+        dicts will be converted to a string using JSON.
+    :param dict headers: a dictionary of message headers
+    :param str content_type: MIME content type
+    :param str content_encoding: MIME encoding
+    :param int delivery_mode: 1 for non-persistent, 2 for persistent
+    :param int priority: message priority - integer between 0 and 9
+    :param str correlation_id: correlation id of the message *(for applications)*
+    :param str reply_to: reply-to address *(for applications)*
+    :param str expiration: expiration specification *(for applications)*
+    :param str message_id: unique id of the message *(for applications)*
+    :param datetime.datetime timestamp: :class:`~datetime.datetime` of when the message was sent
+        (default: :meth:`datetime.now() <datetime.datetime.now>`)
+    :param str type: message type *(for applications)*
+    :param str user_id: ID of the user sending the message *(for applications)*
+    :param str app_id: ID of the application sending the message *(for applications)*
 
-    Attributes: same as constructor parameters.
+    Attributes are the same as the constructor parameters.
     """
     property_types = OrderedDict(
         [("content_type", amqptypes.ShortStr),
@@ -94,7 +93,12 @@ class Message(object):
             raise AttributeError from e
 
     def json(self):
-        return json.loads(self.body.decode('utf-8'))
+        """
+        Parse the message body as JSON.
+
+        :return: the parsed JSON.
+        """
+        return json.loads(self.body.decode(self.content_encoding))
 
 
 def get_header_payload(message, class_id):

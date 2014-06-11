@@ -15,20 +15,17 @@ VALID_EXCHANGE_NAME_RE = re.compile(r'^(?!amq\.)(\w|[-.:])+$', flags=re.A)
 
 class Channel(object):
     """
+    Manage AMQP Channels.
+
     A Channel is a 'virtual connection' over which messages are sent and received.
-    Several independent channels can be multiplexed over the same connection,
+    Several independent channels can be multiplexed over the same :class:`Connection`,
     so peers can perform several tasks concurrently while using a single socket.
 
-    Multi-threaded applications will typically use a 'channel-per-thread' approach,
-    though it is also acceptable to open several connections for a single thread.
+    Channels are created using :meth:`Connection.open_channel`.
 
-    Attributes:
-        channel.id: the numerical ID of the channel
+    .. attribute::id
 
-    Methods:
-        channel.declare_queue(name='', **kwargs): Declare a queue on the broker. This method is a coroutine.
-        channel.declare_exchange(name, type): Declare an exchange on the broker. This method is a coroutine.
-        channel.close(): Close the channel. This method is a coroutine.
+        the numerical ID of the channel
     """
     def __init__(self, consumers, id, synchroniser, sender, loop):
         self.consumers = consumers
@@ -41,21 +38,17 @@ class Channel(object):
     @asyncio.coroutine
     def declare_exchange(self, name, type, *, durable=True, auto_delete=False, internal=False):
         """
-        Declare an exchange on the broker. If the exchange does not exist, it will be created.
-        This method is a coroutine.
+        Declare an :class:`Exchange` on the broker. If the exchange does not exist, it will be created.
 
-        Arguments:
-            name: the name of the exchange.
-            type: the type of the exchange (usually one of 'fanout', 'direct', 'topic', or 'headers')
-            durable: If true, the exchange will be re-created when the server restarts.
-                     default: True
-            auto_delete: If true, the exchange will be deleted when the last queue is un-bound from it.
-                         default: False
-            internal: If true, the exchange cannot be published to directly; it can only be bound to other exchanges.
-                      default: False
+        This method is a :ref:`coroutine <coroutine>`.
 
-        Return value:
-            the new Exchange object.
+        :param str name: the name of the exchange.
+        :param str type: the type of the exchange (usually one of ``'fanout'``, ``'direct'``, ``'topic'``, or ``'headers'``)
+        :keyword bool durable: If true, the exchange will be re-created when the server restarts.
+        :keyword bool auto_delete: If true, the exchange will be deleted when the last queue is un-bound from it.
+        :keyword bool internal: If true, the exchange cannot be published to directly; it can only be bound to other exchanges.
+
+        :return: the new :class:`Exchange` object.
         """
         if name == '':
             return exchange.Exchange(self.synchroniser, self.sender, name, 'direct', True, False, False)
@@ -74,23 +67,21 @@ class Channel(object):
     def declare_queue(self, name='', *, durable=True, exclusive=False, auto_delete=False):
         """
         Declare a queue on the broker. If the queue does not exist, it will be created.
-        This method is a coroutine.
 
-        Arguments:
-            name: the name of the queue.
-                  Supplying a name of '' will create a queue with a unique name of the server's choosing.
-                  default: ''
-            durable: If true, the queue will be re-created when the server restarts.
-                     default: True
-            exclusive: If true, the queue can only be accessed by the current connection,
-                       and will be deleted when the connection is closed.
-                       default: False
-            auto_delete: If true, the queue will be deleted when the last consumer is cancelled.
-                         If there were never any conusmers, the queue won't be deleted.
-                         default: False
+        This method is a :ref:`coroutine <coroutine>`.
 
-        Return value:
-            The new Queue object.
+        :param str name: the name of the queue.
+            Supplying a name of '' will create a queue with a unique name of the server's choosing.
+
+        :keyword bool durable: If true, the queue will be re-created when the server restarts.
+
+        :keyword bool exclusive: If true, the queue can only be accessed by the current connection,
+            and will be deleted when the connection is closed.
+
+        :keyword bool auto_delete: If true, the queue will be deleted when the last consumer is cancelled.
+            If there were never any conusmers, the queue won't be deleted.
+
+        :return: The new :class:`Queue` object.
         """
         if not VALID_QUEUE_NAME_RE.match(name):
             raise ValueError("Not a valid queue name.\n"
@@ -106,7 +97,8 @@ class Channel(object):
     def close(self):
         """
         Close the channel by handshaking with the server.
-        This method is a coroutine.
+
+        This method is a :ref:`coroutine <coroutine>`.
         """
         with (yield from self.synchroniser.sync(spec.ChannelCloseOK)) as fut:
             self.closing = True

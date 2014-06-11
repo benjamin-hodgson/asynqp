@@ -1,0 +1,56 @@
+Reference guide
+===============
+
+.. module:: asynqp
+
+Connecting to the AMQP broker
+-----------------------------
+
+.. autofunction:: connect
+
+
+Managing Connections and Channels
+---------------------------------
+
+Connections
+~~~~~~~~~~~
+
+.. autoclass:: Connection
+    :members:
+
+
+Channels
+~~~~~~~~
+
+.. autoclass:: Channel
+    :members:
+
+
+Sending and receiving messages with Queues and Exchanges
+--------------------------------------------------------
+
+Queues
+~~~~~~
+
+.. autoclass:: Queue
+    :members:
+
+
+Exchanges
+~~~~~~~~~
+
+.. autoclass:: Exchange
+    :members:
+
+
+Bindings
+~~~~~~~~
+.. autoclass:: QueueBinding
+    :members:
+
+
+Message objects
+---------------
+
+.. autoclass:: Message
+    :members:

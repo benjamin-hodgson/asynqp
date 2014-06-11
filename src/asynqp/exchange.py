@@ -4,20 +4,23 @@ from . import spec
 
 class Exchange(object):
     """
+    Manage AMQP Exchanges and publish messages.
+
     An exchange is a 'routing node' to which messages can be published.
-    When a message is published to an exchange, the exchange determines which queues
+    When a message is published to an exchange, the exchange determines which :class:`Queue`
     to deliver the message to by inspecting the message's routing key and the exchange's bindings.
     You can bind a queue to an exchange, to start receiving messages on the queue,
-    using queue.bind(exchange).
+    using :meth:`Queue.bind`.
 
-    Attributes:
-        exchange.name: the name of the exchange.
-        exchange.type: the type of the exchange (usually one of 'fanout', 'direct', 'topic', or 'headers').
+    Exchanges are created using :meth:`Channel.declare_exchange`.
 
-    Methods:
-        exchange.publish(message, routing_key): Publish a message to the exchange,
-                                                to be asynchronously delivered to queues.
-        exchange.delete(): Delete the exchange. This method is a coroutine.
+    .. attribute:: name
+
+        the name of the exchange.
+
+    .. attribute:: type
+
+        the type of the exchange (usually one of ``'fanout'``, ``'direct'``, ``'topic'``, or ``'headers'``).
     """
     def __init__(self, synchroniser, sender, name, type, durable, auto_delete, internal):
         self.synchroniser = synchroniser
@@ -32,9 +35,8 @@ class Exchange(object):
         """
         Publish a message on the exchange, to be asynchronously delivered to queues.
 
-        Arguments:
-            message: an instance of asyncio.Message
-            routing_key: the routing key to publish the message with
+        :param asynqp.Message message: the message to send
+        :param str routing_key: the routing key with which to publish the message
         """
         self.sender.send_BasicPublish(self.name, routing_key, mandatory, message)
 
@@ -42,11 +44,11 @@ class Exchange(object):
     def delete(self, *, if_unused=True):
         """
         Delete the exchange.
-        This method is a coroutine.
 
-        Arguments:
-            if_unused: If true, the exchange will only be deleted if
-                       it has no queues bound to it. Default: True
+        This method is a :ref:`coroutine <coroutine>`.
+
+        :keyword bool if_unused: If true, the exchange will only be deleted if
+            it has no queues bound to it.
         """
         with (yield from self.synchroniser.sync(spec.ExchangeDeleteOK)) as fut:
             self.sender.send_ExchangeDelete(self.name, if_unused)

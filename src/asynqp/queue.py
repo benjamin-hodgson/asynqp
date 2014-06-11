@@ -5,22 +5,28 @@ from .exceptions import Deleted
 
 class Queue(object):
     """
-    A queue is a collection of messages, which new messages can be delivered to via an exchange,
-    and messages can be consumed from by an application.
+    Manage AMQP Queues and consume messages.
 
-    Attributes:
-        queue.name: the name of the queue
-        queue.durable: if True, the queue will be re-created when the broker restarts
-        queue.exclusive: if True, the queue is only accessible over one channel
-        queue.auto_delete: if True, the queue will be deleted when its last consumer is removed
+    A queue is a collection of messages, to which new messages can be delivered via an :class:`Exchange`,
+    and from which messages can be consumed by an application.
 
-    Methods:
-        queue.bind(exchange, routing_key): Bind a queue to an exchange. This method is a coroutine.
-        queue.consume(callback): Start a consumer on the queue, with a callback
-                                 function to be called when a message is delivered.
-                                 This method is a coroutine.
-        queue.get(): Synchronously get a message from the queue. This method is a coroutine.
-        queue.delete(): delete the queue. This method is a coroutine.
+    Queues are created using :meth:`Channel.declare_queue`.
+
+    .. attribute:: name
+
+        the name of the queue
+
+    .. attribute:: durable
+
+        if True, the queue will be re-created when the broker restarts
+
+    .. attribute:: exclusive
+
+        if True, the queue is only accessible over one channel
+
+    .. attribute:: auto_delete
+
+        if True, the queue will be deleted when its last consumer is removed
     """
     def __init__(self, consumers, synchroniser, loop, sender, name, durable, exclusive, auto_delete):
         self.consumers = consumers
@@ -37,16 +43,16 @@ class Queue(object):
     def bind(self, exchange, routing_key):
         """
         Bind a queue to an exchange, with the supplied routing key.
+
         This action 'subscribes' the queue to the routing key; the precise meaning of this
         varies with the exchange type.
-        This method is a coroutine.
 
-        Arguments:
-            exchange: the exchange to bind to
-            routing_key: the routing key under which to bind
+        This method is a :ref:`coroutine <coroutine>`.
 
-        Return value:
-            The newly created instance of QueueBinding
+        :param asynqp.Exchange exchange: the :class:`Exchange` to bind to
+        :param str routing_key: the routing key under which to bind
+
+        :return: The new :class:`QueueBinding` object
         """
         if self.deleted:
             raise Deleted("Queue {} was deleted".format(self.name))
@@ -61,19 +67,17 @@ class Queue(object):
         """
         Start a consumer on the queue. Messages will be delivered asynchronously to the consumer.
         The callback function will be called whenever a new message arrives on the queue.
-        This method is a coroutine.
 
-        Arguments:
-            callback: a callback to be called when a message is delivered.
-                      The callback must accept a single argument (an instance of asynqp.Message).
-            no_local: If true, the server will not deliver messages that were
-                      published by this connection. Default: False
-            no_ack: If true, messages delivered to the consumer don't require acknowledgement.
-                    Default: False
-            exclusive: If true, only this consumer can access the queue. Default: False
+        This method is a :ref:`coroutine <coroutine>`.
 
-        Return value:
-            The newly created consumer object.
+        :param callable callback: a callback to be called when a message is delivered.
+            The callback must accept a single argument (an instance of asynqp.Message).
+        :keyword bool no_local: If true, the server will not deliver messages that were
+            published by this connection.
+        :keyword bool no_ack: If true, messages delivered to the consumer don't require acknowledgement.
+        :keyword bool exclusive: If true, only this consumer can access the queue.
+
+        :return: The newly created :class:`Consumer` object.
         """
         if self.deleted:
             raise Deleted("Queue {} was deleted".format(self.name))
@@ -89,14 +93,12 @@ class Queue(object):
     def get(self, *, no_ack=False):
         """
         Synchronously get a message from the queue.
-        This method is a coroutine.
 
-        Arguments:
-            no_ack: if True, the broker does not require acknowledgement of receipt of the message.
-                    default: False
+        This method is a :ref:`coroutine <coroutine>`.
 
-        Return value:
-            an instance of asynqp.Message, or None if there were no messages on the queue.
+        :keyword bool no_ack: if true, the broker does not require acknowledgement of receipt of the message.
+
+        :return: a :class:`Message`, or ``None`` if there were no messages on the queue.
         """
         if self.deleted:
             raise Deleted("Queue {} was deleted".format(self.name))
@@ -110,7 +112,8 @@ class Queue(object):
     def purge(self):
         """
         Purge all undelivered messages from the queue.
-        This method is a coroutine.
+
+        This method is a :ref:`coroutine <coroutine>`.
         """
         with (yield from self.synchroniser.sync(spec.QueuePurgeOK)) as fut:
             self.sender.send_QueuePurge(self.name)
@@ -120,13 +123,13 @@ class Queue(object):
     def delete(self, *, if_unused=True, if_empty=True):
         """
         Delete the queue.
-        This method is a coroutine.
 
-        Arguments:
-            if_unused: If true, the queue will only be deleted
-                       if it has no consumers. Default: True
-            if_empty: If true, the queue will only be deleted if
-                      it has no unacknowledged messages. Default: True
+        This method is a :ref:`coroutine <coroutine>`.
+
+        :keyword bool if_unused: If true, the queue will only be deleted
+            if it has no consumers.
+        :keyword bool if_empty: If true, the queue will only be deleted if
+            it has no unacknowledged messages.
         """
         if self.deleted:
             raise Deleted("Queue {} was already deleted".format(self.name))
@@ -139,18 +142,24 @@ class Queue(object):
 
 class QueueBinding(object):
     """
-    Represents a binding between a queue and an exchange.
+    Manage queue-exchange bindings.
+
+    Represents a binding between a :class:`Queue` and an :class:`Exchange`.
     Once a queue has been bound to an exchange, messages published
     to that exchange will be delivered to the queue. The delivery
     may be conditional, depending on the type of the exchange.
 
-    Attributes:
-        binding.queue: the Queue instance which was bound
-        binding.exchange: the Exchange instance to which the queue was bound
-        binding.routing_key: the routing key used for the binding
+    .. attribute:: queue
 
-    Methods:
-        binding.unbind(): unbind the queue from the exchange. This method is a coroutine.
+        the :class:`Queue` which was bound
+
+    .. attribute:: exchange
+
+        the :class:`Exchange` to which the queue was bound
+
+    .. attribute:: routing_key
+
+        the routing key used for the binding
     """
     def __init__(self, sender, synchroniser, queue, exchange, routing_key):
         self.sender = sender

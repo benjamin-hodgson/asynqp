@@ -16,20 +16,21 @@ class ConnectionInfo(object):
 
 class Connection(object):
     """
-    A Connection is a long-lasting mode of communication with a remote server.
-    Each Connection occupies a single TCP connection, and may carry multiple Channels.
-    A Connection communicates with a single virtual host on the server; virtual hosts are
+    Manage connections to AMQP brokers.
+
+    A :class:`Connection` is a long-lasting mode of communication with a remote server.
+    Each connection occupies a single TCP connection, and may carry multiple :class:`Channels <Channel>`.
+    A connection communicates with a single virtual host on the server; virtual hosts are
     sandboxed and may not communicate with one another.
 
-    Applications are advised to use one Connection for each AMQP peer it needs to communicate with;
-    if you need to perform multiple concurrent tasks you should open multiple Channels.
+    Applications are advised to use one connection for each AMQP peer it needs to communicate with;
+    if you need to perform multiple concurrent tasks you should open multiple channels.
 
-    Attributes:
-        connection.closed: a Future which is done when the handshake to close the connection has finished
+    Connections are created using :func:`asynqp.connect`.
 
-    Methods:
-        connection.open_channel(): Open a new channel on this connection. This method is a coroutine.
-        connection.close(): Close the connection. This method is a coroutine.
+    .. attribute:: closed
+
+        a :class:`~asyncio.Future` which is done when the handshake to close the connection has finished
     """
     def __init__(self, loop, protocol, synchroniser, sender, dispatcher, connection_info):
         self.synchroniser = synchroniser
@@ -47,10 +48,10 @@ class Connection(object):
     def open_channel(self):
         """
         Open a new channel on this connection.
-        This method is a coroutine.
 
-        Return value:
-            The new Channel object.
+        This method is a :ref:`coroutine <coroutine>`.
+
+        :return: The new :class:`Channel` object.
         """
         channel = (yield from self.channel_factory.open())
         return channel
@@ -59,7 +60,8 @@ class Connection(object):
     def close(self):
         """
         Close the connection by handshaking with the server.
-        This method is a coroutine.
+
+        This method is a :ref:`coroutine <coroutine>`.
         """
         with (yield from self.synchroniser.sync(spec.ConnectionCloseOK)) as fut:
             self.closing.set_result(True)

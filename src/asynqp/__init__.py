@@ -1,28 +1,33 @@
 import asyncio
 from .exceptions import AMQPError, Deleted
 from .message import Message
+from .connection import Connection
+from .channel import Channel
+from .exchange import Exchange
+from .queue import Queue, QueueBinding
 
 
 @asyncio.coroutine
-def connect(host='localhost', port=5672, username='guest', password='guest', virtual_host='/', *, loop=None, **kwargs):
+def connect(host='localhost',
+            port=5672,
+            username='guest', password='guest',
+            virtual_host='/', *,
+            loop=None, **kwargs):
     """
     Connect to an AMQP server on the given host and port.
+
     Log in to the given virtual host using the supplied credentials.
-    This function is a coroutine.
+    This function is a :ref:`coroutine <coroutine>`.
 
-    Arguments:
-        host - the host server to connect to.
-            default: 'localhost'
-        port - the port which the AMQP server is listening on.
-            default: 5672
-        username - the username to authenticate with.
-            default: 'guest'
-        password - the password to authenticate with.
-            default: 'guest'
-        virtual_host - the AMQP virtual host to connect to.
-            default: '/'
+    :param str host: the host server to connect to.
+    :param int port: the port which the AMQP server is listening on.
+    :param str username: the username to authenticate with.
+    :param str password: the password to authenticate with.
+    :param str virtual_host: the AMQP virtual host to connect to.
 
-    Further keyword arguments are passed on to the open_connection() method of the event loop.
+    Further keyword arguments are passed on to :meth:`~asyncio.BaseEventLoop.create_connection`.
+
+    :return: the :class:`Connection` object.
     """
     from .protocol import AMQP, Dispatcher
     from .connection import ConnectionInfo, open_connection
