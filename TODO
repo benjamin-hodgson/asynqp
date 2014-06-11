@@ -1,10 +1,7 @@
-Sphinx docs
-
-
 API design issues
 
-    Public implementation-related fields in public classes
-    No public constructors - hard to subclass
+    Public implementation-related fields in public classes (even though they're not documented)
+    No public constructors - hard to subclass (is this the end of the world?)
     Threading issues
     Pluggable SASL authentication mechanism
 
