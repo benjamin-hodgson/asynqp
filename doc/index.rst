@@ -5,7 +5,7 @@
 
 ``asynqp``
 ==========
-An AMQP (aka RabbitMQ) client library for :py:mod:`asyncio`.
+An AMQP (aka `RabbitMQ <http://www.rabbitmq.com/>`_) client library for :mod:`asyncio`.
 
 
 Example

@@ -8,7 +8,9 @@ install:
   - pip install contexts colorama
   - python setup.py install
 
-script: run-contexts -v
+script:
+  - run-contexts -v
+  - ./doc/make html
 
 deploy:
   provider: pypi
