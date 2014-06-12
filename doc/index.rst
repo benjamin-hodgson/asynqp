@@ -50,6 +50,14 @@ Example
         loop.run_until_complete(send_and_receive())
 
 
+Installation
+------------
+
+::
+
+    pip install asynqp
+
+
 Table of contents
 -----------------
 .. toctree::

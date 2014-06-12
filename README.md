@@ -6,7 +6,7 @@ asynqp
 `asynqp` is an AMQP (aka [RabbitMQ](rabbitmq.com)) client library for
 Python 3.4's new [`asyncio`](https://docs.python.org/3.4/library/asyncio.html) module.
 
-`asynqp` features a simple API which makes common tasks easy; you don't have to manage queue and exchange names yourself.
+Check out the [official documentation](http://asynqp.readthedocs.org/).
 
 
 Example
