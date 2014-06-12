@@ -35,6 +35,8 @@ intersphinx_mapping = {'python': ('http://docs.python.org/3', None)}
 
 autodoc_member_order = 'bysource'
 
+add_function_parentheses = False
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
@@ -62,7 +64,7 @@ release = '0.1'
 
 
 def hide_class_constructor(app, what, name, obj, options, signature, return_annotation):
-    if what == "class" and not name.endswith("Message"):
+    if what == "class" and not name.endswith(".Message"):
         return (None, None)
     return (signature, return_annotation)
 

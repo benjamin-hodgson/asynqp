@@ -21,7 +21,7 @@ class Channel(object):
     Several independent channels can be multiplexed over the same :class:`Connection`,
     so peers can perform several tasks concurrently while using a single socket.
 
-    Channels are created using :meth:`Connection.open_channel`.
+    Channels are created using :meth:`Connection.open_channel() <Connection.open_channel>`.
 
     .. attribute::id
 

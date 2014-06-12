@@ -54,3 +54,6 @@ Message objects
 
 .. autoclass:: Message
     :members:
+
+.. autoclass:: asynqp.message.IncomingMessage
+    :members:

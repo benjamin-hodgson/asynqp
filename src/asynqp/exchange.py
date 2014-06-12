@@ -12,7 +12,7 @@ class Exchange(object):
     You can bind a queue to an exchange, to start receiving messages on the queue,
     using :meth:`Queue.bind`.
 
-    Exchanges are created using :meth:`Channel.declare_exchange`.
+    Exchanges are created using :meth:`Channel.declare_exchange() <Channel.declare_exchange>`.
 
     .. attribute:: name
 

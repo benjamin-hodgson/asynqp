@@ -14,7 +14,7 @@ class Message(object):
     just for the convenience of user applications. They are marked "for applications"
     in the list below.
 
-    :param body: bytestring, string or dictionary representing the body of the message.
+    :param body: :func:`bytes` , :class:`str` or :class:`dict` representing the body of the message.
         Strings will be encoded according to the content_encoding parameter;
         dicts will be converted to a string using JSON.
     :param dict headers: a dictionary of message headers
@@ -101,22 +101,12 @@ class Message(object):
         return json.loads(self.body.decode(self.content_encoding))
 
 
-def get_header_payload(message, class_id):
-    return ContentHeaderPayload(class_id, len(message.body), list(message.properties.values()))
-
-
-# NB: the total frame size will be 8 bytes larger than frame_body_size
-def get_frame_payloads(message, frame_body_size):
-    frames = []
-    remaining = message.body
-    while remaining:
-        frame = remaining[:frame_body_size]
-        remaining = remaining[frame_body_size:]
-        frames.append(frame)
-    return frames
-
-
 class IncomingMessage(Message):
+    """
+    A message that has been delivered to the client.
+
+    Subclass of :class:`Message`.
+    """
     def __init__(self, *args, sender, delivery_tag, **kwargs):
         super().__init__(*args, **kwargs)
         self.sender = sender
@@ -132,12 +122,25 @@ class IncomingMessage(Message):
         """
         Reject the message.
 
-        Arguments:
-            redeliver: if true, the broker will attempt to requeue the
-                       message and deliver it to an alternate consumer.
-                       Default: True.
+        :keyword bool redeliver: if true, the broker will attempt to requeue the
+            message and deliver it to an alternate consumer.
         """
         self.sender.send_BasicReject(self.delivery_tag, requeue)
+
+
+def get_header_payload(message, class_id):
+    return ContentHeaderPayload(class_id, len(message.body), list(message.properties.values()))
+
+
+# NB: the total frame size will be 8 bytes larger than frame_body_size
+def get_frame_payloads(message, frame_body_size):
+    frames = []
+    remaining = message.body
+    while remaining:
+        frame = remaining[:frame_body_size]
+        remaining = remaining[frame_body_size:]
+        frames.append(frame)
+    return frames
 
 
 class ContentHeaderPayload(object):

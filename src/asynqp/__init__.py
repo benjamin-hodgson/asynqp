@@ -25,7 +25,7 @@ def connect(host='localhost',
     :param str password: the password to authenticate with.
     :param str virtual_host: the AMQP virtual host to connect to.
 
-    Further keyword arguments are passed on to :meth:`~asyncio.BaseEventLoop.create_connection`.
+    Further keyword arguments are passed on to :meth:`create_connection() <asyncio.BaseEventLoop.create_connection>`.
 
     :return: the :class:`Connection` object.
     """

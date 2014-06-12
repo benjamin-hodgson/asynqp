@@ -26,7 +26,7 @@ class Connection(object):
     Applications are advised to use one connection for each AMQP peer it needs to communicate with;
     if you need to perform multiple concurrent tasks you should open multiple channels.
 
-    Connections are created using :func:`asynqp.connect`.
+    Connections are created using :func:`asynqp.connect() <connect>`.
 
     .. attribute:: closed
 

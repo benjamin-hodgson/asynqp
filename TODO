@@ -22,6 +22,7 @@ Unimplemented methods:
         flow/flow-ok
 
     Exchange
+        bind/bind-ok
         unbind/unbind-ok (Rabbit extension)
 
     Basic

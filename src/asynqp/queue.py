@@ -10,7 +10,7 @@ class Queue(object):
     A queue is a collection of messages, to which new messages can be delivered via an :class:`Exchange`,
     and from which messages can be consumed by an application.
 
-    Queues are created using :meth:`Channel.declare_queue`.
+    Queues are created using :meth:`Channel.declare_queue() <Channel.declare_queue>`.
 
     .. attribute:: name
 
@@ -71,7 +71,7 @@ class Queue(object):
         This method is a :ref:`coroutine <coroutine>`.
 
         :param callable callback: a callback to be called when a message is delivered.
-            The callback must accept a single argument (an instance of asynqp.Message).
+            The callback must accept a single argument (an instance of :class:`~asynqp.message.IncomingMessage`).
         :keyword bool no_local: If true, the server will not deliver messages that were
             published by this connection.
         :keyword bool no_ack: If true, messages delivered to the consumer don't require acknowledgement.
@@ -98,7 +98,8 @@ class Queue(object):
 
         :keyword bool no_ack: if true, the broker does not require acknowledgement of receipt of the message.
 
-        :return: a :class:`Message`, or ``None`` if there were no messages on the queue.
+        :return: an :class:`~asynqp.message.IncomingMessage`,
+            or ``None`` if there were no messages on the queue.
         """
         if self.deleted:
             raise Deleted("Queue {} was deleted".format(self.name))
