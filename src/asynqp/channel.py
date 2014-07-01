@@ -188,6 +188,10 @@ class ChannelFrameHandler(bases.FrameHandler):
     def handle_BasicConsumeOK(self, frame):
         self.synchroniser.succeed(frame.payload.consumer_tag)
 
+    def handle_BasicCancelOK(self, frame):
+        consumer_tag = frame.payload.consumer_tag
+        self.consumers.cancel(consumer_tag)
+
     def handle_BasicDeliver(self, frame):
         payload = frame.payload
         self.message_builder = message.MessageBuilder(
@@ -258,6 +262,9 @@ class ChannelMethodSender(bases.Sender):
 
     def send_BasicConsume(self, queue_name, no_local, no_ack, exclusive):
         self.send_method(spec.BasicConsume(0, queue_name, '', no_local, no_ack, exclusive, False, {}))
+
+    def send_BasicCancel(self, consumer_tag):
+        self.send_method(spec.BasicCancel(consumer_tag, False))
 
     def send_BasicGet(self, queue_name, no_ack):
         self.send_method(spec.BasicGet(0, queue_name, no_ack))

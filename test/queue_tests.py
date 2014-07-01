@@ -1,12 +1,11 @@
 import asyncio
 from datetime import datetime
 from unittest import mock
-from contexts import catch
 import asynqp
 from asynqp import message
 from asynqp import frames
 from asynqp import spec
-from .base_contexts import OpenChannelContext, QueueContext, ExchangeContext, BoundQueueContext
+from .base_contexts import OpenChannelContext, QueueContext, ExchangeContext, BoundQueueContext, ConsumerContext
 
 
 class WhenDeclaringAQueue(OpenChannelContext):
@@ -225,16 +224,9 @@ class WhenConsumeOKArrives(QueueContext):
         assert self.task.result().tag == 'made.up.tag'
 
 
-class WhenBasicDeliverArrives(QueueContext):
-    def given_a_consumer(self):
+class WhenBasicDeliverArrives(ConsumerContext):
+    def given_a_message(self):
         self.expected_message = asynqp.Message('body', timestamp=datetime(2014, 5, 5))
-        self.callback = mock.Mock()
-
-        task = asyncio.async(self.queue.consume(self.callback, no_local=False, no_ack=False, exclusive=False))
-        self.go()
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, spec.BasicConsumeOK('made.up.tag')))
-        self.go()
-        self.consumer = task.result()
 
     def when_BasicDeliver_arrives_with_content(self):
         method = spec.BasicDeliver(self.consumer.tag, 123, False, 'my.exchange', 'routing.key')
@@ -251,6 +243,25 @@ class WhenBasicDeliverArrives(QueueContext):
 
     def it_should_send_the_message_to_the_callback(self):
         self.callback.assert_called_once_with(self.expected_message)
+
+
+class WhenICancelAConsumer(ConsumerContext):
+    def when_I_cancel_the_consumer(self):
+        self.consumer.cancel()
+
+    def it_should_send_a_BasicCancel_method(self):
+        self.protocol.send_method.assert_called_once_with(self.channel.id, spec.BasicCancel(self.consumer.tag, False))
+
+
+class WhenCancelOKArrives(ConsumerContext):
+    def given_I_cancelled_a_consumer(self):
+        self.consumer.cancel()
+
+    def when_BasicCancelOK_arrives(self):
+        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, spec.BasicCancelOK(self.consumer.tag)))
+
+    def it_should_be_cancelled(self):
+        assert self.consumer.cancelled
 
 
 class WhenIPurgeAQueue(QueueContext):

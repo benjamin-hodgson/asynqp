@@ -85,7 +85,7 @@ class Queue(object):
         with (yield from self.synchroniser.sync(spec.BasicConsumeOK)) as fut:
             self.sender.send_BasicConsume(self.name, no_local, no_ack, exclusive)
             tag = yield from fut
-            consumer = Consumer(tag, callback)
+            consumer = Consumer(tag, callback, self.sender)
             self.consumers.add_consumer(consumer)
             return consumer
 
@@ -150,6 +150,8 @@ class QueueBinding(object):
     to that exchange will be delivered to the queue. The delivery
     may be conditional, depending on the type of the exchange.
 
+    QueueBindings are created using :meth:`Queue.bind() <Queue.bind>`.
+
     .. attribute:: queue
 
         the :class:`Queue` which was bound
@@ -185,6 +187,39 @@ class QueueBinding(object):
             self.deleted = True
 
 
+class Consumer(object):
+    """
+    A consumer asynchronously recieves messages from a queue as they arrive.
+
+    Consumers are created using :meth:`Queue.consume() <Queue.consume>`.
+
+    .. attribute :: tag
+
+        A string representing the *consumer tag* used by the server to identify this consumer.
+
+    .. attribute :: callback
+
+        The callback function that is called when messages are delivered to the consumer.
+        This is the function that was passed to :meth:`Queue.consume() <Queue.consume>`,
+        and should accept a single :class:`~asynqp.message.IncomingMessage` argument.
+
+    .. attribute :: cancelled
+
+        Boolean. True if the consumer has been successfully cancelled.
+    """
+    def __init__(self, tag, callback, sender):
+        self.tag = tag
+        self.callback = callback
+        self.sender = sender
+        self.cancelled = False
+
+    def cancel(self):
+        """
+        Cancel the consumer and stop recieving messages.
+        """
+        self.sender.send_BasicCancel(self.tag)
+
+
 class Consumers(object):
     def __init__(self, loop):
         self.loop = loop
@@ -194,13 +229,8 @@ class Consumers(object):
         self.consumers[consumer.tag] = consumer
 
     def deliver(self, tag, msg):
-        self.loop.call_soon(self.consumers[tag].deliver, msg)
+        self.loop.call_soon(self.consumers[tag].callback, msg)
 
-
-class Consumer(object):
-    def __init__(self, tag, callback):
-        self.tag = tag
-        self.callback = callback
-
-    def deliver(self, msg):
-        self.callback(msg)
+    def cancel(self, tag):
+        self.consumers[tag].cancelled = True
+        del self.consumers[tag]

@@ -110,3 +110,16 @@ class BoundQueueContext(QueueContext, ExchangeContext):
         self.go()
         self.binding = task.result()
         self.protocol.reset_mock()
+
+
+class ConsumerContext(QueueContext):
+    def given_a_consumer(self):
+        self.callback = mock.Mock()
+        del self.callback._is_coroutine  # :(
+
+        task = asyncio.async(self.queue.consume(self.callback, no_local=False, no_ack=False, exclusive=False))
+        self.go()
+        self.dispatcher.dispatch(asynqp.frames.MethodFrame(self.channel.id, spec.BasicConsumeOK('made.up.tag')))
+        self.go()
+        self.consumer = task.result()
+        self.protocol.reset_mock()

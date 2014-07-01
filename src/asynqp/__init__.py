@@ -4,7 +4,7 @@ from .message import Message
 from .connection import Connection
 from .channel import Channel
 from .exchange import Exchange
-from .queue import Queue, QueueBinding
+from .queue import Queue, QueueBinding, Consumer
 
 
 @asyncio.coroutine

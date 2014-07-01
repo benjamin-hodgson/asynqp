@@ -45,8 +45,15 @@ Exchanges
 
 Bindings
 ~~~~~~~~
+
 .. autoclass:: QueueBinding
     :members:
+
+Consumers
+~~~~~~~~~
+
+.. autoclass:: Consumer
+	:members:
 
 
 Message objects

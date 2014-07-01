@@ -1,9 +1,8 @@
 API design issues
 
     Public implementation-related fields in public classes (even though they're not documented)
-    No public constructors - hard to subclass (is this the end of the world?)
     Threading issues
-    Pluggable SASL authentication mechanism
+    Load testing?
 
 
 
@@ -16,18 +15,17 @@ Unimplemented wire-protocol elements
 Unimplemented methods:
 
     Connection
-        secure/secure-ok
+        secure/secure-ok - pluggable auth mechanism?
 
     Channel
         flow/flow-ok
 
     Exchange
-        bind/bind-ok
+        bind/bind-ok (Rabbit extension)
         unbind/unbind-ok (Rabbit extension)
 
     Basic
         qos/qos-ok
-        cancel/cancel-ok
         return
         recover/recover-ok
         nack (Rabbit extension)
