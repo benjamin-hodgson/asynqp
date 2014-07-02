@@ -3,6 +3,7 @@ API design issues
     Public implementation-related fields in public classes (even though they're not documented)
     Threading issues
     Load testing?
+    Integration test for long messages
 
 
 
