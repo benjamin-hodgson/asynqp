@@ -72,6 +72,6 @@ class Synchroniser(object):
         if self.is_waiting():
             if any(isinstance(frame, cls) for cls in expected):
                 return True
-            if frame.payload.synchronous:
+            if getattr(frame.payload, "synchronous", False):
                 return any(isinstance(frame.payload, cls) for cls in expected)
         return True

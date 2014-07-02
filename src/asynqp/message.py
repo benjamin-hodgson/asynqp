@@ -144,6 +144,8 @@ def get_frame_payloads(message, frame_body_size):
 
 
 class ContentHeaderPayload(object):
+    synchronous = False
+
     def __init__(self, class_id, body_length, properties):
         self.class_id = class_id
         self.body_length = body_length

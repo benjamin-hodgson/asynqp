@@ -192,31 +192,44 @@ class ChannelFrameHandler(bases.FrameHandler):
         consumer_tag = frame.payload.consumer_tag
         self.consumers.cancel(consumer_tag)
 
+    # hack attack! We don't want to process BasicDeliver etc until we're done with BasicConsumeOK.
+    # this was reported in bug #1
     def handle_BasicDeliver(self, frame):
-        payload = frame.payload
-        self.message_builder = message.MessageBuilder(
-            self.sender,
-            payload.delivery_tag,
-            payload.redelivered,
-            payload.exchange,
-            payload.routing_key,
-            payload.consumer_tag
-        )
+        @asyncio.coroutine
+        def task():
+            with (yield from self.synchroniser.sync(frames.ContentHeaderFrame)) as fut:
+                payload = frame.payload
+                self.message_builder = message.MessageBuilder(
+                    self.sender,
+                    payload.delivery_tag,
+                    payload.redelivered,
+                    payload.exchange,
+                    payload.routing_key,
+                    payload.consumer_tag
+                )
+                yield from fut
+        asyncio.async(task())
 
     def handle_ContentHeaderFrame(self, frame):
-        self.synchroniser.change_expected(frames.ContentBodyFrame)
-        self.message_builder.set_header(frame.payload)
+        @asyncio.coroutine
+        def task():
+            self.synchroniser.change_expected(frames.ContentBodyFrame)
+            self.message_builder.set_header(frame.payload)
+        asyncio.async(task())
 
     def handle_ContentBodyFrame(self, frame):
-        self.message_builder.add_body_chunk(frame.payload)
-        if self.message_builder.done():
-            msg = self.message_builder.build()
-            if self.synchroniser.is_waiting():  # someone asked for it with BasicGet
-                self.synchroniser.succeed(msg)
-            else:  # it's being delivered to a consumer
-                consumer_tag = self.message_builder.consumer_tag
-                self.consumers.deliver(consumer_tag, msg)
-            self.message_builder = None
+        @asyncio.coroutine
+        def task():
+            self.message_builder.add_body_chunk(frame.payload)
+            if self.message_builder.done():
+                msg = self.message_builder.build()
+                if self.message_builder.consumer_tag is None:  # someone asked for it with BasicGet
+                    self.synchroniser.succeed(msg)
+                else:  # it's being delivered to a consumer
+                    self.consumers.deliver(self.message_builder.consumer_tag, msg)
+                    self.synchroniser.succeed()
+                self.message_builder = None
+        asyncio.async(task())
 
     def handle_ChannelClose(self, frame):
         self.channel.closing = True
