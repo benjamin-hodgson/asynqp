@@ -4,7 +4,6 @@ from . import channel
 from . import bases
 from . import spec
 from .util import Synchroniser
-from .exceptions import AMQPError
 
 
 class ConnectionInfo(object):
@@ -36,6 +35,7 @@ class Connection(object):
         self.synchroniser = synchroniser
         self.sender = sender
         self.channel_factory = channel.ChannelFactory(loop, protocol, dispatcher, connection_info)
+        self.connection_info = connection_info
 
         # this is ugly. when the connection is closing, all methods other than ConnectionCloseOK
         # should be ignored. at the moment this behaviour is part of the dispatcher

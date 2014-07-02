@@ -128,3 +128,40 @@ class WhenIStartAConsumerWithAMessageWaiting(BoundQueueContext):
     def start_consumer(self):
         yield from self.queue.consume(self.message_received.set_result)
         yield from self.message_received
+
+
+class WhenPublishingAndGettingALongMessage(BoundQueueContext):
+    def given_a_multi_frame_message_and_a_consumer(self):
+        frame_max = self.connection.connection_info.frame_max
+        body1 = "a" * (frame_max - 8)
+        body2 = "b" * (frame_max - 8)
+        body3 = "c" * (frame_max - 8)
+        body = body1 + body2 + body3
+        self.msg = asynqp.Message(body)
+
+    def when_I_publish_and_get_the_message(self):
+        self.exchange.publish(self.msg, 'routingkey')
+        self.result = self.loop.run_until_complete(asyncio.wait_for(self.queue.get(), 0.2))
+
+    def it_should_return_my_message(self):
+        assert self.result == self.msg
+
+
+class WhenPublishingAndConsumingALongMessage(BoundQueueContext):
+    def given_a_multi_frame_message(self):
+        frame_max = self.connection.connection_info.frame_max
+        body1 = "a" * (frame_max - 8)
+        body2 = "b" * (frame_max - 8)
+        body3 = "c" * (frame_max - 8)
+        body = body1 + body2 + body3
+        self.msg = asynqp.Message(body)
+
+        self.message_received = asyncio.Future()
+        self.loop.run_until_complete(asyncio.wait_for(self.queue.consume(self.message_received.set_result), 0.2))
+
+    def when_I_publish_and_get_the_message(self):
+        self.exchange.publish(self.msg, 'routingkey')
+        self.loop.run_until_complete(asyncio.wait_for(self.message_received, 0.2))
+
+    def it_should_deliver_the_message_to_the_consumer(self):
+        assert self.message_received.result() == self.msg
