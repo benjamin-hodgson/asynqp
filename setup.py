@@ -7,7 +7,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='asynqp',
-    version='0.1',
+    version='0.2',
     author="Benjamin Hodgson",
     author_email="benjamin.hodgson@huddle.net",
     url="https://github.com/benjamin-hodgson/asynqp",
