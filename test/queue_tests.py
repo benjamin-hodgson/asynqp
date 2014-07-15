@@ -196,6 +196,7 @@ class WhenBasicGetOKArrives(QueueContext):
         body = message.get_frame_payloads(self.expected_message, 100)[0]
         self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
         self.tick()
+        self.tick()
 
     def it_should_return_the_expected_message(self):
         assert self.task.result() == self.expected_message
@@ -240,6 +241,7 @@ class WhenBasicDeliverArrives(ConsumerContext):
         body = message.get_frame_payloads(self.expected_message, 100)[0]
         self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
         self.tick()
+        self.tick()
 
     def it_should_send_the_message_to_the_callback(self):
         self.callback.assert_called_once_with(self.expected_message)
@@ -259,6 +261,7 @@ class WhenCancelOKArrives(ConsumerContext):
 
     def when_BasicCancelOK_arrives(self):
         self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, spec.BasicCancelOK(self.consumer.tag)))
+        self.tick()
 
     def it_should_be_cancelled(self):
         assert self.consumer.cancelled

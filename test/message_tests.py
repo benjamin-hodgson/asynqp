@@ -140,6 +140,7 @@ class WhenIAcknowledgeADeliveredMessage(QueueContext):
         body = message.get_frame_payloads(msg, 100)[0]
         self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
         self.tick()
+        self.tick()
 
         self.msg = task.result()
         self.protocol.reset_mock()
@@ -168,6 +169,7 @@ class WhenIRejectADeliveredMessage(QueueContext):
 
         body = message.get_frame_payloads(msg, 100)[0]
         self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
+        self.tick()
         self.tick()
 
         self.msg = task.result()

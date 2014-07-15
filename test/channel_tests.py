@@ -55,6 +55,7 @@ class WhenTheServerClosesAChannel(OpenChannelContext):
     def when_the_server_shuts_the_channel_down(self):
         channel_close_frame = asynqp.frames.MethodFrame(1, spec.ChannelClose(123, 'i am tired of you', 40, 50))
         self.dispatcher.dispatch(channel_close_frame)
+        self.tick()
 
     def it_should_send_ChannelCloseOK(self):
         self.protocol.send_method.assert_called_once_with(1, spec.ChannelCloseOK())
@@ -116,6 +117,7 @@ class WhenAnAsyncMethodArrivesWhileWeAwaitASynchronousOne(OpenChannelContext):
     def when_an_async_method_arrives(self):
         frame = asynqp.frames.MethodFrame(1, spec.BasicDeliver('consumer', 2, False, 'exchange', 'routing_key'))
         self.dispatcher.dispatch(frame)
+        self.tick()
 
     def it_should_not_close_the_channel(self):
         assert not self.protocol.send_method.called
@@ -133,6 +135,7 @@ class WhenAnUnexpectedChannelCloseArrives(OpenChannelContext):
     def when_ChannelClose_arrives(self):
         frame = asynqp.frames.MethodFrame(1, spec.ChannelClose(123, 'i am tired of you', 40, 50))
         self.dispatcher.dispatch(frame)
+        self.tick()
 
     def it_should_send_ChannelCloseOK(self):
         self.protocol.send_method.assert_called_once_with(1, spec.ChannelCloseOK())

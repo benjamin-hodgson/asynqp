@@ -38,6 +38,7 @@ class WhenRespondingToConnectionTune(ConnectionContext):
     def when_ConnectionTune_arrives(self):
         tune_frame = asynqp.frames.MethodFrame(0, spec.ConnectionTune(0, 131072, 600))
         self.dispatcher.dispatch(tune_frame)
+        self.tick()
 
     def it_should_send_tune_ok_followed_by_open(self):
         tune_ok = spec.ConnectionTuneOK(0, 131072, 600)
@@ -52,6 +53,7 @@ class WhenRespondingToConnectionClose(OpenConnectionContext):
     def when_the_close_frame_arrives(self):
         close_frame = asynqp.frames.MethodFrame(0, spec.ConnectionClose(123, 'you muffed up', 10, 20))
         self.dispatcher.dispatch(close_frame)
+        self.tick()
 
     def it_should_send_close_ok(self):
         expected = spec.ConnectionCloseOK()
@@ -70,6 +72,7 @@ class WhenAConnectionThatWasClosedByTheServerReceivesAMethod(OpenConnectionConte
 
         with mock.patch.dict(self.dispatcher.handlers, {1: self.mock_handler}):
             self.dispatcher.dispatch(unexpected_frame)
+            self.tick()
 
     def it_MUST_be_discarded(self):
         assert not self.mock_handler.method_calls
@@ -87,6 +90,7 @@ class WhenAConnectionThatWasClosedByTheApplicationReceivesAMethod(OpenConnection
     def when_another_frame_arrives(self):
         with mock.patch.dict(self.dispatcher.handlers, {0: self.mock_handler}):
             self.dispatcher.dispatch(self.start_frame)
+            self.tick()
 
     def it_MUST_be_discarded(self):
         assert not self.mock_handler.method_calls
@@ -110,6 +114,7 @@ class WhenRecievingConnectionCloseOK(OpenConnectionContext):
     def when_connection_close_ok_arrives(self):
         frame = asynqp.frames.MethodFrame(0, spec.ConnectionCloseOK())
         self.dispatcher.dispatch(frame)
+        self.tick()
 
     def it_should_close_the_transport(self):
         assert self.protocol.transport.close.called

@@ -60,6 +60,15 @@ class ProtocolContext(LoopContext):
         self.protocol.connection_made(self.transport)
 
 
+def MockHandlerContext(channel_number):
+    class _MockHandlerContext(ProtocolContext):
+        def given_a_frame_handler(self):
+            self.handler = mock.Mock()
+            self.handler.handle._is_coroutine = False  # :(
+            self.dispatcher.add_handler(channel_number, self.handler)
+    return _MockHandlerContext
+
+
 class OpenChannelContext(OpenConnectionContext):
     def given_an_open_channel(self):
         self.channel = self.open_channel()

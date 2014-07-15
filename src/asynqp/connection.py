@@ -105,7 +105,8 @@ class ConnectionFrameHandler(bases.FrameHandler):
             'en_US'
         )
 
-    def handle_ConnectionTune(self, frame):  # just agree with whatever the server wants. Make this configurable in future
+    def handle_ConnectionTune(self, frame):
+        # just agree with whatever the server wants. Make this configurable in future
         self.connection_info.frame_max = frame.payload.frame_max
         heartbeat_interval = frame.payload.heartbeat
         self.sender.send_TuneOK(frame.payload.channel_max, frame.payload.frame_max, heartbeat_interval)
