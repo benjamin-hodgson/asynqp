@@ -77,7 +77,7 @@ class Dispatcher(object):
         if self.closing.done() and not isinstance(frame.payload, (spec.ConnectionClose, spec.ConnectionCloseOK)):
             return
         handler = self.handlers[frame.channel_id]
-        asyncio.async(handler.handle(frame))
+        handler.handle(frame)
 
 
 class HeartbeatMonitor(object):

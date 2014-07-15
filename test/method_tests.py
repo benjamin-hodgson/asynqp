@@ -36,7 +36,7 @@ class WhenConnectionStartArrives(MockHandlerContext(0)):
         self.tick()
 
     def it_should_dispatch_a_correctly_deserialised_ConnectionStart_method(self):
-        self.handler._handle.assert_called_once_with(self.expected_frame)
+        self.handler.handle.assert_called_once_with(self.expected_frame)
 
 
 class WhenSendingConnectionStartOK(ProtocolContext):
@@ -65,7 +65,7 @@ class WhenConnectionTuneArrives(MockHandlerContext(0)):
         self.tick()
 
     def it_should_dispatch_a_correctly_deserialised_ConnectionTune_method(self):
-        self.handler._handle.assert_called_once_with(self.expected_frame)
+        self.handler.handle.assert_called_once_with(self.expected_frame)
 
 
 class WhenSendingConnectionTuneOK(ProtocolContext):
@@ -141,7 +141,7 @@ class WhenAContentHeaderArrives(MockHandlerContext(1)):
         self.tick()
 
     def it_should_deserialise_it_to_a_ContentHeaderFrame(self):
-        self.handler._handle.assert_called_once_with(self.expected_frame)
+        self.handler.handle.assert_called_once_with(self.expected_frame)
 
 
 class WhenBasicGetOKArrives(MockHandlerContext(1)):
@@ -164,5 +164,5 @@ class WhenBasicGetOKArrives(MockHandlerContext(1)):
         self.tick()
 
     def it_should_deserialise_it_to_the_correct_method(self):
-        self.handler._handle.assert_called_once_with(self.expected_frame)
+        self.handler.handle.assert_called_once_with(self.expected_frame)
 

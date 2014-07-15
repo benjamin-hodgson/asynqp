@@ -142,11 +142,10 @@ class ChannelFrameHandler(bases.FrameHandler):
         self.consumers = consumers
         self.message_receiver = MessageReceiver(synchroniser, sender, consumers)
 
-    @asyncio.coroutine
     def handle(self, frame):
         if self.channel.closing and type(frame.payload) is not spec.ChannelCloseOK:
             return
-        yield from super().handle(frame)
+        super().handle(frame)
 
     def handle_ChannelOpenOK(self, frame):
         self.synchroniser.succeed()

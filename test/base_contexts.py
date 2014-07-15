@@ -63,15 +63,10 @@ class ProtocolContext(LoopContext):
 def MockHandlerContext(channel_number):
     class _MockHandlerContext(ProtocolContext):
         def given_a_frame_handler(self):
-            self.handler = MockHandler()
+            self.handler = mock.Mock()
+            self.handler.handle._is_coroutine = False  # :(
             self.dispatcher.add_handler(channel_number, self.handler)
     return _MockHandlerContext
-
-
-class MockHandler(mock.Mock):
-    @asyncio.coroutine
-    def handle(self, frame):
-        self._handle(frame)
 
 
 class OpenChannelContext(OpenConnectionContext):

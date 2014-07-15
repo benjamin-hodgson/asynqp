@@ -26,7 +26,7 @@ class WhenAWholeFrameArrives(MockHandlerContext(0)):
         self.tick()
 
     def it_should_dispatch_the_method(self):
-        self.handler._handle.assert_called_once_with(self.expected_frame)
+        self.handler.handle.assert_called_once_with(self.expected_frame)
 
     def it_should_reset_the_heartbeat_timeout(self):
         assert self.protocol.heartbeat_monitor.heartbeat_received.called
@@ -58,7 +58,7 @@ class WhenHalfAFrameArrives(MockHandlerContext(0)):
         self.tick()
 
     def it_should_not_dispatch_the_method(self):
-        assert not self.handler._handle.called
+        assert not self.handler.handle.called
 
 
 class WhenAFrameArrivesInTwoParts(MockHandlerContext(0)):
@@ -79,7 +79,7 @@ class WhenAFrameArrivesInTwoParts(MockHandlerContext(0)):
         self.tick()
 
     def it_should_dispatch_the_method(self):
-        self.handler._handle.assert_called_once_with(self.expected_frame)
+        self.handler.handle.assert_called_once_with(self.expected_frame)
 
 
 class WhenMoreThanAWholeFrameArrives(MockHandlerContext(0)):
@@ -93,7 +93,7 @@ class WhenMoreThanAWholeFrameArrives(MockHandlerContext(0)):
         self.tick()
 
     def it_should_dispatch_the_method_once(self):
-        self.handler._handle.assert_called_once_with(self.expected_frame)
+        self.handler.handle.assert_called_once_with(self.expected_frame)
 
 
 class WhenTwoFramesArrive(MockHandlerContext(0)):
@@ -107,7 +107,7 @@ class WhenTwoFramesArrive(MockHandlerContext(0)):
         self.tick()
 
     def it_should_dispatch_the_method_twice(self):
-        self.handler._handle.assert_has_calls([mock.call(self.expected_frame), mock.call(self.expected_frame)])
+        self.handler.handle.assert_has_calls([mock.call(self.expected_frame), mock.call(self.expected_frame)])
 
 
 class WhenTwoFramesArrivePiecemeal(MockHandlerContext(0)):
@@ -129,4 +129,4 @@ class WhenTwoFramesArrivePiecemeal(MockHandlerContext(0)):
             self.tick()
 
     def it_should_dispatch_the_method_twice(self):
-        self.handler._handle.assert_has_calls([mock.call(self.expected_frame), mock.call(self.expected_frame)])
+        self.handler.handle.assert_has_calls([mock.call(self.expected_frame), mock.call(self.expected_frame)])
