@@ -10,12 +10,12 @@ from .base_contexts import ConnectionContext, OpenConnectionContext
 class WhenRespondingToConnectionStart(ConnectionContext):
     def given_I_wrote_the_protocol_header(self):
         asyncio.async(open_connection(self.loop, self.protocol, self.dispatcher, self.connection_info))
-        self.go()
+        self.tick()
 
     def when_ConnectionStart_arrives(self):
         start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
         self.dispatcher.dispatch(asynqp.frames.MethodFrame(0, start_method))
-        self.go()
+        self.tick()
 
     def it_should_send_start_ok(self):
         expected_method = spec.ConnectionStartOK(
@@ -30,10 +30,10 @@ class WhenRespondingToConnectionStart(ConnectionContext):
 class WhenRespondingToConnectionTune(ConnectionContext):
     def given_a_started_connection(self):
         asyncio.async(open_connection(self.loop, self.protocol, self.dispatcher, self.connection_info))
-        self.go()
+        self.tick()
         start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
         self.dispatcher.dispatch(asynqp.frames.MethodFrame(0, start_method))
-        self.go()
+        self.tick()
 
     def when_ConnectionTune_arrives(self):
         tune_frame = asynqp.frames.MethodFrame(0, spec.ConnectionTune(0, 131072, 600))
@@ -62,7 +62,7 @@ class WhenAConnectionThatWasClosedByTheServerReceivesAMethod(OpenConnectionConte
     def given_a_closed_connection(self):
         close_frame = asynqp.frames.MethodFrame(0, spec.ConnectionClose(123, 'you muffed up', 10, 20))
         self.dispatcher.dispatch(close_frame)
-        self.go()
+        self.tick()
         self.mock_handler = mock.Mock()
 
     def when_another_frame_arrives(self):
@@ -78,7 +78,7 @@ class WhenAConnectionThatWasClosedByTheServerReceivesAMethod(OpenConnectionConte
 class WhenAConnectionThatWasClosedByTheApplicationReceivesAMethod(OpenConnectionContext):
     def given_a_closed_connection(self):
         asyncio.async(self.connection.close())
-        self.go()
+        self.tick()
 
         start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
         self.start_frame = asynqp.frames.MethodFrame(0, start_method)
@@ -95,7 +95,7 @@ class WhenAConnectionThatWasClosedByTheApplicationReceivesAMethod(OpenConnection
 class WhenTheApplicationClosesTheConnection(OpenConnectionContext):
     def when_I_close_the_connection(self):
         asyncio.async(self.connection.close())
-        self.go()
+        self.tick()
 
     def it_should_send_ConnectionClose_with_no_exception(self):
         expected = spec.ConnectionClose(0, 'Connection closed by application', 0, 0)
@@ -105,7 +105,7 @@ class WhenTheApplicationClosesTheConnection(OpenConnectionContext):
 class WhenRecievingConnectionCloseOK(OpenConnectionContext):
     def given_a_connection_that_I_closed(self):
         asyncio.async(self.connection.close())
-        self.go()
+        self.tick()
 
     def when_connection_close_ok_arrives(self):
         frame = asynqp.frames.MethodFrame(0, spec.ConnectionCloseOK())

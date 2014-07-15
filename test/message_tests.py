@@ -128,18 +128,18 @@ class WhenIAcknowledgeADeliveredMessage(QueueContext):
 
         msg = asynqp.Message('body', timestamp=datetime(2014, 5, 5))
         task = asyncio.async(self.queue.get())
-        self.go()
+        self.tick()
         method = spec.BasicGetOK(self.delivery_tag, False, 'my.exchange', 'routing.key', 0)
         self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
-        self.go()
+        self.tick()
 
         header = message.get_header_payload(msg, spec.BasicGet.method_type[0])
         self.dispatcher.dispatch(frames.ContentHeaderFrame(self.channel.id, header))
-        self.go()
+        self.tick()
 
         body = message.get_frame_payloads(msg, 100)[0]
         self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
-        self.go()
+        self.tick()
 
         self.msg = task.result()
         self.protocol.reset_mock()
@@ -157,18 +157,18 @@ class WhenIRejectADeliveredMessage(QueueContext):
 
         msg = asynqp.Message('body', timestamp=datetime(2014, 5, 5))
         task = asyncio.async(self.queue.get())
-        self.go()
+        self.tick()
         method = spec.BasicGetOK(self.delivery_tag, False, 'my.exchange', 'routing.key', 0)
         self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
-        self.go()
+        self.tick()
 
         header = message.get_header_payload(msg, spec.BasicGet.method_type[0])
         self.dispatcher.dispatch(frames.ContentHeaderFrame(self.channel.id, header))
-        self.go()
+        self.tick()
 
         body = message.get_frame_payloads(msg, 100)[0]
         self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
-        self.go()
+        self.tick()
 
         self.msg = task.result()
         self.protocol.reset_mock()
