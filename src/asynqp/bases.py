@@ -1,3 +1,4 @@
+import asyncio
 from . import spec
 from .exceptions import AMQPError
 
@@ -16,6 +17,7 @@ class FrameHandler(object):
         self.synchroniser = synchroniser
         self.sender = sender
 
+    @asyncio.coroutine
     def handle(self, frame):
         try:
             self.synchroniser.check_expected(frame)
@@ -27,4 +29,8 @@ class FrameHandler(object):
             handler = getattr(self, 'handle_' + type(frame).__name__)
         except AttributeError:
             handler = getattr(self, 'handle_' + type(frame.payload).__name__)
-        handler(frame)
+
+        if not asyncio.iscoroutinefunction(handler):
+            handler = asyncio.coroutine(handler)
+
+        yield from handler(frame)

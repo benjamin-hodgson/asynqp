@@ -140,12 +140,13 @@ class ChannelFrameHandler(bases.FrameHandler):
         super().__init__(synchroniser, sender)
         self.channel = channel
         self.consumers = consumers
-        self.message_builder = None
+        self.message_receiver = MessageReceiver(synchroniser, sender, consumers)
 
+    @asyncio.coroutine
     def handle(self, frame):
         if self.channel.closing and type(frame.payload) is not spec.ChannelCloseOK:
             return
-        super().handle(frame)
+        yield from super().handle(frame)
 
     def handle_ChannelOpenOK(self, frame):
         self.synchroniser.succeed()
@@ -172,9 +173,44 @@ class ChannelFrameHandler(bases.FrameHandler):
         self.synchroniser.succeed()
 
     def handle_BasicGetEmpty(self, frame):
-        self.synchroniser.succeed(None)
+        self.synchroniser.succeed((None, None))
 
     def handle_BasicGetOK(self, frame):
+        asyncio.async(self.message_receiver.receive_getOK(frame))
+
+    def handle_BasicConsumeOK(self, frame):
+        self.synchroniser.succeed(frame.payload.consumer_tag)
+
+    def handle_BasicCancelOK(self, frame):
+        consumer_tag = frame.payload.consumer_tag
+        self.consumers.cancel(consumer_tag)
+
+    def handle_BasicDeliver(self, frame):
+        asyncio.async(self.message_receiver.receive_deliver(frame))
+
+    def handle_ContentHeaderFrame(self, frame):
+        asyncio.async(self.message_receiver.receive_header(frame))
+
+    def handle_ContentBodyFrame(self, frame):
+        asyncio.async(self.message_receiver.receive_body(frame))
+
+    def handle_ChannelClose(self, frame):
+        self.channel.closing = True
+        self.sender.send_CloseOK()
+
+    def handle_ChannelCloseOK(self, frame):
+        self.synchroniser.succeed()
+
+
+class MessageReceiver(object):
+    def __init__(self, synchroniser, sender, consumers):
+        self.synchroniser = synchroniser
+        self.sender = sender
+        self.consumers = consumers
+        self.message_builder = None
+
+    @asyncio.coroutine
+    def receive_getOK(self, frame):
         self.synchroniser.change_expected(frames.ContentHeaderFrame)
         payload = frame.payload
         self.message_builder = message.MessageBuilder(
@@ -185,58 +221,34 @@ class ChannelFrameHandler(bases.FrameHandler):
             payload.routing_key
         )
 
-    def handle_BasicConsumeOK(self, frame):
-        self.synchroniser.succeed(frame.payload.consumer_tag)
+    @asyncio.coroutine
+    def receive_deliver(self, frame):
+        with (yield from self.synchroniser.sync(frames.ContentHeaderFrame)) as fut:
+            payload = frame.payload
+            self.message_builder = message.MessageBuilder(
+                self.sender,
+                payload.delivery_tag,
+                payload.redelivered,
+                payload.exchange,
+                payload.routing_key,
+                payload.consumer_tag
+            )
+            tag, msg = yield from fut
+            self.consumers.deliver(tag, msg)
 
-    def handle_BasicCancelOK(self, frame):
-        consumer_tag = frame.payload.consumer_tag
-        self.consumers.cancel(consumer_tag)
+    @asyncio.coroutine
+    def receive_header(self, frame):
+        self.synchroniser.change_expected(frames.ContentBodyFrame)
+        self.message_builder.set_header(frame.payload)
 
-    # hack attack! We don't want to process BasicDeliver etc until we're done with BasicConsumeOK.
-    # this was reported in bug #1
-    def handle_BasicDeliver(self, frame):
-        @asyncio.coroutine
-        def task():
-            with (yield from self.synchroniser.sync(frames.ContentHeaderFrame)) as fut:
-                payload = frame.payload
-                self.message_builder = message.MessageBuilder(
-                    self.sender,
-                    payload.delivery_tag,
-                    payload.redelivered,
-                    payload.exchange,
-                    payload.routing_key,
-                    payload.consumer_tag
-                )
-                yield from fut
-        asyncio.async(task())
-
-    def handle_ContentHeaderFrame(self, frame):
-        @asyncio.coroutine
-        def task():
-            self.synchroniser.change_expected(frames.ContentBodyFrame)
-            self.message_builder.set_header(frame.payload)
-        asyncio.async(task())
-
-    def handle_ContentBodyFrame(self, frame):
-        @asyncio.coroutine
-        def task():
-            self.message_builder.add_body_chunk(frame.payload)
-            if self.message_builder.done():
-                msg = self.message_builder.build()
-                if self.message_builder.consumer_tag is None:  # someone asked for it with BasicGet
-                    self.synchroniser.succeed(msg)
-                else:  # it's being delivered to a consumer
-                    self.consumers.deliver(self.message_builder.consumer_tag, msg)
-                    self.synchroniser.succeed()
-                self.message_builder = None
-        asyncio.async(task())
-
-    def handle_ChannelClose(self, frame):
-        self.channel.closing = True
-        self.sender.send_CloseOK()
-
-    def handle_ChannelCloseOK(self, frame):
-        self.synchroniser.succeed()
+    @asyncio.coroutine
+    def receive_body(self, frame):
+        self.message_builder.add_body_chunk(frame.payload)
+        if self.message_builder.done():
+            msg = self.message_builder.build()
+            tag = self.message_builder.consumer_tag
+            self.synchroniser.succeed((tag, msg))
+            self.message_builder = None
 
 
 class ChannelMethodSender(bases.Sender):

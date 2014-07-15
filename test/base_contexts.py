@@ -46,9 +46,9 @@ class OpenConnectionContext(ConnectionContext):
 
         open_ok_frame = asynqp.frames.MethodFrame(0, spec.ConnectionOpenOK(''))
         self.dispatcher.dispatch(open_ok_frame)
-        self.protocol.reset_mock()
         self.tick()
 
+        self.protocol.reset_mock()
         self.connection = task.result()
 
 
@@ -63,10 +63,15 @@ class ProtocolContext(LoopContext):
 def MockHandlerContext(channel_number):
     class _MockHandlerContext(ProtocolContext):
         def given_a_frame_handler(self):
-            self.handler = mock.Mock()
-            self.handler.handle._is_coroutine = False  # :(
+            self.handler = MockHandler()
             self.dispatcher.add_handler(channel_number, self.handler)
     return _MockHandlerContext
+
+
+class MockHandler(mock.Mock):
+    @asyncio.coroutine
+    def handle(self, frame):
+        self._handle(frame)
 
 
 class OpenChannelContext(OpenConnectionContext):

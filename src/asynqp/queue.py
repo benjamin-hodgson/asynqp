@@ -106,8 +106,9 @@ class Queue(object):
 
         with (yield from self.synchroniser.sync(spec.BasicGetOK, spec.BasicGetEmpty)) as fut:
             self.sender.send_BasicGet(self.name, no_ack)
-            result = yield from fut
-            return result
+            consumer_tag, msg = yield from fut
+            assert consumer_tag is None
+            return msg
 
     @asyncio.coroutine
     def purge(self):
