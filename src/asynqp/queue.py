@@ -28,11 +28,13 @@ class Queue(object):
 
         if True, the queue will be deleted when its last consumer is removed
     """
-    def __init__(self, consumers, synchroniser, loop, sender, name, durable, exclusive, auto_delete):
+    def __init__(self, consumers, synchroniser, loop, sender, message_receiver, name, durable, exclusive, auto_delete):
         self.consumers = consumers
         self.synchroniser = synchroniser
         self.loop = loop
         self.sender = sender
+        self.message_receiver = message_receiver
+
         self.name = name
         self.durable = durable
         self.exclusive = exclusive
@@ -108,7 +110,8 @@ class Queue(object):
             self.sender.send_BasicGet(self.name, no_ack)
             consumer_tag, msg = yield from fut
             assert consumer_tag is None
-            return msg
+        self.message_receiver.ready()
+        return msg
 
     @asyncio.coroutine
     def purge(self):

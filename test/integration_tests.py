@@ -130,6 +130,27 @@ class WhenIStartAConsumerWithAMessageWaiting(BoundQueueContext):
         yield from self.message_received
 
 
+class WhenIStartAConsumerWithSeveralMessagesWaiting(BoundQueueContext):
+    def given_published_messages(self):
+        self.message1 = asynqp.Message('one')
+        self.message2 = asynqp.Message('one')
+        self.exchange.publish(self.message1, 'routingkey')
+        self.exchange.publish(self.message2, 'routingkey')
+
+        self.received = []
+
+    def when_I_start_a_consumer(self):
+        self.loop.run_until_complete(asyncio.wait_for(self.start_consumer(), 0.2))
+
+    def it_should_deliver_the_messages_to_the_consumer(self):
+        assert self.received == [self.message1, self.message2]
+
+    @asyncio.coroutine
+    def start_consumer(self):
+        yield from self.queue.consume(self.received.append)
+        yield from asyncio.sleep(0.02)  # possibly flaky
+
+
 class WhenPublishingAndGettingALongMessage(BoundQueueContext):
     def given_a_multi_frame_message_and_a_consumer(self):
         frame_max = self.connection.connection_info.frame_max

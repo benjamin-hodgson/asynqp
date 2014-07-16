@@ -27,11 +27,12 @@ class Channel(object):
 
         the numerical ID of the channel
     """
-    def __init__(self, consumers, id, synchroniser, sender, loop):
+    def __init__(self, consumers, id, synchroniser, sender, message_receiver, loop):
         self.consumers = consumers
         self.id = id
         self.synchroniser = synchroniser
         self.sender = sender
+        self.message_receiver = message_receiver
         self.loop = loop
         self.closing = False
 
@@ -91,7 +92,7 @@ class Channel(object):
         with (yield from self.synchroniser.sync(spec.QueueDeclareOK)) as fut:
             self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete)
             name = yield from fut
-            return queue.Queue(self.consumers, self.synchroniser, self.loop, self.sender, name, durable, exclusive, auto_delete)
+            return queue.Queue(self.consumers, self.synchroniser, self.loop, self.sender, self.message_receiver, name, durable, exclusive, auto_delete)
 
     @asyncio.coroutine
     def close(self):
@@ -121,9 +122,10 @@ class ChannelFactory(object):
         with (yield from synchroniser.sync(spec.ChannelOpenOK)) as fut:
             sender = ChannelMethodSender(self.next_channel_id, self.protocol, self.connection_info)
             consumers = queue.Consumers(self.loop)
-            channel = Channel(consumers, self.next_channel_id, synchroniser, sender, self.loop)
+            message_receiver = MessageReceiver(synchroniser, sender, consumers)
+            channel = Channel(consumers, self.next_channel_id, synchroniser, sender, message_receiver, self.loop)
 
-            self.dispatcher.add_handler(self.next_channel_id, ChannelFrameHandler(synchroniser, sender, channel, consumers))
+            self.dispatcher.add_handler(self.next_channel_id, ChannelFrameHandler(synchroniser, sender, channel, consumers, message_receiver))
             try:
                 sender.send_ChannelOpen()
                 yield from fut
@@ -136,11 +138,11 @@ class ChannelFactory(object):
 
 
 class ChannelFrameHandler(bases.FrameHandler):
-    def __init__(self, synchroniser, sender, channel, consumers):
+    def __init__(self, synchroniser, sender, channel, consumers, message_receiver):
         super().__init__(synchroniser, sender)
         self.channel = channel
         self.consumers = consumers
-        self.message_receiver = MessageReceiver(synchroniser, sender, consumers)
+        self.message_receiver = message_receiver
 
     def handle(self, frame):
         if self.channel.closing and type(frame.payload) is not spec.ChannelCloseOK:
@@ -175,7 +177,7 @@ class ChannelFrameHandler(bases.FrameHandler):
         self.synchroniser.succeed((None, None))
 
     def handle_BasicGetOK(self, frame):
-        asyncio.async(self.message_receiver.receive_getOK(frame))
+        self.message_receiver.receive_getOK(frame)
 
     def handle_BasicConsumeOK(self, frame):
         self.synchroniser.succeed(frame.payload.consumer_tag)
@@ -185,13 +187,13 @@ class ChannelFrameHandler(bases.FrameHandler):
         self.consumers.cancel(consumer_tag)
 
     def handle_BasicDeliver(self, frame):
-        asyncio.async(self.message_receiver.receive_deliver(frame))
+        self.message_receiver.receive_deliver(frame)
 
     def handle_ContentHeaderFrame(self, frame):
-        asyncio.async(self.message_receiver.receive_header(frame))
+        self.message_receiver.receive_header(frame)
 
     def handle_ContentBodyFrame(self, frame):
-        asyncio.async(self.message_receiver.receive_body(frame))
+        self.message_receiver.receive_body(frame)
 
     def handle_ChannelClose(self, frame):
         self.channel.closing = True
@@ -207,47 +209,73 @@ class MessageReceiver(object):
         self.sender = sender
         self.consumers = consumers
         self.message_builder = None
+        self.q = asyncio.Queue()
+        self.ready()
+
+    def ready(self):
+        asyncio.async(self.read_next())
 
     @asyncio.coroutine
+    def read_next(self):
+        coro = yield from self.q.get()
+        yield from coro
+
     def receive_getOK(self, frame):
-        self.synchroniser.change_expected(frames.ContentHeaderFrame)
-        payload = frame.payload
-        self.message_builder = message.MessageBuilder(
-            self.sender,
-            payload.delivery_tag,
-            payload.redelivered,
-            payload.exchange,
-            payload.routing_key
-        )
-
-    @asyncio.coroutine
-    def receive_deliver(self, frame):
-        with (yield from self.synchroniser.sync(frames.ContentHeaderFrame)) as fut:
+        @asyncio.coroutine
+        def coro():
+            self.synchroniser.change_expected(frames.ContentHeaderFrame)
             payload = frame.payload
             self.message_builder = message.MessageBuilder(
                 self.sender,
                 payload.delivery_tag,
                 payload.redelivered,
                 payload.exchange,
-                payload.routing_key,
-                payload.consumer_tag
+                payload.routing_key
             )
-            tag, msg = yield from fut
-            self.consumers.deliver(tag, msg)
+            self.ready()
 
-    @asyncio.coroutine
+        self.q.put_nowait(coro())
+
+    def receive_deliver(self, frame):
+        @asyncio.coroutine
+        def coro():
+            with (yield from self.synchroniser.sync(frames.ContentHeaderFrame)) as fut:
+                payload = frame.payload
+                self.message_builder = message.MessageBuilder(
+                    self.sender,
+                    payload.delivery_tag,
+                    payload.redelivered,
+                    payload.exchange,
+                    payload.routing_key,
+                    payload.consumer_tag
+                )
+                self.ready()
+                tag, msg = yield from fut
+                self.consumers.deliver(tag, msg)
+            self.ready()
+
+        self.q.put_nowait(coro())
+
     def receive_header(self, frame):
-        self.synchroniser.change_expected(frames.ContentBodyFrame)
-        self.message_builder.set_header(frame.payload)
+        @asyncio.coroutine
+        def coro():
+            self.synchroniser.change_expected(frames.ContentBodyFrame)
+            self.message_builder.set_header(frame.payload)
+            self.ready()
+        self.q.put_nowait(coro())
 
-    @asyncio.coroutine
     def receive_body(self, frame):
-        self.message_builder.add_body_chunk(frame.payload)
-        if self.message_builder.done():
-            msg = self.message_builder.build()
-            tag = self.message_builder.consumer_tag
-            self.synchroniser.succeed((tag, msg))
-            self.message_builder = None
+        @asyncio.coroutine
+        def coro():
+            self.message_builder.add_body_chunk(frame.payload)
+            if self.message_builder.done():
+                msg = self.message_builder.build()
+                tag = self.message_builder.consumer_tag
+                self.synchroniser.succeed((tag, msg))
+                self.message_builder = None
+                return  # don't call self.ready() - that's the job of the calling code
+            self.ready()
+        self.q.put_nowait(coro())
 
 
 class ChannelMethodSender(bases.Sender):
