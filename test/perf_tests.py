@@ -6,7 +6,7 @@ from .integration_tests import BoundQueueContext
 
 class WhenConsumingLoadsOfMessages(BoundQueueContext):
     def establish_one_thousand_messages_in_the_queue(self):
-        self.msg_count = 10000
+        self.msg_count = 1000
         self.condition = asyncio.Condition()
         self.received = []
         for x in range(self.msg_count):
@@ -16,7 +16,7 @@ class WhenConsumingLoadsOfMessages(BoundQueueContext):
         self.time = contexts.time(self.loop.run_until_complete, self.consume())
 
     def it_should_consume_the_messages_reasonably_quickly(self):
-        assert self.time < 15
+        assert self.time < 1.5
 
     @asyncio.coroutine
     def consume(self):
