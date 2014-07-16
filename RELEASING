@@ -1,0 +1,8 @@
+1. Check Travis is green on the latest commit
+2. Increment the version in setup.py
+3. Increment the version in doc/conf.py
+4. Commit and tag
+5. Push using --follow-tags
+6. Check that the tests passed on Travis and it published to the Cheese Shop
+6a. If it failed to publish to the cheese shop for some reason, run `python setup.py register` followed by `python setup.py sdist bdist_egg bdist_wheel upload`
+7. Build the docs at readthedocs.org and increment the latest version
