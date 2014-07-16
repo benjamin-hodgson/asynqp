@@ -15,35 +15,37 @@ class AMQP(asyncio.Protocol):
         self.transport = transport
 
     def data_received(self, data):
-        self.heartbeat_monitor.heartbeat_received()  # the spec says 'any octet may substitute for a heartbeat'
+        while data:
+            self.heartbeat_monitor.heartbeat_received()  # the spec says 'any octet may substitute for a heartbeat'
 
-        data = self.partial_frame + data
-        self.partial_frame = b''
+            data = self.partial_frame + data
+            self.partial_frame = b''
 
-        if len(data) < 7:
-            self.partial_frame = data
-            return
+            if len(data) < 7:
+                self.partial_frame = data
+                return
 
-        frame_header = data[:7]
-        frame_type, channel_id, size = struct.unpack('!BHL', frame_header)
+            frame_header = data[:7]
+            frame_type, channel_id, size = struct.unpack('!BHL', frame_header)
 
-        if len(data) < size + 8:
-            self.partial_frame = data
-            return
+            if len(data) < size + 8:
+                self.partial_frame = data
+                return
 
-        raw_payload = data[7:7+size]
-        frame_end = data[7+size]
+            raw_payload = data[7:7+size]
+            frame_end = data[7+size]
 
-        if frame_end != spec.FRAME_END:
-            self.transport.close()
-            raise AMQPError("Frame end byte was incorrect")
+            if frame_end != spec.FRAME_END:
+                self.transport.close()
+                raise AMQPError("Frame end byte was incorrect")
 
-        frame = frames.read(frame_type, channel_id, raw_payload)
-        self.dispatcher.dispatch(frame)
+            frame = frames.read(frame_type, channel_id, raw_payload)
+            self.dispatcher.dispatch(frame)
 
-        remainder = data[8+size:]
-        if remainder:
-            self.data_received(remainder)
+            remainder = data[8+size:]
+            if not remainder:
+                return
+            data = remainder  # loop
 
     def send_method(self, channel, method):
         frame = frames.MethodFrame(channel, method)
