@@ -53,6 +53,8 @@ Example
 Installation
 ------------
 
+:mod:`asynqp` has no dependencies outside of the standard library. To install the package:
+
 ::
 
     pip install asynqp
