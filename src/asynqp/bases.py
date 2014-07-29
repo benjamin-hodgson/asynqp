@@ -16,6 +16,22 @@ class FrameHandler(object):
     def __init__(self, synchroniser, sender):
         self.synchroniser = synchroniser
         self.sender = sender
+        self.q = asyncio.Queue()
+        self.is_waiting = False
+
+    def ready(self):
+        assert not self.is_waiting
+        self.is_waiting = True
+        asyncio.async(self.read_next())
+
+    def enqueue(self, frame):
+        self.q.put_nowait(frame)
+
+    @asyncio.coroutine
+    def read_next(self):
+        frame = yield from self.q.get()
+        self.is_waiting = False
+        self.handle(frame)
 
     def handle(self, frame):
         try:

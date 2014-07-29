@@ -79,7 +79,7 @@ class Dispatcher(object):
         if self.closing.done() and not isinstance(frame.payload, (spec.ConnectionClose, spec.ConnectionCloseOK)):
             return
         handler = self.handlers[frame.channel_id]
-        handler.handle(frame)
+        handler.enqueue(frame)
 
 
 class HeartbeatMonitor(object):

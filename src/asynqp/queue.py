@@ -28,7 +28,8 @@ class Queue(object):
 
         if True, the queue will be deleted when its last consumer is removed
     """
-    def __init__(self, consumers, synchroniser, loop, sender, message_receiver, name, durable, exclusive, auto_delete):
+    def __init__(self, handler, consumers, synchroniser, loop, sender, message_receiver, name, durable, exclusive, auto_delete):
+        self.handler = handler
         self.consumers = consumers
         self.synchroniser = synchroniser
         self.loop = loop
@@ -62,7 +63,9 @@ class Queue(object):
         with (yield from self.synchroniser.sync(spec.QueueBindOK)) as fut:
             self.sender.send_QueueBind(self.name, exchange.name, routing_key)
             yield from fut
-            return QueueBinding(self.sender, self.synchroniser, self, exchange, routing_key)
+            b = QueueBinding(self.handler, self.sender, self.synchroniser, self, exchange, routing_key)
+        self.handler.ready()
+        return b
 
     @asyncio.coroutine
     def consume(self, callback, *, no_local=False, no_ack=False, exclusive=False):
@@ -89,7 +92,8 @@ class Queue(object):
             tag = yield from fut
             consumer = Consumer(tag, callback, self.sender)
             self.consumers.add_consumer(consumer)
-            return consumer
+        self.handler.ready()
+        return consumer
 
     @asyncio.coroutine
     def get(self, *, no_ack=False):
@@ -111,6 +115,8 @@ class Queue(object):
             consumer_tag, msg = yield from fut
             assert consumer_tag is None
         self.message_receiver.ready()
+        if msg is None:
+            self.handler.ready()
         return msg
 
     @asyncio.coroutine
@@ -123,6 +129,7 @@ class Queue(object):
         with (yield from self.synchroniser.sync(spec.QueuePurgeOK)) as fut:
             self.sender.send_QueuePurge(self.name)
             yield from fut
+        self.handler.ready()
 
     @asyncio.coroutine
     def delete(self, *, if_unused=True, if_empty=True):
@@ -143,6 +150,7 @@ class Queue(object):
             self.sender.send_QueueDelete(self.name, if_unused, if_empty)
             yield from fut
             self.deleted = True
+        self.handler.ready()
 
 
 class QueueBinding(object):
@@ -168,7 +176,8 @@ class QueueBinding(object):
 
         the routing key used for the binding
     """
-    def __init__(self, sender, synchroniser, queue, exchange, routing_key):
+    def __init__(self, handler, sender, synchroniser, queue, exchange, routing_key):
+        self.handler = handler
         self.sender = sender
         self.synchroniser = synchroniser
         self.queue = queue
@@ -189,6 +198,7 @@ class QueueBinding(object):
             self.sender.send_QueueUnbind(self.queue.name, self.exchange.name, self.routing_key)
             yield from fut
             self.deleted = True
+        self.handler.ready()
 
 
 class Consumer(object):
@@ -238,3 +248,4 @@ class Consumers(object):
     def cancel(self, tag):
         self.consumers[tag].cancelled = True
         del self.consumers[tag]
+        self.handler.ready()

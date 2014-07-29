@@ -80,11 +80,13 @@ def open_connection(loop, protocol, dispatcher, connection_info):
         try:
             dispatcher.add_handler(0, handler)
             protocol.send_protocol_header()
+            handler.ready()
             yield from fut
         except:
             dispatcher.remove_handler(0)
             raise
-        return connection
+    handler.ready()
+    return connection
 
 
 class ConnectionFrameHandler(bases.FrameHandler):
@@ -104,6 +106,7 @@ class ConnectionFrameHandler(bases.FrameHandler):
             {'LOGIN': self.connection_info.username, 'PASSWORD': self.connection_info.password},
             'en_US'
         )
+        self.ready()
 
     def handle_ConnectionTune(self, frame):
         # just agree with whatever the server wants. Make this configurable in future
@@ -114,6 +117,7 @@ class ConnectionFrameHandler(bases.FrameHandler):
         self.synchroniser.change_expected(spec.ConnectionOpenOK)
         self.sender.send_Open(self.connection_info.virtual_host)
         self.protocol.start_heartbeat(heartbeat_interval)
+        self.ready()
 
     def handle_ConnectionOpenOK(self, frame):
         self.synchroniser.succeed()

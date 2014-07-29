@@ -52,7 +52,7 @@ class Channel(object):
         :return: the new :class:`Exchange` object.
         """
         if name == '':
-            return exchange.Exchange(self.synchroniser, self.sender, name, 'direct', True, False, False)
+            return exchange.Exchange(self.handler, self.synchroniser, self.sender, name, 'direct', True, False, False)
 
         if not VALID_EXCHANGE_NAME_RE.match(name):
             raise ValueError("Invalid exchange name.\n"
@@ -62,7 +62,9 @@ class Channel(object):
         with (yield from self.synchroniser.sync(spec.ExchangeDeclareOK)) as fut:
             self.sender.send_ExchangeDeclare(name, type, durable, auto_delete, internal)
             yield from fut
-            return exchange.Exchange(self.synchroniser, self.sender, name, type, durable, auto_delete, internal)
+            ex = exchange.Exchange(self.handler, self.synchroniser, self.sender, name, type, durable, auto_delete, internal)
+        self.handler.ready()
+        return ex
 
     @asyncio.coroutine
     def declare_queue(self, name='', *, durable=True, exclusive=False, auto_delete=False):
@@ -92,7 +94,9 @@ class Channel(object):
         with (yield from self.synchroniser.sync(spec.QueueDeclareOK)) as fut:
             self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete)
             name = yield from fut
-            return queue.Queue(self.consumers, self.synchroniser, self.loop, self.sender, self.message_receiver, name, durable, exclusive, auto_delete)
+            q = queue.Queue(self.handler, self.consumers, self.synchroniser, self.loop, self.sender, self.message_receiver, name, durable, exclusive, auto_delete)
+        self.handler.ready()
+        return q
 
     @asyncio.coroutine
     def close(self):
@@ -124,17 +128,23 @@ class ChannelFactory(object):
             consumers = queue.Consumers(self.loop)
             message_receiver = MessageReceiver(synchroniser, sender, consumers)
             channel = Channel(consumers, self.next_channel_id, synchroniser, sender, message_receiver, self.loop)
+            handler = ChannelFrameHandler(synchroniser, sender, channel, consumers, message_receiver)
+            channel.handler = handler
+            consumers.handler = handler
+            message_receiver.handler = handler
 
-            self.dispatcher.add_handler(self.next_channel_id, ChannelFrameHandler(synchroniser, sender, channel, consumers, message_receiver))
+            self.dispatcher.add_handler(self.next_channel_id, handler)
             try:
                 sender.send_ChannelOpen()
+                handler.ready()
                 yield from fut
             except:
                 self.dispatcher.remove_handler(self.next_channel_id)
                 raise
 
             self.next_channel_id += 1
-            return channel
+        handler.ready()
+        return channel
 
 
 class ChannelFrameHandler(bases.FrameHandler):
@@ -188,12 +198,15 @@ class ChannelFrameHandler(bases.FrameHandler):
 
     def handle_BasicDeliver(self, frame):
         self.message_receiver.receive_deliver(frame)
+        self.ready()
 
     def handle_ContentHeaderFrame(self, frame):
         self.message_receiver.receive_header(frame)
+        self.ready()
 
     def handle_ContentBodyFrame(self, frame):
         self.message_receiver.receive_body(frame)
+        self.ready()
 
     def handle_ChannelClose(self, frame):
         self.channel.closing = True
@@ -233,6 +246,7 @@ class MessageReceiver(object):
                 payload.routing_key
             )
             self.ready()
+            self.handler.ready()
 
         self.q.put_nowait(coro())
 
