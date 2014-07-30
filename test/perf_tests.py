@@ -16,7 +16,7 @@ class WhenConsumingLoadsOfMessages(BoundQueueContext):
         self.time = contexts.time(self.loop.run_until_complete, self.consume())
 
     def it_should_consume_the_messages_reasonably_quickly(self):
-        assert self.time < 1.6
+        assert self.time < 2
 
     @asyncio.coroutine
     def consume(self):
