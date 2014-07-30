@@ -114,9 +114,7 @@ class Queue(object):
             self.sender.send_BasicGet(self.name, no_ack)
             consumer_tag, msg = yield from fut
             assert consumer_tag is None
-        self.message_receiver.ready()
-        if msg is None:
-            self.handler.ready()
+        self.handler.ready()
         return msg
 
     @asyncio.coroutine
