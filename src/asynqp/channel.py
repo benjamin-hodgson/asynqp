@@ -110,6 +110,21 @@ class Channel(object):
             self.sender.send_Close(0, 'Channel closed by application', 0, 0)
             yield from fut
 
+    @asyncio.coroutine
+    def set_qos(self, prefetch_count=0):
+        """
+        This method requests a specific quality of service.
+
+        This method is a :ref:`coroutine <coroutine>`.
+
+        :param int prefetch_count: Specifies a prefetch window in terms of whole messages
+        :return:
+        """
+        with (yield from self.synchroniser.sync(spec.BasicQosOK)) as fut:
+            self.sender.send_BasicQos(0, prefetch_count, False)
+            yield from fut
+        self.handler.ready()
+
 
 class ChannelFactory(object):
     def __init__(self, loop, protocol, dispatcher, connection_info):
@@ -210,6 +225,9 @@ class ChannelFrameHandler(bases.FrameHandler):
         self.sender.send_CloseOK()
 
     def handle_ChannelCloseOK(self, frame):
+        self.synchroniser.succeed()
+
+    def handle_BasicQosOK(self, frame):
         self.synchroniser.succeed()
 
 
@@ -322,6 +340,9 @@ class ChannelMethodSender(bases.Sender):
 
     def send_CloseOK(self):
         self.send_method(spec.ChannelCloseOK())
+
+    def send_BasicQos(self, prefetch_size, prefetch_count, all_channels):
+        self.send_method(spec.BasicQos(prefetch_size, prefetch_count, all_channels))
 
     def send_content(self, msg):
         header_payload = message.get_header_payload(msg, spec.BasicPublish.method_type[0])

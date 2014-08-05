@@ -139,3 +139,26 @@ class WhenAnUnexpectedChannelCloseArrives(OpenChannelContext):
 
     def it_should_send_ChannelCloseOK(self):
         self.protocol.send_method.assert_called_once_with(1, spec.ChannelCloseOK())
+
+
+class WhenBasicQosOkArrives(OpenChannelContext):
+    def given_we_are_setting_qos_settings(self):
+        self.task = asyncio.async(self.channel.set_qos(prefetch_count=100))
+        self.tick()
+
+    def when_BasicQosOk_arrives(self):
+        frame = asynqp.frames.MethodFrame(1, spec.BasicQosOK())
+        self.dispatcher.dispatch(frame)
+        self.tick()
+
+    def it_should_yield_result(self):
+        assert self.task.done()
+
+
+class WhenSettingQosPrefetchCount(OpenChannelContext):
+    def when_we_are_setting_prefetch_count_only(self):
+        asyncio.async(self.channel.set_qos(prefetch_count=100))
+        self.tick()
+
+    def it_should_send_BasicQos_with_default_values(self):
+        self.protocol.send_method.assert_called_once_with(1, spec.BasicQos(0, 100, False))
