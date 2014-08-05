@@ -152,13 +152,7 @@ class WhenBasicQosOkArrives(OpenChannelContext):
         self.tick()
 
     def it_should_yield_result(self):
-        try:
-            self.task.result()
-        except asyncio.futures.InvalidStateError:
-            result_is_ready = False
-        else:
-            result_is_ready = True
-        assert result_is_ready
+        assert self.task.done()
 
 
 class WhenSettingQosPrefetchCount(OpenChannelContext):

@@ -111,20 +111,17 @@ class Channel(object):
             yield from fut
 
     @asyncio.coroutine
-    def set_qos(self, prefetch_size=0, prefetch_count=0, all_channels=False):
+    def set_qos(self, prefetch_count=0):
         """
         This method requests a specific quality of service.
 
         This method is a :ref:`coroutine <coroutine>`.
 
-        :param float prefetch_size: This field specifies the prefetch window size in octets
         :param int prefetch_count: Specifies a prefetch window in terms of whole messages
-        :param int all_channels: By default the QoS settings apply to the current channel only. If this field is
-          set, they are applied to the entire connection.
         :return:
         """
         with (yield from self.synchroniser.sync(spec.BasicQosOK)) as fut:
-            self.sender.send_BasicQos(prefetch_size, prefetch_count, all_channels)
+            self.sender.send_BasicQos(0, prefetch_count, False)
             yield from fut
         self.handler.ready()
 
