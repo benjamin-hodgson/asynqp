@@ -159,3 +159,12 @@ class WhenBasicQosOkArrives(OpenChannelContext):
         else:
             result_is_ready = True
         assert result_is_ready
+
+
+class WhenSettingQosPrefetchCount(OpenChannelContext):
+    def when_we_are_setting_prefetch_count_only(self):
+        asyncio.async(self.channel.set_qos(prefetch_count=100))
+        self.tick()
+
+    def it_should_send_BasicQos_with_default_values(self):
+        self.protocol.send_method.assert_called_once_with(1, spec.BasicQos(0, 100, False))
