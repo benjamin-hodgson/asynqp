@@ -111,7 +111,7 @@ class Channel(object):
             yield from fut
 
     @asyncio.coroutine
-    def basic_qos(self, prefetch_size=0, prefetch_count=0, all_channels=False):
+    def set_qos(self, prefetch_size=0, prefetch_count=0, all_channels=False):
         """
         This method requests a specific quality of service.
 
@@ -126,7 +126,7 @@ class Channel(object):
         with (yield from self.synchroniser.sync(spec.BasicQosOK)) as fut:
             self.sender.send_BasicQos(prefetch_size, prefetch_count, all_channels)
             yield from fut
-            self.handler.ready()
+        self.handler.ready()
 
 
 class ChannelFactory(object):
