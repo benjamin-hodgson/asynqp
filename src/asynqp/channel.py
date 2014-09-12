@@ -111,7 +111,7 @@ class Channel(object):
             yield from fut
 
     @asyncio.coroutine
-    def set_qos(self, prefetch_count=0):
+    def set_qos(self, prefetch_size=0, prefetch_count=0, apply_globally=False):
         """
         This method requests a specific quality of service.
 
@@ -121,7 +121,7 @@ class Channel(object):
         :return:
         """
         with (yield from self.synchroniser.sync(spec.BasicQosOK)) as fut:
-            self.sender.send_BasicQos(0, prefetch_count, False)
+            self.sender.send_BasicQos(prefetch_size, prefetch_count, apply_globally)
             yield from fut
         self.handler.ready()
 
@@ -341,8 +341,8 @@ class ChannelMethodSender(bases.Sender):
     def send_CloseOK(self):
         self.send_method(spec.ChannelCloseOK())
 
-    def send_BasicQos(self, prefetch_size, prefetch_count, all_channels):
-        self.send_method(spec.BasicQos(prefetch_size, prefetch_count, all_channels))
+    def send_BasicQos(self, prefetch_size, prefetch_count, apply_globally):
+        self.send_method(spec.BasicQos(prefetch_size, prefetch_count, apply_globally))
 
     def send_content(self, msg):
         header_payload = message.get_header_payload(msg, spec.BasicPublish.method_type[0])
