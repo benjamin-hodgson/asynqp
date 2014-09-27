@@ -225,6 +225,7 @@ class ChannelFrameHandler(bases.FrameHandler):
 
     def handle_BasicCancelOK(self, frame):
         consumer_tag = frame.payload.consumer_tag
+        self.synchroniser.succeed()
         self.consumers.cancel(consumer_tag)
 
     def handle_BasicDeliver(self, frame):

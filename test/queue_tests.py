@@ -249,7 +249,8 @@ class WhenBasicDeliverArrives(ConsumerContext):
 
 class WhenICancelAConsumer(ConsumerContext):
     def when_I_cancel_the_consumer(self):
-        self.consumer.cancel()
+        asyncio.async(self.consumer.cancel())
+        self.tick()
 
     def it_should_send_a_BasicCancel_method(self):
         self.protocol.send_method.assert_called_once_with(self.channel.id, spec.BasicCancel(self.consumer.tag, False))
@@ -257,7 +258,8 @@ class WhenICancelAConsumer(ConsumerContext):
 
 class WhenCancelOKArrives(ConsumerContext):
     def given_I_cancelled_a_consumer(self):
-        self.consumer.cancel()
+        asyncio.async(self.consumer.cancel())
+        self.tick()
 
     def when_BasicCancelOK_arrives(self):
         self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, spec.BasicCancelOK(self.consumer.tag)))

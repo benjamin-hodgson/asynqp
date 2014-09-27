@@ -1,5 +1,6 @@
 import asyncio
 import asynqp
+import contexts
 
 
 class ConnectionContext:
@@ -186,3 +187,15 @@ class WhenPublishingAndConsumingALongMessage(BoundQueueContext):
 
     def it_should_deliver_the_message_to_the_consumer(self):
         assert self.message_received.result() == self.msg
+
+
+class WhenBasicCancelIsInterleavedWithAnotherMethod(BoundQueueContext):
+    def given_I_have_started_a_consumer(self):
+        self.consumer = self.loop.run_until_complete(asyncio.wait_for(self.queue.consume(lambda x: None), 0.2))
+
+    def when_I_cancel_the_consumer_and_also_get_a_message(self):
+        self.consumer.cancel()
+        self.exception = contexts.catch(self.loop.run_until_complete, self.queue.get())
+
+    def it_should_not_throw(self):
+        assert self.exception is None

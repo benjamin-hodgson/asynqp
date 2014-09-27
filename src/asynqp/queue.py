@@ -90,7 +90,7 @@ class Queue(object):
         with (yield from self.synchroniser.sync(spec.BasicConsumeOK)) as fut:
             self.sender.send_BasicConsume(self.name, no_local, no_ack, exclusive)
             tag = yield from fut
-            consumer = Consumer(tag, callback, self.sender)
+            consumer = Consumer(tag, callback, self.sender, self.synchroniser, self.handler)
             self.consumers.add_consumer(consumer)
         self.handler.ready()
         return consumer
@@ -187,7 +187,8 @@ class QueueBinding(object):
     def unbind(self):
         """
         Unbind the queue from the exchange.
-        This method is a coroutine.
+
+        This method is a :ref:`coroutine <coroutine>`.
         """
         if self.deleted:
             raise Deleted("Queue {} was already unbound from exchange {}".format(self.queue.name, self.exchange.name))
@@ -219,17 +220,26 @@ class Consumer(object):
 
         Boolean. True if the consumer has been successfully cancelled.
     """
-    def __init__(self, tag, callback, sender):
+    def __init__(self, tag, callback, sender, synchroniser, handler):
         self.tag = tag
         self.callback = callback
         self.sender = sender
         self.cancelled = False
+        self.synchroniser = synchroniser
+        self.handler = handler
 
+    @asyncio.coroutine
     def cancel(self):
         """
         Cancel the consumer and stop recieving messages.
+
+        This method is a :ref:`coroutine <coroutine>`.
         """
-        self.sender.send_BasicCancel(self.tag)
+        with (yield from self.synchroniser.sync(spec.BasicCancelOK)) as fut:
+            self.sender.send_BasicCancel(self.tag)
+            yield from fut
+            self.cancelled = True
+        self.handler.ready()
 
 
 class Consumers(object):
@@ -244,6 +254,4 @@ class Consumers(object):
         self.loop.call_soon(self.consumers[tag].callback, msg)
 
     def cancel(self, tag):
-        self.consumers[tag].cancelled = True
         del self.consumers[tag]
-        self.handler.ready()
