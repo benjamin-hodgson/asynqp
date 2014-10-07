@@ -1,4 +1,5 @@
 import asyncio
+import collections
 from contextlib import contextmanager
 from .exceptions import AMQPError
 
@@ -15,63 +16,61 @@ def rethrow_as(expected_cls, to_throw):
 
 
 class Synchroniser(object):
-    def __init__(self, loop, *defaults):
+    def __init__(self, loop):
         self.loop = loop
-        self.defaults = frozenset(defaults)
-        self.expected_methods = set()
-        self.response = None
-        self.lock = asyncio.Lock(loop=loop)
+        self.futures = OrderedManyToManyMap()
 
-    # When yielded from, sync() returns a context manager containing a future.
-    # It's not a coroutine; it doesn't make sense to schedule it as a task.
-    # You use it like this:
-    #
-    #     with (yield from s.sync(*expected_methods)) as fut:
-    #         ...
-    #         yield from fut
-    #         ...
-    def sync(self, *expected_methods):
-        yield from self.lock.acquire()
-        self.expected_methods = set(expected_methods)
-        self.response = asyncio.Future(loop=self.loop)
-        return self.manager(expected_methods)
+    def await(self, *expected_methods):
+        fut = asyncio.Future(loop=self.loop)
+        self.futures.add_item(expected_methods, fut)
+        return fut
 
-    # useful for multi-frame messages or multi-stage communications
-    def change_expected(self, *expected_methods):
-        self.expected_methods = set(expected_methods)
+    def notify(self, method, result=None):
+        fut = self.futures.get_leftmost(method)
+        fut.set_result(result)
+        self.futures.remove_item(fut)
 
-    def check_expected(self, frame):
-        method_type = type(frame.payload)
-        if not self.is_expected(frame):
-            msg = 'Expected one of {} but got {}'.format([cls.__name__ for cls in (self.expected_methods | self.defaults)], method_type.__name__)
 
-            self.fail(AMQPError(msg))
-            raise AMQPError(msg)
+class OrderedManyToManyMap(object):
+    def __init__(self):
+        self.items = collections.defaultdict(OrderedSet)
 
-    def succeed(self, result=None):
-        self.response.set_result(result)
+    def add_item(self, keys, item):
+        for key in keys:
+            self.items[key].add(item)
 
-    def fail(self, exception):
-        self.response.set_exception(exception)
+    def remove_item(self, item):
+        for ordered_set in self.items.values():
+            ordered_set.discard(item)
 
-    def is_waiting(self):
-        return self.response is not None
+    def get_leftmost(self, key):
+        return self.items[key].first()
 
-    @contextmanager
-    def manager(self, expected_methods):
+
+class OrderedSet(collections.MutableSet):
+    def __init__(self):
+        self._map = collections.OrderedDict()
+
+    def __contains__(self, item):
+        return item in self._map
+
+    def __iter__(self):
+        return iter(self._map.keys())
+
+    def __getitem__(self, ix):
+        return
+
+    def __len__(self):
+        return len(self._map)
+
+    def add(self, item):
+        self._map[item] = None
+
+    def discard(self, item):
         try:
-            yield self.response
-        finally:
-            self.expected_methods = set()
-            self.response = None
-            self.lock.release()
+            del self._map[item]
+        except KeyError:
+            pass
 
-    def is_expected(self, frame):
-        expected = self.expected_methods | self.defaults
-
-        if self.is_waiting():
-            if any(isinstance(frame, cls) for cls in expected):
-                return True
-            if getattr(frame.payload, "synchronous", False):
-                return any(isinstance(frame.payload, cls) for cls in expected)
-        return True
+    def first(self):
+        return next(iter(self._map))

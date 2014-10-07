@@ -51,8 +51,7 @@ class Exchange(object):
         :keyword bool if_unused: If true, the exchange will only be deleted if
             it has no queues bound to it.
         """
-        with (yield from self.synchroniser.sync(spec.ExchangeDeleteOK)) as fut:
-            self.sender.send_ExchangeDelete(self.name, if_unused)
-            yield from fut
+        self.sender.send_ExchangeDelete(self.name, if_unused)
+        yield from self.synchroniser.await(spec.ExchangeDeleteOK)
         self.handler.ready()
 

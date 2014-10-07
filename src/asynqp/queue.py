@@ -1,5 +1,5 @@
 import asyncio
-from . import spec
+from . import spec, frames
 from .exceptions import Deleted
 
 
@@ -60,10 +60,9 @@ class Queue(object):
         if self.deleted:
             raise Deleted("Queue {} was deleted".format(self.name))
 
-        with (yield from self.synchroniser.sync(spec.QueueBindOK)) as fut:
-            self.sender.send_QueueBind(self.name, exchange.name, routing_key)
-            yield from fut
-            b = QueueBinding(self.handler, self.sender, self.synchroniser, self, exchange, routing_key)
+        self.sender.send_QueueBind(self.name, exchange.name, routing_key)
+        yield from self.synchroniser.await(spec.QueueBindOK)
+        b = QueueBinding(self.handler, self.sender, self.synchroniser, self, exchange, routing_key)
         self.handler.ready()
         return b
 
@@ -87,11 +86,10 @@ class Queue(object):
         if self.deleted:
             raise Deleted("Queue {} was deleted".format(self.name))
 
-        with (yield from self.synchroniser.sync(spec.BasicConsumeOK)) as fut:
-            self.sender.send_BasicConsume(self.name, no_local, no_ack, exclusive)
-            tag = yield from fut
-            consumer = Consumer(tag, callback, self.sender, self.synchroniser, self.handler)
-            self.consumers.add_consumer(consumer)
+        self.sender.send_BasicConsume(self.name, no_local, no_ack, exclusive)
+        tag = yield from self.synchroniser.await(spec.BasicConsumeOK)
+        consumer = Consumer(tag, callback, self.sender, self.synchroniser, self.handler)
+        self.consumers.add_consumer(consumer)
         self.handler.ready()
         return consumer
 
@@ -110,10 +108,15 @@ class Queue(object):
         if self.deleted:
             raise Deleted("Queue {} was deleted".format(self.name))
 
-        with (yield from self.synchroniser.sync(spec.BasicGetOK, spec.BasicGetEmpty)) as fut:
-            self.sender.send_BasicGet(self.name, no_ack)
-            consumer_tag, msg = yield from fut
+        self.sender.send_BasicGet(self.name, no_ack)
+        has_message = yield from self.synchroniser.await(spec.BasicGetOK, spec.BasicGetEmpty)
+
+        if has_message:
+            yield from self.synchroniser.await(frames.ContentHeaderFrame)
+            consumer_tag, msg = yield from self.synchroniser.await(frames.ContentBodyFrame)
             assert consumer_tag is None
+        else:
+            msg = None
         self.handler.ready()
         return msg
 
@@ -124,9 +127,8 @@ class Queue(object):
 
         This method is a :ref:`coroutine <coroutine>`.
         """
-        with (yield from self.synchroniser.sync(spec.QueuePurgeOK)) as fut:
-            self.sender.send_QueuePurge(self.name)
-            yield from fut
+        self.sender.send_QueuePurge(self.name)
+        yield from self.synchroniser.await(spec.QueuePurgeOK)
         self.handler.ready()
 
     @asyncio.coroutine
@@ -144,10 +146,9 @@ class Queue(object):
         if self.deleted:
             raise Deleted("Queue {} was already deleted".format(self.name))
 
-        with (yield from self.synchroniser.sync(spec.QueueDeleteOK)) as fut:
-            self.sender.send_QueueDelete(self.name, if_unused, if_empty)
-            yield from fut
-            self.deleted = True
+        self.sender.send_QueueDelete(self.name, if_unused, if_empty)
+        yield from self.synchroniser.await(spec.QueueDeleteOK)
+        self.deleted = True
         self.handler.ready()
 
 
@@ -193,10 +194,9 @@ class QueueBinding(object):
         if self.deleted:
             raise Deleted("Queue {} was already unbound from exchange {}".format(self.queue.name, self.exchange.name))
 
-        with (yield from self.synchroniser.sync(spec.QueueUnbindOK)) as fut:
-            self.sender.send_QueueUnbind(self.queue.name, self.exchange.name, self.routing_key)
-            yield from fut
-            self.deleted = True
+        self.sender.send_QueueUnbind(self.queue.name, self.exchange.name, self.routing_key)
+        yield from self.synchroniser.await(spec.QueueUnbindOK)
+        self.deleted = True
         self.handler.ready()
 
 
@@ -235,10 +235,9 @@ class Consumer(object):
 
         This method is a :ref:`coroutine <coroutine>`.
         """
-        with (yield from self.synchroniser.sync(spec.BasicCancelOK)) as fut:
-            self.sender.send_BasicCancel(self.tag)
-            yield from fut
-            self.cancelled = True
+        self.sender.send_BasicCancel(self.tag)
+        yield from self.synchroniser.await(spec.BasicCancelOK)
+        self.cancelled = True
         self.handler.ready()
 
 

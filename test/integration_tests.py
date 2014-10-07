@@ -195,7 +195,7 @@ class WhenBasicCancelIsInterleavedWithAnotherMethod(BoundQueueContext):
 
     def when_I_cancel_the_consumer_and_also_get_a_message(self):
         self.consumer.cancel()
-        self.exception = contexts.catch(self.loop.run_until_complete, self.queue.get())
+        self.exception = contexts.catch(self.loop.run_until_complete, asyncio.wait_for(self.queue.get(), 0.2))
 
     def it_should_not_throw(self):
         assert self.exception is None

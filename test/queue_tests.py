@@ -42,23 +42,6 @@ class WhenQueueDeclareOKArrives(OpenChannelContext):
         assert self.result.auto_delete
 
 
-class WhenIDeclareTwoQueuesConcurrently(OpenChannelContext):
-    def given_I_am_awaiting_QueueDeclareOK(self):
-        self.queue_name1 = 'my.nice.queue'
-        self.task1 = asyncio.async(self.channel.declare_queue(self.queue_name1, durable=True, exclusive=True, auto_delete=True),
-                                   loop=self.loop)
-        self.tick()
-        self.protocol.reset_mock()
-
-    def when_I_declare_another_queue(self):
-        asyncio.async(self.channel.declare_queue('another.queue', durable=True, exclusive=True, auto_delete=True),
-                      loop=self.loop)
-        self.tick()
-
-    def it_should_not_send_a_second_QueueDeclare_method(self):
-        assert not self.protocol.method_calls
-
-
 class WhenILetTheServerPickTheQueueName(OpenChannelContext):
     def given_I_declared_a_queue(self):
         self.task = asyncio.async(self.channel.declare_queue('', durable=True, exclusive=True, auto_delete=True), loop=self.loop)

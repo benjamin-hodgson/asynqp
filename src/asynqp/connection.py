@@ -53,7 +53,7 @@ class Connection(object):
 
         :return: The new :class:`Channel` object.
         """
-        channel = (yield from self.channel_factory.open())
+        channel = yield from self.channel_factory.open()
         return channel
 
     @asyncio.coroutine
@@ -63,28 +63,28 @@ class Connection(object):
 
         This method is a :ref:`coroutine <coroutine>`.
         """
-        with (yield from self.synchroniser.sync(spec.ConnectionCloseOK)) as fut:
-            self.closing.set_result(True)
-            self.sender.send_Close(0, 'Connection closed by application', 0, 0)
-            yield from fut
+        self.closing.set_result(True)
+        self.sender.send_Close(0, 'Connection closed by application', 0, 0)
+        yield from self.synchroniser.await(spec.ConnectionCloseOK)
 
 
 @asyncio.coroutine
 def open_connection(loop, protocol, dispatcher, connection_info):
     synchroniser = Synchroniser(loop)
 
-    with (yield from synchroniser.sync(spec.ConnectionStart)) as fut:
-        sender = ConnectionMethodSender(protocol)
-        connection = Connection(loop, protocol, synchroniser, sender, dispatcher, connection_info)
-        handler = ConnectionFrameHandler(synchroniser, sender, protocol, connection, connection_info)
-        try:
-            dispatcher.add_handler(0, handler)
-            protocol.send_protocol_header()
-            handler.ready()
-            yield from fut
-        except:
-            dispatcher.remove_handler(0)
-            raise
+    sender = ConnectionMethodSender(protocol)
+    connection = Connection(loop, protocol, synchroniser, sender, dispatcher, connection_info)
+    handler = ConnectionFrameHandler(synchroniser, sender, protocol, connection, connection_info)
+    try:
+        dispatcher.add_handler(0, handler)
+        protocol.send_protocol_header()
+        handler.ready()
+        yield from synchroniser.await(spec.ConnectionStart)
+        yield from synchroniser.await(spec.ConnectionTune)
+        yield from synchroniser.await(spec.ConnectionOpenOK)
+    except:
+        dispatcher.remove_handler(0)
+        raise
     handler.ready()
     return connection
 
@@ -97,7 +97,7 @@ class ConnectionFrameHandler(bases.FrameHandler):
         self.connection_info = connection_info
 
     def handle_ConnectionStart(self, frame):
-        self.synchroniser.change_expected(spec.ConnectionTune)
+        self.synchroniser.notify(spec.ConnectionStart)
         self.sender.send_StartOK(
             {"product": "asynqp",
              "version": "0.1",  # todo: use pkg_resources to inspect the package
@@ -110,17 +110,17 @@ class ConnectionFrameHandler(bases.FrameHandler):
 
     def handle_ConnectionTune(self, frame):
         # just agree with whatever the server wants. Make this configurable in future
+        self.synchroniser.notify(spec.ConnectionTune)
         self.connection_info.frame_max = frame.payload.frame_max
         heartbeat_interval = frame.payload.heartbeat
         self.sender.send_TuneOK(frame.payload.channel_max, frame.payload.frame_max, heartbeat_interval)
 
-        self.synchroniser.change_expected(spec.ConnectionOpenOK)
         self.sender.send_Open(self.connection_info.virtual_host)
         self.protocol.start_heartbeat(heartbeat_interval)
         self.ready()
 
     def handle_ConnectionOpenOK(self, frame):
-        self.synchroniser.succeed()
+        self.synchroniser.notify(spec.ConnectionOpenOK)
 
     def handle_ConnectionClose(self, frame):
         self.connection.closing.set_result(True)
@@ -129,7 +129,7 @@ class ConnectionFrameHandler(bases.FrameHandler):
 
     def handle_ConnectionCloseOK(self, frame):
         self.protocol.transport.close()
-        self.synchroniser.succeed()
+        self.synchroniser.notify(spec.ConnectionCloseOK)
 
 
 class ConnectionMethodSender(bases.Sender):

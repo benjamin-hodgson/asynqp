@@ -90,24 +90,6 @@ class WhenAnotherMethodArrivesAfterTheServerClosedTheChannel(OpenChannelContext)
         assert not self.protocol.send_frame.called
 
 
-class WhenAnUnexpectedSynchronousMethodArrives(OpenChannelContext):
-    def given_we_are_awaiting_QueueDeclareOK(self):
-        self.task = asyncio.async(self.channel.declare_queue('my.nice.queue', durable=True, exclusive=True, auto_delete=True), loop=self.loop)
-        self.tick()
-        self.protocol.reset_mock()
-
-    def when_the_wrong_method_arrives(self):
-        open_ok_frame = asynqp.frames.MethodFrame(1, spec.ChannelOpenOK(''))
-        self.dispatcher.dispatch(open_ok_frame)
-        self.tick()
-
-    def it_should_close_the_channel(self):
-        self.protocol.send_method.assert_called_once_with(1, util.any(spec.ChannelClose))
-
-    def it_should_throw(self):
-        assert isinstance(self.task.exception(), asynqp.AMQPError)
-
-
 class WhenAnAsyncMethodArrivesWhileWeAwaitASynchronousOne(OpenChannelContext):
     def given_we_are_awaiting_QueueDeclareOK(self):
         self.task = asyncio.async(self.channel.declare_queue('my.nice.queue', durable=True, exclusive=True, auto_delete=True), loop=self.loop)

@@ -59,10 +59,9 @@ class Channel(object):
                              "Valid names consist of letters, digits, hyphen, underscore, period, or colon, "
                              "and do not begin with 'amq.'")
 
-        with (yield from self.synchroniser.sync(spec.ExchangeDeclareOK)) as fut:
-            self.sender.send_ExchangeDeclare(name, type, durable, auto_delete, internal)
-            yield from fut
-            ex = exchange.Exchange(self.handler, self.synchroniser, self.sender, name, type, durable, auto_delete, internal)
+        self.sender.send_ExchangeDeclare(name, type, durable, auto_delete, internal)
+        yield from self.synchroniser.await(spec.ExchangeDeclareOK)
+        ex = exchange.Exchange(self.handler, self.synchroniser, self.sender, name, type, durable, auto_delete, internal)
         self.handler.ready()
         return ex
 
@@ -91,10 +90,9 @@ class Channel(object):
                              "Valid names consist of letters, digits, hyphen, underscore, period, or colon, "
                              "and do not begin with 'amq.'")
 
-        with (yield from self.synchroniser.sync(spec.QueueDeclareOK)) as fut:
-            self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete)
-            name = yield from fut
-            q = queue.Queue(self.handler, self.consumers, self.synchroniser, self.loop, self.sender, self.message_receiver, name, durable, exclusive, auto_delete)
+        self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete)
+        name = yield from self.synchroniser.await(spec.QueueDeclareOK)
+        q = queue.Queue(self.handler, self.consumers, self.synchroniser, self.loop, self.sender, self.message_receiver, name, durable, exclusive, auto_delete)
         self.handler.ready()
         return q
 
@@ -105,10 +103,9 @@ class Channel(object):
 
         This method is a :ref:`coroutine <coroutine>`.
         """
-        with (yield from self.synchroniser.sync(spec.ChannelCloseOK)) as fut:
-            self.closing = True
-            self.sender.send_Close(0, 'Channel closed by application', 0, 0)
-            yield from fut
+        self.closing = True
+        self.sender.send_Close(0, 'Channel closed by application', 0, 0)
+        yield from self.synchroniser.await(spec.ChannelCloseOK)
 
     @asyncio.coroutine
     def set_qos(self, prefetch_size=0, prefetch_count=0, apply_globally=False):
@@ -136,9 +133,8 @@ class Channel(object):
                 per-consumer (for new consumers on the channel; existing ones being unaffected) and
                 global=true to mean that the QoS settings should apply per-channel.
         """
-        with (yield from self.synchroniser.sync(spec.BasicQosOK)) as fut:
-            self.sender.send_BasicQos(prefetch_size, prefetch_count, apply_globally)
-            yield from fut
+        self.sender.send_BasicQos(prefetch_size, prefetch_count, apply_globally)
+        yield from self.synchroniser.await(spec.BasicQosOK)
         self.handler.ready()
 
 
@@ -152,28 +148,27 @@ class ChannelFactory(object):
 
     @asyncio.coroutine
     def open(self):
-        synchroniser = Synchroniser(self.loop, spec.ChannelClose)
+        synchroniser = Synchroniser(self.loop)
 
-        with (yield from synchroniser.sync(spec.ChannelOpenOK)) as fut:
-            sender = ChannelMethodSender(self.next_channel_id, self.protocol, self.connection_info)
-            consumers = queue.Consumers(self.loop)
-            message_receiver = MessageReceiver(synchroniser, sender, consumers)
-            channel = Channel(consumers, self.next_channel_id, synchroniser, sender, message_receiver, self.loop)
-            handler = ChannelFrameHandler(synchroniser, sender, channel, consumers, message_receiver)
-            channel.handler = handler
-            consumers.handler = handler
-            message_receiver.handler = handler
+        sender = ChannelMethodSender(self.next_channel_id, self.protocol, self.connection_info)
+        consumers = queue.Consumers(self.loop)
+        message_receiver = MessageReceiver(synchroniser, sender, consumers)
+        channel = Channel(consumers, self.next_channel_id, synchroniser, sender, message_receiver, self.loop)
+        handler = ChannelFrameHandler(synchroniser, sender, channel, consumers, message_receiver)
+        channel.handler = handler
+        consumers.handler = handler
+        message_receiver.handler = handler
 
-            self.dispatcher.add_handler(self.next_channel_id, handler)
-            try:
-                sender.send_ChannelOpen()
-                handler.ready()
-                yield from fut
-            except:
-                self.dispatcher.remove_handler(self.next_channel_id)
-                raise
+        self.dispatcher.add_handler(self.next_channel_id, handler)
+        try:
+            sender.send_ChannelOpen()
+            handler.ready()
+            yield from synchroniser.await(spec.ChannelOpenOK)
+        except:
+            self.dispatcher.remove_handler(self.next_channel_id)
+            raise
 
-            self.next_channel_id += 1
+        self.next_channel_id += 1
         handler.ready()
         return channel
 
@@ -191,41 +186,41 @@ class ChannelFrameHandler(bases.FrameHandler):
         super().handle(frame)
 
     def handle_ChannelOpenOK(self, frame):
-        self.synchroniser.succeed()
+        self.synchroniser.notify(spec.ChannelOpenOK)
 
     def handle_QueueDeclareOK(self, frame):
-        self.synchroniser.succeed(frame.payload.queue)
+        self.synchroniser.notify(spec.QueueDeclareOK, frame.payload.queue)
 
     def handle_ExchangeDeclareOK(self, frame):
-        self.synchroniser.succeed()
+        self.synchroniser.notify(spec.ExchangeDeclareOK)
 
     def handle_ExchangeDeleteOK(self, frame):
-        self.synchroniser.succeed()
+        self.synchroniser.notify(spec.ExchangeDeleteOK)
 
     def handle_QueueBindOK(self, frame):
-        self.synchroniser.succeed()
+        self.synchroniser.notify(spec.QueueBindOK)
 
     def handle_QueueUnbindOK(self, frame):
-        self.synchroniser.succeed()
+        self.synchroniser.notify(spec.QueueUnbindOK)
 
     def handle_QueuePurgeOK(self, frame):
-        self.synchroniser.succeed()
+        self.synchroniser.notify(spec.QueuePurgeOK)
 
     def handle_QueueDeleteOK(self, frame):
-        self.synchroniser.succeed()
+        self.synchroniser.notify(spec.QueueDeleteOK)
 
     def handle_BasicGetEmpty(self, frame):
-        self.synchroniser.succeed((None, None))
+        self.synchroniser.notify(spec.BasicGetEmpty, False)
 
     def handle_BasicGetOK(self, frame):
         asyncio.async(self.message_receiver.receive_getOK(frame))
 
     def handle_BasicConsumeOK(self, frame):
-        self.synchroniser.succeed(frame.payload.consumer_tag)
+        self.synchroniser.notify(spec.BasicConsumeOK, frame.payload.consumer_tag)
 
     def handle_BasicCancelOK(self, frame):
         consumer_tag = frame.payload.consumer_tag
-        self.synchroniser.succeed()
+        self.synchroniser.notify(spec.BasicCancelOK)
         self.consumers.cancel(consumer_tag)
 
     def handle_BasicDeliver(self, frame):
@@ -242,10 +237,10 @@ class ChannelFrameHandler(bases.FrameHandler):
         self.sender.send_CloseOK()
 
     def handle_ChannelCloseOK(self, frame):
-        self.synchroniser.succeed()
+        self.synchroniser.notify(spec.ChannelCloseOK)
 
     def handle_BasicQosOK(self, frame):
-        self.synchroniser.succeed()
+        self.synchroniser.notify(spec.BasicQosOK)
 
 
 class MessageReceiver(object):
@@ -257,7 +252,7 @@ class MessageReceiver(object):
 
     @asyncio.coroutine
     def receive_getOK(self, frame):
-        self.synchroniser.change_expected(frames.ContentHeaderFrame)
+        self.synchroniser.notify(spec.BasicGetOK, True)
         payload = frame.payload
         self.message_builder = message.MessageBuilder(
             self.sender,
@@ -270,24 +265,24 @@ class MessageReceiver(object):
 
     @asyncio.coroutine
     def receive_deliver(self, frame):
-        with (yield from self.synchroniser.sync(frames.ContentHeaderFrame)) as fut:
-            payload = frame.payload
-            self.message_builder = message.MessageBuilder(
-                self.sender,
-                payload.delivery_tag,
-                payload.redelivered,
-                payload.exchange,
-                payload.routing_key,
-                payload.consumer_tag
-            )
-            self.handler.ready()
-            tag, msg = yield from fut
-            self.consumers.deliver(tag, msg)
+        payload = frame.payload
+        self.message_builder = message.MessageBuilder(
+            self.sender,
+            payload.delivery_tag,
+            payload.redelivered,
+            payload.exchange,
+            payload.routing_key,
+            payload.consumer_tag
+        )
+        self.handler.ready()
+        yield from self.synchroniser.await(frames.ContentHeaderFrame)
+        tag, msg = yield from self.synchroniser.await(frames.ContentBodyFrame)
+        self.consumers.deliver(tag, msg)
         self.handler.ready()
 
     @asyncio.coroutine
     def receive_header(self, frame):
-        self.synchroniser.change_expected(frames.ContentBodyFrame)
+        self.synchroniser.notify(frames.ContentHeaderFrame)
         self.message_builder.set_header(frame.payload)
         self.handler.ready()
 
@@ -297,9 +292,12 @@ class MessageReceiver(object):
         if self.message_builder.done():
             msg = self.message_builder.build()
             tag = self.message_builder.consumer_tag
-            self.synchroniser.succeed((tag, msg))
+            self.synchroniser.notify(frames.ContentBodyFrame, (tag, msg))
             self.message_builder = None
-            return  # don't call self.ready() - that's the job of the calling code
+            # don't call self.handler.ready() if the message is all here -
+            # get() or receive_deliver() will call
+            # it when they have finished processing the completed msg
+            return
         self.handler.ready()
 
 

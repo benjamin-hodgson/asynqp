@@ -35,12 +35,6 @@ class FrameHandler(object):
 
     def handle(self, frame):
         try:
-            self.synchroniser.check_expected(frame)
-        except AMQPError:
-            self.sender.send_Close(spec.UNEXPECTED_FRAME, "got an unexpected frame", *frame.payload.method_type)
-            return
-
-        try:
             handler = getattr(self, 'handle_' + type(frame).__name__)
         except AttributeError:
             handler = getattr(self, 'handle_' + type(frame.payload).__name__)
