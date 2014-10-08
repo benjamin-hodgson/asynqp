@@ -16,7 +16,7 @@ so you'll need to install that into your virtualenv before running the tests.
 You also need a local instance of RabbitMQ running. So to run all the tests:
 
 ```bash
-sudo rabbitmq-server
 pip install contexts
-run-contexts
+sudo rabbitmq-server
+run-contexts  # in another window
 ```
