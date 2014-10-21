@@ -140,6 +140,22 @@ class Channel(object):
         self.handler.ready()
 
     def set_return_handler(self, handler):
+        """
+        Set ``handler`` as the callback function for undeliverable messages
+        that were returned by the server.
+
+        By default, an exception is raised, which will be handled by
+        :ref:`the event loop's exception handler <BaseEventLoop.set_exception_handler>`.
+        If ``handler`` is None, this default behaviour is set.
+
+        :param callable handler: A function to be called when a message is returned.
+            The handler will be passed one argument, a dictionary, containing the following items:
+
+                * ``"reply_code"`` - the AMQP error code returned by the server
+                * ``"message"`` - the exception message
+                * ``"exchange_name"`` - the name of the exchange to which the undeliverable message was published
+                * ``"routing_key"`` - the routing key with which the undeliverable message was published
+        """
         self._basic_return_handler = handler
 
 
