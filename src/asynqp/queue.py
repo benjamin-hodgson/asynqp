@@ -1,6 +1,10 @@
 import asyncio
+import re
 from . import spec, frames
 from .exceptions import Deleted
+
+
+VALID_QUEUE_NAME_RE = re.compile(r'^(?!amq\.)(\w|[-.:])*$', flags=re.A)
 
 
 class Queue(object):
@@ -239,6 +243,29 @@ class Consumer(object):
         yield from self.synchroniser.await(spec.BasicCancelOK)
         self.cancelled = True
         self.handler.ready()
+
+
+class QueueFactory(object):
+    def __init__(self, sender, synchroniser, handler, consumers, message_receiver, loop):
+        self.sender = sender
+        self.synchroniser = synchroniser
+        self.handler = handler
+        self.consumers = consumers
+        self.message_receiver = message_receiver
+        self.loop = loop
+
+    @asyncio.coroutine
+    def declare(self, name, durable, exclusive, auto_delete):
+        if not VALID_QUEUE_NAME_RE.match(name):
+            raise ValueError("Not a valid queue name.\n"
+                             "Valid names consist of letters, digits, hyphen, underscore, period, or colon, "
+                             "and do not begin with 'amq.'")
+
+        self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete)
+        name = yield from self.synchroniser.await(spec.QueueDeclareOK)
+        q = Queue(self.handler, self.consumers, self.synchroniser, self.loop, self.sender, self.message_receiver, name, durable, exclusive, auto_delete)
+        self.handler.ready()
+        return q
 
 
 class Consumers(object):

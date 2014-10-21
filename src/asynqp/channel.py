@@ -28,15 +28,13 @@ class Channel(object):
 
         the numerical ID of the channel
     """
-    def __init__(self, consumers, id, synchroniser, sender, message_receiver, catcher, loop):
-        self.consumers = consumers
+    def __init__(self, id, synchroniser, sender, catcher, queue_factory, handler):
         self.id = id
         self.synchroniser = synchroniser
         self.sender = sender
-        self.message_receiver = message_receiver
-        self.loop = loop
         self.catcher = catcher
-        self.closing = False
+        self.queue_factory = queue_factory
+        self.handler = handler
 
     @asyncio.coroutine
     def declare_exchange(self, name, type, *, durable=True, auto_delete=False, internal=False):
@@ -87,15 +85,7 @@ class Channel(object):
 
         :return: The new :class:`Queue` object.
         """
-        if not VALID_QUEUE_NAME_RE.match(name):
-            raise ValueError("Not a valid queue name.\n"
-                             "Valid names consist of letters, digits, hyphen, underscore, period, or colon, "
-                             "and do not begin with 'amq.'")
-
-        self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete)
-        name = yield from self.synchroniser.await(spec.QueueDeclareOK)
-        q = queue.Queue(self.handler, self.consumers, self.synchroniser, self.loop, self.sender, self.message_receiver, name, durable, exclusive, auto_delete)
-        self.handler.ready()
+        q = yield from self.queue_factory.declare(name, durable, exclusive, auto_delete)
         return q
 
     @asyncio.coroutine
@@ -105,9 +95,9 @@ class Channel(object):
 
         This method is a :ref:`coroutine <coroutine>`.
         """
-        self.closing = True
         self.sender.send_Close(0, 'Channel closed by application', 0, 0)
         yield from self.synchroniser.await(spec.ChannelCloseOK)
+        # don't say self.handler.ready - stop reading frames from the q
 
     @asyncio.coroutine
     def set_qos(self, prefetch_size=0, prefetch_count=0, apply_globally=False):
@@ -175,9 +165,10 @@ class ChannelFactory(object):
         sender = ChannelMethodSender(self.next_channel_id, self.protocol, self.connection_info)
         consumers = queue.Consumers(self.loop)
         message_receiver = MessageReceiver(synchroniser, sender, consumers, catcher)
-        channel = Channel(consumers, self.next_channel_id, synchroniser, sender, message_receiver, catcher, self.loop)
-        handler = ChannelFrameHandler(synchroniser, sender, channel, consumers, message_receiver)
-        channel.handler = handler
+        handler = ChannelFrameHandler(synchroniser, sender, consumers, message_receiver)
+        queue_factory = queue.QueueFactory(sender, synchroniser, handler, consumers, message_receiver, self.loop)
+        channel = Channel(self.next_channel_id, synchroniser, sender, catcher, queue_factory, handler)
+
         consumers.handler = handler
         message_receiver.handler = handler
 
@@ -196,16 +187,10 @@ class ChannelFactory(object):
 
 
 class ChannelFrameHandler(bases.FrameHandler):
-    def __init__(self, synchroniser, sender, channel, consumers, message_receiver):
+    def __init__(self, synchroniser, sender, consumers, message_receiver):
         super().__init__(synchroniser, sender)
-        self.channel = channel
         self.consumers = consumers
         self.message_receiver = message_receiver
-
-    def handle(self, frame):
-        if self.channel.closing and type(frame.payload) is not spec.ChannelCloseOK:
-            return
-        super().handle(frame)
 
     def handle_ChannelOpenOK(self, frame):
         self.synchroniser.notify(spec.ChannelOpenOK)
@@ -255,7 +240,6 @@ class ChannelFrameHandler(bases.FrameHandler):
         asyncio.async(self.message_receiver.receive_body(frame))
 
     def handle_ChannelClose(self, frame):
-        self.channel.closing = True
         self.sender.send_CloseOK()
 
     def handle_ChannelCloseOK(self, frame):
