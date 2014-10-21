@@ -1,3 +1,4 @@
+import contexts
 import asyncio
 import asynqp
 from asynqp import spec
@@ -144,3 +145,72 @@ class WhenBasicQOSOkArrives(OpenChannelContext):
 
     def it_should_yield_result(self):
         assert self.task.done()
+
+
+class WhenBasicReturnArrivesAndIHaveNotDefinedAHandler(OpenChannelContext):
+    def given_I_am_listening_for_exceptions(self):
+        self.exception = None
+        self.loop.set_exception_handler(lambda l, c: setattr(self, "exception", c["exception"]))
+
+    def when_BasicReturn_arrives(self):
+        frame = asynqp.frames.MethodFrame(1, spec.BasicReturn(123, "you messed up", "the.exchange", "the.routing.key"))
+        self.dispatcher.dispatch(frame)
+        self.tick()
+
+    def it_should_throw_an_exception(self):
+        assert self.exception is not None
+
+    def it_should_set_the_reply_code(self):
+        assert self.exception.reply_code == 123
+
+    def it_should_set_the_message(self):
+        assert self.exception.message == "you messed up"
+
+    def it_should_set_the_exchange_name(self):
+        assert self.exception.exchange_name == "the.exchange"
+
+    def it_should_set_the_routing_key(self):
+        assert self.exception.routing_key == "the.routing.key"
+
+    def cleanup_the_exception_handler(self):
+        self.loop.set_exception_handler(None)
+
+
+class WhenAnotherFrameArrivesAfterBasicReturn(OpenChannelContext):
+    def given_BasicReturn_has_arrived(self):
+        self.loop.set_exception_handler(lambda l, c: None)
+
+        frame = asynqp.frames.MethodFrame(1, spec.BasicReturn(123, "you messed up", "the.exchange", "the.routing.key"))
+        self.dispatcher.dispatch(frame)
+        self.tick()
+
+    def when_another_frame_arrives(self):  # just use another BasicReturn
+        self.exception = None
+        self.loop.set_exception_handler(lambda l, c: setattr(self, "exception", c["exception"]))
+
+        frame = asynqp.frames.MethodFrame(1, spec.BasicReturn(123, "you messed up", "the.exchange", "the.routing.key"))
+        self.dispatcher.dispatch(frame)
+        self.tick()
+
+    def it_should_handle_the_frame_correctly(self):
+        assert self.exception is not None
+
+    def cleanup_the_exception_handler(self):
+        self.loop.set_exception_handler(None)
+
+
+class WhenBasicReturnArrivesAndIHaveDefinedAHandler(OpenChannelContext):
+    def given_I_have_set_a_BasicReturn_handler(self):
+        self.channel.set_return_handler(lambda x: setattr(self, "details", x))
+
+    def when_BasicReturn_arrives(self):
+        frame = asynqp.frames.MethodFrame(1, spec.BasicReturn(123, "you messed up", "the.exchange", "the.routing.key"))
+        self.dispatcher.dispatch(frame)
+        self.tick()
+
+    def it_should_call_the_handler_with_a_dict_containing_the_info(self):
+        assert self.details == {"reply_code": 123,
+                                "message": "you messed up",
+                                "exchange_name": "the.exchange",
+                                "routing_key": "the.routing.key"}
+

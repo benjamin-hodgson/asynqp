@@ -7,6 +7,7 @@ from . import queue
 from . import exchange
 from . import message
 from .util import Synchroniser
+from .exceptions import AMQPError
 
 
 VALID_QUEUE_NAME_RE = re.compile(r'^(?!amq\.)(\w|[-.:])*$', flags=re.A)
@@ -35,6 +36,7 @@ class Channel(object):
         self.message_receiver = message_receiver
         self.loop = loop
         self.closing = False
+        self._basic_return_handler = None
 
     @asyncio.coroutine
     def declare_exchange(self, name, type, *, durable=True, auto_delete=False, internal=False):
@@ -136,6 +138,9 @@ class Channel(object):
         self.sender.send_BasicQos(prefetch_size, prefetch_count, apply_globally)
         yield from self.synchroniser.await(spec.BasicQosOK)
         self.handler.ready()
+
+    def set_return_handler(self, handler):
+        self._basic_return_handler = handler
 
 
 class ChannelFactory(object):
@@ -241,6 +246,25 @@ class ChannelFrameHandler(bases.FrameHandler):
 
     def handle_BasicQosOK(self, frame):
         self.synchroniser.notify(spec.BasicQosOK)
+
+    def handle_BasicReturn(self, frame):
+        # schedule reading of the next frame, then raise the exception
+        self.ready()
+
+        if self.channel._basic_return_handler is not None:
+            self.channel._basic_return_handler({
+                "reply_code": frame.payload.reply_code,
+                "message": frame.payload.reply_text,
+                "exchange_name": frame.payload.exchange,
+                "routing_key": frame.payload.routing_key
+            })
+        else:
+            exc = AMQPError()
+            exc.reply_code = frame.payload.reply_code
+            exc.message = frame.payload.reply_text
+            exc.exchange_name = frame.payload.exchange
+            exc.routing_key = frame.payload.routing_key
+            raise exc
 
 
 class MessageReceiver(object):
