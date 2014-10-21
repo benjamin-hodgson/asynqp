@@ -139,12 +139,7 @@ class Channel(object):
         If ``handler`` is None, this default behaviour is set.
 
         :param callable handler: A function to be called when a message is returned.
-            The handler will be passed one argument, a dictionary, containing the following items:
-
-                * ``"reply_code"`` - the AMQP error code returned by the server
-                * ``"message"`` - the exception message
-                * ``"exchange_name"`` - the name of the exchange to which the undeliverable message was published
-                * ``"routing_key"`` - the routing key with which the undeliverable message was published
+            The callback will be passed the undelivered message.
         """
         self.catcher.set_callback(handler)
 
