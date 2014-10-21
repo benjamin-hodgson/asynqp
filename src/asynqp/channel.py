@@ -156,6 +156,8 @@ class Channel(object):
                 * ``"exchange_name"`` - the name of the exchange to which the undeliverable message was published
                 * ``"routing_key"`` - the routing key with which the undeliverable message was published
         """
+        if not callable(handler):
+            raise TypeError("The handler must be a callable with one argument (a dictionary).", handler)
         self._basic_return_handler = handler
 
 

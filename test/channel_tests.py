@@ -214,3 +214,10 @@ class WhenBasicReturnArrivesAndIHaveDefinedAHandler(OpenChannelContext):
                                 "exchange_name": "the.exchange",
                                 "routing_key": "the.routing.key"}
 
+
+class WhenTheHandlerIsNotCallable(OpenChannelContext):
+    def when_I_set_the_handler(self):
+        self.exception = contexts.catch(self.channel.set_return_handler, "i am not callable")
+
+    def it_should_throw_a_TypeError(self):
+        assert isinstance(self.exception, TypeError)
