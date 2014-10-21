@@ -25,7 +25,6 @@ Unimplemented methods:
         unbind/unbind-ok (Rabbit extension)
 
     Basic
-        return
         recover/recover-ok
         nack (Rabbit extension)
 
