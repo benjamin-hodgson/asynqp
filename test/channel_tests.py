@@ -1,7 +1,9 @@
-import contexts
 import asyncio
+import contexts
 import asynqp
-from asynqp import spec
+from unittest import mock
+from asynqp import spec, frames
+from asynqp import message
 from . import util
 from .base_contexts import OpenConnectionContext, OpenChannelContext
 
@@ -22,7 +24,7 @@ class WhenChannelOpenOKArrives(OpenConnectionContext):
         self.tick()
 
     def when_channel_open_ok_arrives(self):
-        open_ok_frame = asynqp.frames.MethodFrame(1, spec.ChannelOpenOK(''))
+        open_ok_frame = frames.MethodFrame(1, spec.ChannelOpenOK(''))
         self.dispatcher.dispatch(open_ok_frame)
         self.tick()
         self.result = self.task.result()
@@ -54,12 +56,12 @@ class WhenTheApplicationClosesAChannel(OpenChannelContext):
 
 class WhenTheServerClosesAChannel(OpenChannelContext):
     def when_the_server_shuts_the_channel_down(self):
-        channel_close_frame = asynqp.frames.MethodFrame(1, spec.ChannelClose(123, 'i am tired of you', 40, 50))
+        channel_close_frame = frames.MethodFrame(self.channel.id, spec.ChannelClose(123, 'i am tired of you', 40, 50))
         self.dispatcher.dispatch(channel_close_frame)
         self.tick()
 
     def it_should_send_ChannelCloseOK(self):
-        self.protocol.send_method.assert_called_once_with(1, spec.ChannelCloseOK())
+        self.protocol.send_method.assert_called_once_with(self.channel.id, spec.ChannelCloseOK())
 
 
 class WhenAnotherMethodArrivesAfterIClosedTheChannel(OpenChannelContext):
@@ -69,7 +71,7 @@ class WhenAnotherMethodArrivesAfterIClosedTheChannel(OpenChannelContext):
         self.protocol.reset_mock()
 
     def when_another_method_arrives(self):
-        open_ok_frame = asynqp.frames.MethodFrame(1, spec.ChannelOpenOK(''))
+        open_ok_frame = frames.MethodFrame(self.channel.id, spec.ChannelOpenOK(''))
         self.dispatcher.dispatch(open_ok_frame)
 
     def it_MUST_discard_the_method(self):
@@ -78,13 +80,13 @@ class WhenAnotherMethodArrivesAfterIClosedTheChannel(OpenChannelContext):
 
 class WhenAnotherMethodArrivesAfterTheServerClosedTheChannel(OpenChannelContext):
     def given_the_server_closed_the_channel(self):
-        channel_close_frame = asynqp.frames.MethodFrame(1, spec.ChannelClose(123, 'i am tired of you', 40, 50))
+        channel_close_frame = frames.MethodFrame(self.channel.id, spec.ChannelClose(123, 'i am tired of you', 40, 50))
         self.dispatcher.dispatch(channel_close_frame)
         self.tick()
         self.protocol.reset_mock()
 
     def when_another_method_arrives(self):
-        open_ok_frame = asynqp.frames.MethodFrame(1, spec.ChannelOpenOK(''))
+        open_ok_frame = frames.MethodFrame(self.channel.id, spec.ChannelOpenOK(''))
         self.dispatcher.dispatch(open_ok_frame)
 
     def it_MUST_discard_the_method(self):
@@ -98,7 +100,7 @@ class WhenAnAsyncMethodArrivesWhileWeAwaitASynchronousOne(OpenChannelContext):
         self.protocol.reset_mock()
 
     def when_an_async_method_arrives(self):
-        frame = asynqp.frames.MethodFrame(1, spec.BasicDeliver('consumer', 2, False, 'exchange', 'routing_key'))
+        frame = frames.MethodFrame(self.channel.id, spec.BasicDeliver('consumer', 2, False, 'exchange', 'routing_key'))
         self.dispatcher.dispatch(frame)
         self.tick()
 
@@ -116,7 +118,7 @@ class WhenAnUnexpectedChannelCloseArrives(OpenChannelContext):
         self.protocol.reset_mock()
 
     def when_ChannelClose_arrives(self):
-        frame = asynqp.frames.MethodFrame(1, spec.ChannelClose(123, 'i am tired of you', 40, 50))
+        frame = frames.MethodFrame(self.channel.id, spec.ChannelClose(123, 'i am tired of you', 40, 50))
         self.dispatcher.dispatch(frame)
         self.tick()
 
@@ -139,7 +141,7 @@ class WhenBasicQOSOkArrives(OpenChannelContext):
         self.tick()
 
     def when_BasicQosOk_arrives(self):
-        frame = asynqp.frames.MethodFrame(1, spec.BasicQosOK())
+        frame = frames.MethodFrame(self.channel.id, spec.BasicQosOK())
         self.dispatcher.dispatch(frame)
         self.tick()
 
@@ -147,72 +149,97 @@ class WhenBasicQOSOkArrives(OpenChannelContext):
         assert self.task.done()
 
 
+class WhenBasicReturnArrivesAndIHaveDefinedAHandler(OpenChannelContext):
+    def given_a_message(self):
+        self.expected_message = asynqp.Message('body')
+
+        self.callback = mock.Mock()
+        del self.callback._is_coroutine  # :(
+        self.channel.set_return_handler(self.callback)
+
+    def when_BasicReturn_arrives_with_content(self):
+        method = spec.BasicReturn(123, "you messed up", "the.exchange", "the.routing.key")
+        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
+        self.tick()
+
+        header = message.get_header_payload(self.expected_message, spec.BasicGet.method_type[0])
+        self.dispatcher.dispatch(frames.ContentHeaderFrame(self.channel.id, header))
+        self.tick()
+
+        body = message.get_frame_payloads(self.expected_message, 100)[0]
+        self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
+        self.tick()
+        self.tick()
+
+    def it_should_send_the_message_to_the_callback(self):
+        self.callback.assert_called_once_with(self.expected_message)
+
+
 class WhenBasicReturnArrivesAndIHaveNotDefinedAHandler(OpenChannelContext):
-    def given_I_am_listening_for_exceptions(self):
+    def given_I_am_listening_for_asyncio_exceptions(self):
+        self.expected_message = asynqp.Message('body')
+
         self.exception = None
         self.loop.set_exception_handler(lambda l, c: setattr(self, "exception", c["exception"]))
 
     def when_BasicReturn_arrives(self):
-        frame = asynqp.frames.MethodFrame(1, spec.BasicReturn(123, "you messed up", "the.exchange", "the.routing.key"))
-        self.dispatcher.dispatch(frame)
+        method = spec.BasicReturn(123, "you messed up", "the.exchange", "the.routing.key")
+        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
+        self.tick()
+
+        header = message.get_header_payload(self.expected_message, spec.BasicGet.method_type[0])
+        self.dispatcher.dispatch(frames.ContentHeaderFrame(self.channel.id, header))
+        self.tick()
+
+        body = message.get_frame_payloads(self.expected_message, 100)[0]
+        self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
+        self.tick()
         self.tick()
 
     def it_should_throw_an_exception(self):
         assert self.exception is not None
 
     def it_should_set_the_reply_code(self):
-        assert self.exception.reply_code == 123
-
-    def it_should_set_the_message(self):
-        assert self.exception.message == "you messed up"
-
-    def it_should_set_the_exchange_name(self):
-        assert self.exception.exchange_name == "the.exchange"
-
-    def it_should_set_the_routing_key(self):
-        assert self.exception.routing_key == "the.routing.key"
+        assert self.exception.args == (self.expected_message,)
 
     def cleanup_the_exception_handler(self):
         self.loop.set_exception_handler(None)
 
 
-class WhenAnotherFrameArrivesAfterBasicReturn(OpenChannelContext):
-    def given_BasicReturn_has_arrived(self):
-        self.loop.set_exception_handler(lambda l, c: None)
+# test that the call to handler.ready() happens at the correct time
+class WhenBasicReturnArrivesAfterThrowingTheExceptionOnce(OpenChannelContext):
+    def given_I_am_listening_for_asyncio_exceptions(self):
+        self.expected_message = asynqp.Message('body')
 
-        frame = asynqp.frames.MethodFrame(1, spec.BasicReturn(123, "you messed up", "the.exchange", "the.routing.key"))
-        self.dispatcher.dispatch(frame)
-        self.tick()
-
-    def when_another_frame_arrives(self):  # just use another BasicReturn
         self.exception = None
         self.loop.set_exception_handler(lambda l, c: setattr(self, "exception", c["exception"]))
 
-        frame = asynqp.frames.MethodFrame(1, spec.BasicReturn(123, "you messed up", "the.exchange", "the.routing.key"))
-        self.dispatcher.dispatch(frame)
-        self.tick()
+        self.return_msg()  # cause the exception to be thrown
+        self.exception = None  # reset self.exception
 
-    def it_should_handle_the_frame_correctly(self):
+    def when_BasicReturn_arrives(self):
+        self.return_msg()
+
+    def it_should_throw_the_exception_again(self):
         assert self.exception is not None
 
     def cleanup_the_exception_handler(self):
         self.loop.set_exception_handler(None)
 
-
-class WhenBasicReturnArrivesAndIHaveDefinedAHandler(OpenChannelContext):
-    def given_I_have_set_a_BasicReturn_handler(self):
-        self.channel.set_return_handler(lambda x: setattr(self, "details", x))
-
-    def when_BasicReturn_arrives(self):
-        frame = asynqp.frames.MethodFrame(1, spec.BasicReturn(123, "you messed up", "the.exchange", "the.routing.key"))
-        self.dispatcher.dispatch(frame)
+    def return_msg(self):
+        method = spec.BasicReturn(123, "you messed up", "the.exchange", "the.routing.key")
+        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
         self.tick()
 
-    def it_should_call_the_handler_with_a_dict_containing_the_info(self):
-        assert self.details == {"reply_code": 123,
-                                "message": "you messed up",
-                                "exchange_name": "the.exchange",
-                                "routing_key": "the.routing.key"}
+        header = message.get_header_payload(self.expected_message, spec.BasicGet.method_type[0])
+        self.dispatcher.dispatch(frames.ContentHeaderFrame(self.channel.id, header))
+        self.tick()
+
+        body = message.get_frame_payloads(self.expected_message, 100)[0]
+        self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
+        self.tick()
+        self.tick()
+
 
 
 class WhenTheHandlerIsNotCallable(OpenChannelContext):

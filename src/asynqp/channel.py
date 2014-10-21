@@ -28,15 +28,15 @@ class Channel(object):
 
         the numerical ID of the channel
     """
-    def __init__(self, consumers, id, synchroniser, sender, message_receiver, loop):
+    def __init__(self, consumers, id, synchroniser, sender, message_receiver, catcher, loop):
         self.consumers = consumers
         self.id = id
         self.synchroniser = synchroniser
         self.sender = sender
         self.message_receiver = message_receiver
         self.loop = loop
+        self.catcher = catcher
         self.closing = False
-        self._basic_return_handler = None
 
     @asyncio.coroutine
     def declare_exchange(self, name, type, *, durable=True, auto_delete=False, internal=False):
@@ -156,9 +156,7 @@ class Channel(object):
                 * ``"exchange_name"`` - the name of the exchange to which the undeliverable message was published
                 * ``"routing_key"`` - the routing key with which the undeliverable message was published
         """
-        if not callable(handler):
-            raise TypeError("The handler must be a callable with one argument (a dictionary).", handler)
-        self._basic_return_handler = handler
+        self.catcher.set_callback(handler)
 
 
 class ChannelFactory(object):
@@ -173,10 +171,11 @@ class ChannelFactory(object):
     def open(self):
         synchroniser = Synchroniser(self.loop)
 
+        catcher = ReturnedMessageCatcher(self.loop)
         sender = ChannelMethodSender(self.next_channel_id, self.protocol, self.connection_info)
         consumers = queue.Consumers(self.loop)
-        message_receiver = MessageReceiver(synchroniser, sender, consumers)
-        channel = Channel(consumers, self.next_channel_id, synchroniser, sender, message_receiver, self.loop)
+        message_receiver = MessageReceiver(synchroniser, sender, consumers, catcher)
+        channel = Channel(consumers, self.next_channel_id, synchroniser, sender, message_receiver, catcher, self.loop)
         handler = ChannelFrameHandler(synchroniser, sender, channel, consumers, message_receiver)
         channel.handler = handler
         consumers.handler = handler
@@ -266,25 +265,15 @@ class ChannelFrameHandler(bases.FrameHandler):
         self.synchroniser.notify(spec.BasicQosOK)
 
     def handle_BasicReturn(self, frame):
-        # schedule reading of the next frame, then raise the exception
-        self.ready()
-
-        if self.channel._basic_return_handler is not None:
-            self.channel._basic_return_handler({
-                "reply_code": frame.payload.reply_code,
-                "message": frame.payload.reply_text,
-                "exchange_name": frame.payload.exchange,
-                "routing_key": frame.payload.routing_key
-            })
-        else:
-            raise UnhandledBasicReturn(frame.payload.reply_code, frame.payload.reply_text, frame.payload.exchange, frame.payload.routing_key)
+        asyncio.async(self.message_receiver.receive_return(frame))
 
 
 class MessageReceiver(object):
-    def __init__(self, synchroniser, sender, consumers):
+    def __init__(self, synchroniser, sender, consumers, catcher):
         self.synchroniser = synchroniser
         self.sender = sender
         self.consumers = consumers
+        self.catcher = catcher
         self.message_builder = None
 
     @asyncio.coroutine
@@ -316,6 +305,24 @@ class MessageReceiver(object):
         tag, msg = yield from self.synchroniser.await(frames.ContentBodyFrame)
         self.consumers.deliver(tag, msg)
         self.handler.ready()
+
+    @asyncio.coroutine
+    def receive_return(self, frame):
+        payload = frame.payload
+        self.message_builder = message.MessageBuilder(
+            self.sender,
+            '',
+            '',
+            payload.exchange,
+            payload.routing_key
+        )
+        self.handler.ready()
+        yield from self.synchroniser.await(frames.ContentHeaderFrame)
+        tag, msg = yield from self.synchroniser.await(frames.ContentBodyFrame)
+        assert tag is None
+
+        self.handler.ready()  # schedule reading of the next frame before throwing the exception
+        self.catcher.handle_returned_message(msg)
 
     @asyncio.coroutine
     def receive_header(self, frame):
@@ -404,3 +411,19 @@ class ChannelMethodSender(bases.Sender):
         for payload in message.get_frame_payloads(msg, self.connection_info.frame_max - 8):
             frame = frames.ContentBodyFrame(self.channel_id, payload)
             self.protocol.send_frame(frame)
+
+
+class ReturnedMessageCatcher(object):
+    def __init__(self, loop):
+        self.loop = loop
+        self.callback = None
+
+    def set_callback(self, callback):
+        if not callable(callback):
+            raise TypeError("The handler must be a callable with one argument (a dictionary).", callback)
+        self.callback = callback
+
+    def handle_returned_message(self, msg):
+        if self.callback is None:
+            raise UnhandledBasicReturn(msg)
+        self.loop.call_soon(self.callback, msg)

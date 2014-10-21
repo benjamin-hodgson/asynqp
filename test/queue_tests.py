@@ -230,6 +230,39 @@ class WhenBasicDeliverArrives(ConsumerContext):
         self.callback.assert_called_once_with(self.expected_message)
 
 
+# test that the call to handler.ready() is not affected by the exception
+class WhenAConsumerThrowsAnExceptionAndAnotherMessageArrives(ConsumerContext):
+    def given_a_consumer_has_thrown_an_exception(self):
+        self.loop.set_exception_handler(lambda l, c: None)
+        self.expected_message = asynqp.Message('body', timestamp=datetime(2014, 5, 5))
+        self.consumer.callback.side_effect = Exception
+
+        self.deliver_msg()  # cause the exception to be thrown
+
+    def when_another_message_arrives(self):
+        self.deliver_msg()
+
+    def it_should_correctly_call_the_consumer_again(self):
+        assert self.callback.call_count == 2
+
+    def deliver_msg(self):
+        method = spec.BasicDeliver(self.consumer.tag, 123, False, 'my.exchange', 'routing.key')
+        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
+        self.tick()
+
+        header = message.get_header_payload(self.expected_message, spec.BasicGet.method_type[0])
+        self.dispatcher.dispatch(frames.ContentHeaderFrame(self.channel.id, header))
+        self.tick()
+
+        body = message.get_frame_payloads(self.expected_message, 100)[0]
+        self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
+        self.tick()
+        self.tick()
+
+    def cleanup_the_exception_handler(self):
+        self.loop.set_exception_handler(None)
+
+
 class WhenICancelAConsumer(ConsumerContext):
     def when_I_cancel_the_consumer(self):
         asyncio.async(self.consumer.cancel())
