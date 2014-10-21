@@ -7,7 +7,7 @@ from . import queue
 from . import exchange
 from . import message
 from .util import Synchroniser
-from .exceptions import AMQPError
+from .exceptions import UnhandledBasicReturn
 
 
 VALID_QUEUE_NAME_RE = re.compile(r'^(?!amq\.)(\w|[-.:])*$', flags=re.A)
@@ -259,12 +259,7 @@ class ChannelFrameHandler(bases.FrameHandler):
                 "routing_key": frame.payload.routing_key
             })
         else:
-            exc = AMQPError()
-            exc.reply_code = frame.payload.reply_code
-            exc.message = frame.payload.reply_text
-            exc.exchange_name = frame.payload.exchange
-            exc.routing_key = frame.payload.routing_key
-            raise exc
+            raise UnhandledBasicReturn(frame.payload.reply_code, frame.payload.reply_text, frame.payload.exchange, frame.payload.routing_key)
 
 
 class MessageReceiver(object):
