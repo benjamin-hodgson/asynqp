@@ -2,7 +2,7 @@ class AMQPError(IOError):
     pass
 
 
-class UnhandledBasicReturn(ValueError):
+class UndeliverableMessage(ValueError):
     pass
 
 

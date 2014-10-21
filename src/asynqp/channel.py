@@ -7,7 +7,7 @@ from . import queue
 from . import exchange
 from . import message
 from .util import Synchroniser
-from .exceptions import UnhandledBasicReturn
+from .exceptions import UndeliverableMessage
 
 
 VALID_QUEUE_NAME_RE = re.compile(r'^(?!amq\.)(\w|[-.:])*$', flags=re.A)
@@ -404,5 +404,5 @@ class ReturnedMessageCatcher(object):
 
     def handle_returned_message(self, msg):
         if self.callback is None:
-            raise UnhandledBasicReturn(msg)
+            raise UndeliverableMessage(msg)
         self.loop.call_soon(self.callback, msg)
