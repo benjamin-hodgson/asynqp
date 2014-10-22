@@ -160,19 +160,20 @@ class ChannelFactory(object):
         sender = ChannelMethodSender(self.next_channel_id, self.protocol, self.connection_info)
         consumers = queue.Consumers(self.loop)
 
-        handler = ChannelFrameHandler(synchroniser, sender, consumers, catcher)
-        reader = handler.reader
+        handler = ChannelFrameHandler(synchroniser, sender)
+        reader, writer = bases.create_reader_and_writer(handler)
+        handler.message_receiver = MessageReceiver(synchroniser, sender, consumers, catcher, reader)
 
         queue_factory = queue.QueueFactory(sender, synchroniser, reader, consumers, self.loop)
         channel = Channel(self.next_channel_id, synchroniser, sender, catcher, queue_factory, reader)
 
-        self.dispatcher.add_handler(self.next_channel_id, handler)
+        self.dispatcher.add_writer(self.next_channel_id, writer)
         try:
             sender.send_ChannelOpen()
             reader.ready()
             yield from synchroniser.await(spec.ChannelOpenOK)
         except:
-            self.dispatcher.remove_handler(self.next_channel_id)
+            self.dispatcher.remove_writer(self.next_channel_id)
             raise
 
         self.next_channel_id += 1
@@ -181,11 +182,6 @@ class ChannelFactory(object):
 
 
 class ChannelFrameHandler(bases.FrameHandler):
-    def __init__(self, synchroniser, sender, consumers, catcher):
-        super().__init__(synchroniser, sender)
-        self.consumers = consumers
-        self.message_receiver = MessageReceiver(synchroniser, sender, consumers, catcher, self.reader)
-
     def handle_ChannelOpenOK(self, frame):
         self.synchroniser.notify(spec.ChannelOpenOK)
 
@@ -222,7 +218,6 @@ class ChannelFrameHandler(bases.FrameHandler):
     def handle_BasicCancelOK(self, frame):
         consumer_tag = frame.payload.consumer_tag
         self.synchroniser.notify(spec.BasicCancelOK)
-        self.consumers.cancel(consumer_tag)
 
     def handle_BasicDeliver(self, frame):
         asyncio.async(self.message_receiver.receive_deliver(frame))

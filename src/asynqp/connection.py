@@ -75,10 +75,11 @@ def open_connection(loop, protocol, dispatcher, connection_info):
     sender = ConnectionMethodSender(protocol)
     connection = Connection(loop, protocol, synchroniser, sender, dispatcher, connection_info)
     handler = ConnectionFrameHandler(synchroniser, sender, protocol, connection)
-    reader = handler.reader
+
+    reader, writer = bases.create_reader_and_writer(handler)
 
     try:
-        dispatcher.add_handler(0, handler)
+        dispatcher.add_writer(0, writer)
         protocol.send_protocol_header()
         reader.ready()
 
@@ -106,7 +107,7 @@ def open_connection(loop, protocol, dispatcher, connection_info):
         yield from synchroniser.await(spec.ConnectionOpenOK)
         reader.ready()
     except:
-        dispatcher.remove_handler(0)
+        dispatcher.remove_writer(0)
         raise
     return connection
 

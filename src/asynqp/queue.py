@@ -275,7 +275,8 @@ class Consumers(object):
         self.consumers[consumer.tag] = consumer
 
     def deliver(self, tag, msg):
-        self.loop.call_soon(self.consumers[tag].callback, msg)
-
-    def cancel(self, tag):
-        del self.consumers[tag]
+        consumer = self.consumers[tag]
+        if consumer.cancelled:
+            del self.consumers[tag]
+        else:
+            self.loop.call_soon(consumer.callback, msg)

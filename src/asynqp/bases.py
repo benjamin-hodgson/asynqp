@@ -17,10 +17,6 @@ class FrameHandler(object):
     def __init__(self, synchroniser, sender):
         self.synchroniser = synchroniser
         self.sender = sender
-        self.reader, self.writer = create_reader_and_writer(self.handle)
-
-    def enqueue(self, frame):
-        self.writer.enqueue(frame)
 
     def handle(self, frame):
         try:
@@ -31,16 +27,16 @@ class FrameHandler(object):
         meth(frame)
 
 
-def create_reader_and_writer(handler_function):
+def create_reader_and_writer(handler):
     q = asyncio.Queue()
-    reader = QueueReader(handler_function, q)
+    reader = QueueReader(handler, q)
     writer = QueueWriter(q)
     return reader, writer
 
 
 class QueueReader(object):
-    def __init__(self, handler_function, q):
-        self.handler_function = handler_function
+    def __init__(self, handler, q):
+        self.handler = handler
         self.q = q
         self.is_waiting = False
 
@@ -54,7 +50,7 @@ class QueueReader(object):
         assert self.is_waiting, "a frame got read without ready() having been called"
         frame = yield from self.q.get()
         self.is_waiting = False
-        self.handler_function(frame)
+        self.handler.handle(frame)
 
 
 class QueueWriter(object):
@@ -67,20 +63,20 @@ class QueueWriter(object):
 
 class Dispatcher(object):
     def __init__(self, loop):
-        self.handlers = {}
+        self.queue_writers = {}
         self.loop = loop
         self.closing = asyncio.Future(loop=loop)
 
-    def add_handler(self, channel_id, handler):
-        self.handlers[channel_id] = handler
+    def add_writer(self, channel_id, writer):
+        self.queue_writers[channel_id] = writer
 
-    def remove_handler(self, channel_id):
-        del self.handlers[channel_id]
+    def remove_writer(self, channel_id):
+        del self.queue_writers[channel_id]
 
     def dispatch(self, frame):
         if isinstance(frame, frames.HeartbeatFrame):
             return
         if self.closing.done() and not isinstance(frame.payload, (spec.ConnectionClose, spec.ConnectionCloseOK)):
             return
-        handler = self.handlers[frame.channel_id]
-        handler.enqueue(frame)
+        writer = self.queue_writers[frame.channel_id]
+        writer.enqueue(frame)

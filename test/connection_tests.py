@@ -65,17 +65,17 @@ class WhenAConnectionThatWasClosedByTheServerReceivesAMethod(OpenConnectionConte
         close_frame = asynqp.frames.MethodFrame(0, spec.ConnectionClose(123, 'you muffed up', 10, 20))
         self.dispatcher.dispatch(close_frame)
         self.tick()
-        self.mock_handler = mock.Mock()
+        self.mock_writer = mock.Mock()
 
     def when_another_frame_arrives(self):
         unexpected_frame = asynqp.frames.MethodFrame(1, spec.BasicDeliver('', 1, False, '', ''))
 
-        with mock.patch.dict(self.dispatcher.handlers, {1: self.mock_handler}):
+        with mock.patch.dict(self.dispatcher.queue_writers, {1: self.mock_writer}):
             self.dispatcher.dispatch(unexpected_frame)
             self.tick()
 
     def it_MUST_be_discarded(self):
-        assert not self.mock_handler.method_calls
+        assert not self.mock_writer.method_calls
 
 
 class WhenAConnectionThatWasClosedByTheApplicationReceivesAMethod(OpenConnectionContext):
@@ -85,15 +85,15 @@ class WhenAConnectionThatWasClosedByTheApplicationReceivesAMethod(OpenConnection
 
         start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
         self.start_frame = asynqp.frames.MethodFrame(0, start_method)
-        self.mock_handler = mock.Mock()
+        self.mock_writer = mock.Mock()
 
     def when_another_frame_arrives(self):
-        with mock.patch.dict(self.dispatcher.handlers, {0: self.mock_handler}):
+        with mock.patch.dict(self.dispatcher.queue_writers, {0: self.mock_writer}):
             self.dispatcher.dispatch(self.start_frame)
             self.tick()
 
     def it_MUST_be_discarded(self):
-        assert not self.mock_handler.method_calls
+        assert not self.mock_writer.method_calls
 
 
 class WhenTheApplicationClosesTheConnection(OpenConnectionContext):
