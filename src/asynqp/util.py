@@ -16,12 +16,11 @@ def rethrow_as(expected_cls, to_throw):
 
 
 class Synchroniser(object):
-    def __init__(self, loop):
-        self.loop = loop
+    def __init__(self):
         self.futures = OrderedManyToManyMap()
 
     def await(self, *expected_methods):
-        fut = asyncio.Future(loop=self.loop)
+        fut = asyncio.Future()
         self.futures.add_item(expected_methods, fut)
         return fut
 

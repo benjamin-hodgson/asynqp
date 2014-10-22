@@ -32,11 +32,10 @@ class Queue(object):
 
         if True, the queue will be deleted when its last consumer is removed
     """
-    def __init__(self, reader, consumers, synchroniser, loop, sender, name, durable, exclusive, auto_delete):
+    def __init__(self, reader, consumers, synchroniser, sender, name, durable, exclusive, auto_delete):
         self.reader = reader
         self.consumers = consumers
         self.synchroniser = synchroniser
-        self.loop = loop
         self.sender = sender
 
         self.name = name
@@ -245,12 +244,11 @@ class Consumer(object):
 
 
 class QueueFactory(object):
-    def __init__(self, sender, synchroniser, reader, consumers, loop):
+    def __init__(self, sender, synchroniser, reader, consumers):
         self.sender = sender
         self.synchroniser = synchroniser
         self.reader = reader
         self.consumers = consumers
-        self.loop = loop
 
     @asyncio.coroutine
     def declare(self, name, durable, exclusive, auto_delete):
@@ -261,7 +259,7 @@ class QueueFactory(object):
 
         self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete)
         name = yield from self.synchroniser.await(spec.QueueDeclareOK)
-        q = Queue(self.reader, self.consumers, self.synchroniser, self.loop, self.sender, name, durable, exclusive, auto_delete)
+        q = Queue(self.reader, self.consumers, self.synchroniser, self.sender, name, durable, exclusive, auto_delete)
         self.reader.ready()
         return q
 

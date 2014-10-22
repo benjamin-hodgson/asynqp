@@ -41,7 +41,7 @@ class Connection(object):
         # should be ignored. at the moment this behaviour is part of the dispatcher
         # but this introduces an extra dependency between Connection and ConnectionFrameHandler which
         # i don't like
-        self.closing = asyncio.Future(loop=loop)
+        self.closing = asyncio.Future()
         self.closing.add_done_callback(lambda fut: dispatcher.closing.set_result(fut.result()))
 
     @asyncio.coroutine
@@ -70,7 +70,7 @@ class Connection(object):
 
 @asyncio.coroutine
 def open_connection(loop, protocol, dispatcher, connection_info):
-    synchroniser = Synchroniser(loop)
+    synchroniser = Synchroniser()
 
     sender = ConnectionMethodSender(protocol)
     connection = Connection(loop, protocol, synchroniser, sender, dispatcher, connection_info)

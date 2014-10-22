@@ -26,7 +26,7 @@ class ConnectionContext(LoopContext):
         self.protocol.transport = mock.Mock()
         self.protocol.send_frame._is_coroutine = False  # :(
 
-        self.dispatcher = protocol.Dispatcher(self.loop)
+        self.dispatcher = protocol.Dispatcher()
         self.connection_info = ConnectionInfo('guest', 'guest', '/')
 
 
@@ -55,7 +55,7 @@ class OpenConnectionContext(ConnectionContext):
 class ProtocolContext(LoopContext):
     def given_a_connected_protocol(self):
         self.transport = mock.Mock(spec=asyncio.Transport)
-        self.dispatcher = protocol.Dispatcher(self.loop)
+        self.dispatcher = protocol.Dispatcher()
         self.protocol = protocol.AMQP(self.dispatcher, self.loop)
         self.protocol.connection_made(self.transport)
 

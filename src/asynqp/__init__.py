@@ -34,7 +34,7 @@ def connect(host='localhost',
 
     loop = asyncio.get_event_loop() if loop is None else loop
 
-    dispatcher = Dispatcher(loop)
+    dispatcher = Dispatcher()
     transport, protocol = yield from loop.create_connection(lambda: AMQP(dispatcher, loop), host=host, port=port, **kwargs)
 
     connection = yield from open_connection(loop, protocol, dispatcher, ConnectionInfo(username, password, virtual_host))

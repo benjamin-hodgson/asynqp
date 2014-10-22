@@ -154,7 +154,7 @@ class ChannelFactory(object):
 
     @asyncio.coroutine
     def open(self):
-        synchroniser = Synchroniser(self.loop)
+        synchroniser = Synchroniser()
 
         catcher = ReturnedMessageCatcher(self.loop)
         sender = ChannelMethodSender(self.next_channel_id, self.protocol, self.connection_info)
@@ -164,7 +164,7 @@ class ChannelFactory(object):
         reader, writer = bases.create_reader_and_writer(handler)
         handler.message_receiver = MessageReceiver(synchroniser, sender, consumers, catcher, reader)
 
-        queue_factory = queue.QueueFactory(sender, synchroniser, reader, consumers, self.loop)
+        queue_factory = queue.QueueFactory(sender, synchroniser, reader, consumers)
         channel = Channel(self.next_channel_id, synchroniser, sender, catcher, queue_factory, reader)
 
         self.dispatcher.add_writer(self.next_channel_id, writer)

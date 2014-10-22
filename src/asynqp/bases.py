@@ -62,10 +62,9 @@ class QueueWriter(object):
 
 
 class Dispatcher(object):
-    def __init__(self, loop):
+    def __init__(self):
         self.queue_writers = {}
-        self.loop = loop
-        self.closing = asyncio.Future(loop=loop)
+        self.closing = asyncio.Future()
 
     def add_writer(self, channel_id, writer):
         self.queue_writers[channel_id] = writer
