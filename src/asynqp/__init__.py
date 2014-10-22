@@ -64,5 +64,3 @@ def connect_and_open_channel(host='localhost',
     connection = yield from connect(host, port, username, password, virtual_host, loop=loop, **kwargs)
     channel = yield from connection.open_channel()
     return connection, channel
-
-connect_and_open_channel.__annotations__ = connect.__annotations__
