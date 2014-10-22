@@ -74,50 +74,54 @@ def open_connection(loop, protocol, dispatcher, connection_info):
 
     sender = ConnectionMethodSender(protocol)
     connection = Connection(loop, protocol, synchroniser, sender, dispatcher, connection_info)
-    handler = ConnectionFrameHandler(synchroniser, sender, protocol, connection, connection_info)
+    handler = ConnectionFrameHandler(synchroniser, sender, protocol, connection)
+    reader = handler.reader
+
     try:
         dispatcher.add_handler(0, handler)
         protocol.send_protocol_header()
-        handler.reader.ready()
+        reader.ready()
+
         yield from synchroniser.await(spec.ConnectionStart)
-        yield from synchroniser.await(spec.ConnectionTune)
-        yield from synchroniser.await(spec.ConnectionOpenOK)
-    except:
-        dispatcher.remove_handler(0)
-        raise
-    handler.reader.ready()
-    return connection
-
-
-class ConnectionFrameHandler(bases.FrameHandler):
-    def __init__(self, synchroniser, sender, protocol, connection, connection_info):
-        super().__init__(synchroniser, sender)
-        self.protocol = protocol
-        self.connection = connection
-        self.connection_info = connection_info
-
-    def handle_ConnectionStart(self, frame):
-        self.synchroniser.notify(spec.ConnectionStart)
-        self.sender.send_StartOK(
+        sender.send_StartOK(
             {"product": "asynqp",
              "version": "0.1",  # todo: use pkg_resources to inspect the package
              "platform": sys.version},
             'AMQPLAIN',
-            {'LOGIN': self.connection_info.username, 'PASSWORD': self.connection_info.password},
+            {'LOGIN': connection_info.username, 'PASSWORD': connection_info.password},
             'en_US'
         )
-        self.reader.ready()
+        reader.ready()
+
+        frame = yield from synchroniser.await(spec.ConnectionTune)
+        # just agree with whatever the server wants. Make this configurable in future
+        connection_info.frame_max = frame.payload.frame_max
+        heartbeat_interval = frame.payload.heartbeat
+        sender.send_TuneOK(frame.payload.channel_max, frame.payload.frame_max, heartbeat_interval)
+
+        sender.send_Open(connection_info.virtual_host)
+        protocol.start_heartbeat(heartbeat_interval)
+        reader.ready()
+
+        yield from synchroniser.await(spec.ConnectionOpenOK)
+        reader.ready()
+    except:
+        dispatcher.remove_handler(0)
+        raise
+    return connection
+
+
+class ConnectionFrameHandler(bases.FrameHandler):
+    def __init__(self, synchroniser, sender, protocol, connection):
+        super().__init__(synchroniser, sender)
+        self.protocol = protocol
+        self.connection = connection
+
+    def handle_ConnectionStart(self, frame):
+        self.synchroniser.notify(spec.ConnectionStart)
 
     def handle_ConnectionTune(self, frame):
-        # just agree with whatever the server wants. Make this configurable in future
-        self.synchroniser.notify(spec.ConnectionTune)
-        self.connection_info.frame_max = frame.payload.frame_max
-        heartbeat_interval = frame.payload.heartbeat
-        self.sender.send_TuneOK(frame.payload.channel_max, frame.payload.frame_max, heartbeat_interval)
-
-        self.sender.send_Open(self.connection_info.virtual_host)
-        self.protocol.start_heartbeat(heartbeat_interval)
-        self.reader.ready()
+        self.synchroniser.notify(spec.ConnectionTune, frame)
 
     def handle_ConnectionOpenOK(self, frame):
         self.synchroniser.notify(spec.ConnectionOpenOK)
