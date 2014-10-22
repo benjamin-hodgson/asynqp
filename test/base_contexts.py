@@ -60,13 +60,12 @@ class ProtocolContext(LoopContext):
         self.protocol.connection_made(self.transport)
 
 
-def MockHandlerContext(channel_number):
-    class _MockHandlerContext(ProtocolContext):
-        def given_a_frame_handler(self):
-            self.handler = mock.Mock()
-            self.handler.handle._is_coroutine = False  # :(
-            self.dispatcher.add_handler(channel_number, self.handler)
-    return _MockHandlerContext
+class MockDispatcherContext(LoopContext):
+    def given_a_connected_protocol(self):
+        self.transport = mock.Mock(spec=asyncio.Transport)
+        self.dispatcher = mock.Mock(spec=protocol.Dispatcher)
+        self.protocol = protocol.AMQP(self.dispatcher, self.loop)
+        self.protocol.connection_made(self.transport)
 
 
 class OpenChannelContext(OpenConnectionContext):

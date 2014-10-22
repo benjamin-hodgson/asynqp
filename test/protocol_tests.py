@@ -3,7 +3,7 @@ import contexts
 import asynqp
 from asynqp import spec
 from asynqp import protocol
-from .base_contexts import ProtocolContext, MockHandlerContext
+from .base_contexts import ProtocolContext, MockDispatcherContext
 
 
 class WhenInitiatingProceedings(ProtocolContext):
@@ -14,7 +14,7 @@ class WhenInitiatingProceedings(ProtocolContext):
         self.transport.write.assert_called_once_with(b'AMQP\x00\x00\x09\x01')
 
 
-class WhenAWholeFrameArrives(MockHandlerContext(0)):
+class WhenAWholeFrameArrives(MockDispatcherContext):
     def establish_the_frame(self):
         self.raw = b'\x01\x00\x00\x00\x00\x00\x05\x00\x0A\x00\x29\x00\xCE'
         method = spec.ConnectionOpenOK('')
@@ -26,7 +26,7 @@ class WhenAWholeFrameArrives(MockHandlerContext(0)):
         self.tick()
 
     def it_should_dispatch_the_method(self):
-        self.handler.enqueue.assert_called_once_with(self.expected_frame)
+        self.dispatcher.dispatch.assert_called_once_with(self.expected_frame)
 
     def it_should_reset_the_heartbeat_timeout(self):
         assert self.protocol.heartbeat_monitor.heartbeat_received.called
@@ -46,7 +46,7 @@ class WhenAFrameDoesNotEndInFrameEnd(ProtocolContext):
         assert isinstance(self.exception, asynqp.AMQPError)
 
 
-class WhenHalfAFrameArrives(MockHandlerContext(0)):
+class WhenHalfAFrameArrives(MockDispatcherContext):
     @classmethod
     def examples_of_incomplete_frames(cls):
         yield b'\x01\x00\x00\x00\x00\x00\x05\x00\x0A\x00'  # cut off half way through the payload
@@ -58,10 +58,10 @@ class WhenHalfAFrameArrives(MockHandlerContext(0)):
         self.tick()
 
     def it_should_not_dispatch_the_method(self):
-        assert not self.handler.enqueue.called
+        assert not self.dispatcher.dispatch.called
 
 
-class WhenAFrameArrivesInTwoParts(MockHandlerContext(0)):
+class WhenAFrameArrivesInTwoParts(MockDispatcherContext):
     @classmethod
     def examples_of_broken_up_frames(cls):
         yield b'\x01\x00\x00\x00\x00\x00\x05\x00\x0A', b'\x00\x29\x00\xCE'  # cut off half way through the payload
@@ -79,10 +79,10 @@ class WhenAFrameArrivesInTwoParts(MockHandlerContext(0)):
         self.tick()
 
     def it_should_dispatch_the_method(self):
-        self.handler.enqueue.assert_called_once_with(self.expected_frame)
+        self.dispatcher.dispatch.assert_called_once_with(self.expected_frame)
 
 
-class WhenMoreThanAWholeFrameArrives(MockHandlerContext(0)):
+class WhenMoreThanAWholeFrameArrives(MockDispatcherContext):
     def establish_the_frame(self):
         self.raw = b'\x01\x00\x00\x00\x00\x00\x05\x00\x0A\x00\x29\x00\xCE\x01\x00\x00\x00\x00\x00\x05\x00\x0A'
         method = spec.ConnectionOpenOK('')
@@ -93,10 +93,10 @@ class WhenMoreThanAWholeFrameArrives(MockHandlerContext(0)):
         self.tick()
 
     def it_should_dispatch_the_method_once(self):
-        self.handler.enqueue.assert_called_once_with(self.expected_frame)
+        self.dispatcher.dispatch.assert_called_once_with(self.expected_frame)
 
 
-class WhenTwoFramesArrive(MockHandlerContext(0)):
+class WhenTwoFramesArrive(MockDispatcherContext):
     def establish_the_frame(self):
         self.raw = b'\x01\x00\x00\x00\x00\x00\x05\x00\x0A\x00\x29\x00\xCE\x01\x00\x00\x00\x00\x00\x05\x00\x0A\x00\x29\x00\xCE'
         method = spec.ConnectionOpenOK('')
@@ -107,10 +107,10 @@ class WhenTwoFramesArrive(MockHandlerContext(0)):
         self.tick()
 
     def it_should_dispatch_the_method_twice(self):
-        self.handler.enqueue.assert_has_calls([mock.call(self.expected_frame), mock.call(self.expected_frame)])
+        self.dispatcher.dispatch.assert_has_calls([mock.call(self.expected_frame), mock.call(self.expected_frame)])
 
 
-class WhenTwoFramesArrivePiecemeal(MockHandlerContext(0)):
+class WhenTwoFramesArrivePiecemeal(MockDispatcherContext):
     @classmethod
     def examples_of_broken_up_frames(cls):
         yield b'\x01\x00\x00\x00\x00\x00\x05\x00\x0A\x00\x29\x00\xCE', b'\x01\x00\x00\x00\x00\x00\x05\x00\x0A\x00\x29\x00\xCE'
@@ -129,4 +129,4 @@ class WhenTwoFramesArrivePiecemeal(MockHandlerContext(0)):
             self.tick()
 
     def it_should_dispatch_the_method_twice(self):
-        self.handler.enqueue.assert_has_calls([mock.call(self.expected_frame), mock.call(self.expected_frame)])
+        self.dispatcher.dispatch.assert_has_calls([mock.call(self.expected_frame), mock.call(self.expected_frame)])

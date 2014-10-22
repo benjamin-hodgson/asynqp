@@ -4,10 +4,10 @@ from asynqp import spec
 from asynqp import frames
 from asynqp import amqptypes
 from asynqp import message
-from .base_contexts import ProtocolContext, MockHandlerContext
+from .base_contexts import ProtocolContext, MockDispatcherContext
 
 
-class WhenConnectionStartArrives(MockHandlerContext(0)):
+class WhenConnectionStartArrives(MockDispatcherContext):
     def given_a_connection_start_method_I_copied_from_the_rabbitmq_server(self):
         self.raw = (b"\x01\x00\x00\x00\x00\x01\x50"  # type, channel, size
                     b"\x00\x0A\x00\x0A\x00\t\x00\x00\x01"
@@ -36,7 +36,7 @@ class WhenConnectionStartArrives(MockHandlerContext(0)):
         self.tick()
 
     def it_should_dispatch_a_correctly_deserialised_ConnectionStart_method(self):
-        self.handler.enqueue.assert_called_once_with(self.expected_frame)
+        self.dispatcher.dispatch.assert_called_once_with(self.expected_frame)
 
 
 class WhenSendingConnectionStartOK(ProtocolContext):
@@ -54,7 +54,7 @@ class WhenSendingConnectionStartOK(ProtocolContext):
         self.transport.write.assert_called_once_with(expected_bytes)
 
 
-class WhenConnectionTuneArrives(MockHandlerContext(0)):
+class WhenConnectionTuneArrives(MockDispatcherContext):
     def given_a_connection_tune_method_I_copied_from_the_rabbitmq_server(self):
         self.raw = b'\x01\x00\x00\x00\x00\x00\x0C\x00\x0A\x00\x1E\x00\x00\x00\x02\x00\x00\x02\x58\xCE'
         expected_method = spec.ConnectionTune(0, 131072, 600)
@@ -65,7 +65,7 @@ class WhenConnectionTuneArrives(MockHandlerContext(0)):
         self.tick()
 
     def it_should_dispatch_a_correctly_deserialised_ConnectionTune_method(self):
-        self.handler.enqueue.assert_called_once_with(self.expected_frame)
+        self.dispatcher.dispatch.assert_called_once_with(self.expected_frame)
 
 
 class WhenSendingConnectionTuneOK(ProtocolContext):
@@ -121,7 +121,7 @@ class WhenSendingContentHeader(ProtocolContext):
             b'\xCE')
 
 
-class WhenAContentHeaderArrives(MockHandlerContext(1)):
+class WhenAContentHeaderArrives(MockDispatcherContext):
     def given_a_content_header_frame(self):
         self.raw = (
             b'\x02\x00\x01\x00\x00\x00\x25'  # regular frame header
@@ -141,10 +141,10 @@ class WhenAContentHeaderArrives(MockHandlerContext(1)):
         self.tick()
 
     def it_should_deserialise_it_to_a_ContentHeaderFrame(self):
-        self.handler.enqueue.assert_called_once_with(self.expected_frame)
+        self.dispatcher.dispatch.assert_called_once_with(self.expected_frame)
 
 
-class WhenBasicGetOKArrives(MockHandlerContext(1)):
+class WhenBasicGetOKArrives(MockDispatcherContext):
     def given_a_frame(self):
         self.raw = (
             b'\x01\x00\x01\x00\x00\x00\x22'  # type, channel, size
@@ -164,5 +164,5 @@ class WhenBasicGetOKArrives(MockHandlerContext(1)):
         self.tick()
 
     def it_should_deserialise_it_to_the_correct_method(self):
-        self.handler.enqueue.assert_called_once_with(self.expected_frame)
+        self.dispatcher.dispatch.assert_called_once_with(self.expected_frame)
 
