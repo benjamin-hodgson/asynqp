@@ -32,13 +32,12 @@ class Queue(object):
 
         if True, the queue will be deleted when its last consumer is removed
     """
-    def __init__(self, handler, consumers, synchroniser, loop, sender, message_receiver, name, durable, exclusive, auto_delete):
-        self.handler = handler
+    def __init__(self, reader, consumers, synchroniser, loop, sender, name, durable, exclusive, auto_delete):
+        self.reader = reader
         self.consumers = consumers
         self.synchroniser = synchroniser
         self.loop = loop
         self.sender = sender
-        self.message_receiver = message_receiver
 
         self.name = name
         self.durable = durable
@@ -66,8 +65,8 @@ class Queue(object):
 
         self.sender.send_QueueBind(self.name, exchange.name, routing_key)
         yield from self.synchroniser.await(spec.QueueBindOK)
-        b = QueueBinding(self.handler, self.sender, self.synchroniser, self, exchange, routing_key)
-        self.handler.ready()
+        b = QueueBinding(self.reader, self.sender, self.synchroniser, self, exchange, routing_key)
+        self.reader.ready()
         return b
 
     @asyncio.coroutine
@@ -92,9 +91,9 @@ class Queue(object):
 
         self.sender.send_BasicConsume(self.name, no_local, no_ack, exclusive)
         tag = yield from self.synchroniser.await(spec.BasicConsumeOK)
-        consumer = Consumer(tag, callback, self.sender, self.synchroniser, self.handler)
+        consumer = Consumer(tag, callback, self.sender, self.synchroniser, self.reader)
         self.consumers.add_consumer(consumer)
-        self.handler.ready()
+        self.reader.ready()
         return consumer
 
     @asyncio.coroutine
@@ -121,7 +120,7 @@ class Queue(object):
             assert consumer_tag is None
         else:
             msg = None
-        self.handler.ready()
+        self.reader.ready()
         return msg
 
     @asyncio.coroutine
@@ -133,7 +132,7 @@ class Queue(object):
         """
         self.sender.send_QueuePurge(self.name)
         yield from self.synchroniser.await(spec.QueuePurgeOK)
-        self.handler.ready()
+        self.reader.ready()
 
     @asyncio.coroutine
     def delete(self, *, if_unused=True, if_empty=True):
@@ -153,7 +152,7 @@ class Queue(object):
         self.sender.send_QueueDelete(self.name, if_unused, if_empty)
         yield from self.synchroniser.await(spec.QueueDeleteOK)
         self.deleted = True
-        self.handler.ready()
+        self.reader.ready()
 
 
 class QueueBinding(object):
@@ -179,8 +178,8 @@ class QueueBinding(object):
 
         the routing key used for the binding
     """
-    def __init__(self, handler, sender, synchroniser, queue, exchange, routing_key):
-        self.handler = handler
+    def __init__(self, reader, sender, synchroniser, queue, exchange, routing_key):
+        self.reader = reader
         self.sender = sender
         self.synchroniser = synchroniser
         self.queue = queue
@@ -201,7 +200,7 @@ class QueueBinding(object):
         self.sender.send_QueueUnbind(self.queue.name, self.exchange.name, self.routing_key)
         yield from self.synchroniser.await(spec.QueueUnbindOK)
         self.deleted = True
-        self.handler.ready()
+        self.reader.ready()
 
 
 class Consumer(object):
@@ -224,13 +223,13 @@ class Consumer(object):
 
         Boolean. True if the consumer has been successfully cancelled.
     """
-    def __init__(self, tag, callback, sender, synchroniser, handler):
+    def __init__(self, tag, callback, sender, synchroniser, reader):
         self.tag = tag
         self.callback = callback
         self.sender = sender
         self.cancelled = False
         self.synchroniser = synchroniser
-        self.handler = handler
+        self.reader = reader
 
     @asyncio.coroutine
     def cancel(self):
@@ -242,16 +241,15 @@ class Consumer(object):
         self.sender.send_BasicCancel(self.tag)
         yield from self.synchroniser.await(spec.BasicCancelOK)
         self.cancelled = True
-        self.handler.ready()
+        self.reader.ready()
 
 
 class QueueFactory(object):
-    def __init__(self, sender, synchroniser, handler, consumers, message_receiver, loop):
+    def __init__(self, sender, synchroniser, reader, consumers, loop):
         self.sender = sender
         self.synchroniser = synchroniser
-        self.handler = handler
+        self.reader = reader
         self.consumers = consumers
-        self.message_receiver = message_receiver
         self.loop = loop
 
     @asyncio.coroutine
@@ -263,8 +261,8 @@ class QueueFactory(object):
 
         self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete)
         name = yield from self.synchroniser.await(spec.QueueDeclareOK)
-        q = Queue(self.handler, self.consumers, self.synchroniser, self.loop, self.sender, self.message_receiver, name, durable, exclusive, auto_delete)
-        self.handler.ready()
+        q = Queue(self.reader, self.consumers, self.synchroniser, self.loop, self.sender, name, durable, exclusive, auto_delete)
+        self.reader.ready()
         return q
 
 

@@ -28,13 +28,13 @@ class Channel(object):
 
         the numerical ID of the channel
     """
-    def __init__(self, id, synchroniser, sender, catcher, queue_factory, handler):
+    def __init__(self, id, synchroniser, sender, catcher, queue_factory, reader):
         self.id = id
         self.synchroniser = synchroniser
         self.sender = sender
         self.catcher = catcher
         self.queue_factory = queue_factory
-        self.handler = handler
+        self.reader = reader
 
     @asyncio.coroutine
     def declare_exchange(self, name, type, *, durable=True, auto_delete=False, internal=False):
@@ -52,7 +52,7 @@ class Channel(object):
         :return: the new :class:`Exchange` object.
         """
         if name == '':
-            return exchange.Exchange(self.handler, self.synchroniser, self.sender, name, 'direct', True, False, False)
+            return exchange.Exchange(self.reader, self.synchroniser, self.sender, name, 'direct', True, False, False)
 
         if not VALID_EXCHANGE_NAME_RE.match(name):
             raise ValueError("Invalid exchange name.\n"
@@ -61,8 +61,8 @@ class Channel(object):
 
         self.sender.send_ExchangeDeclare(name, type, durable, auto_delete, internal)
         yield from self.synchroniser.await(spec.ExchangeDeclareOK)
-        ex = exchange.Exchange(self.handler, self.synchroniser, self.sender, name, type, durable, auto_delete, internal)
-        self.handler.ready()
+        ex = exchange.Exchange(self.reader, self.synchroniser, self.sender, name, type, durable, auto_delete, internal)
+        self.reader.ready()
         return ex
 
     @asyncio.coroutine
@@ -97,7 +97,7 @@ class Channel(object):
         """
         self.sender.send_Close(0, 'Channel closed by application', 0, 0)
         yield from self.synchroniser.await(spec.ChannelCloseOK)
-        # don't say self.handler.ready - stop reading frames from the q
+        # don't say self.reader.ready - stop reading frames from the q
 
     @asyncio.coroutine
     def set_qos(self, prefetch_size=0, prefetch_count=0, apply_globally=False):
@@ -127,7 +127,7 @@ class Channel(object):
         """
         self.sender.send_BasicQos(prefetch_size, prefetch_count, apply_globally)
         yield from self.synchroniser.await(spec.BasicQosOK)
-        self.handler.ready()
+        self.reader.ready()
 
     def set_return_handler(self, handler):
         """
@@ -159,33 +159,32 @@ class ChannelFactory(object):
         catcher = ReturnedMessageCatcher(self.loop)
         sender = ChannelMethodSender(self.next_channel_id, self.protocol, self.connection_info)
         consumers = queue.Consumers(self.loop)
-        message_receiver = MessageReceiver(synchroniser, sender, consumers, catcher)
-        handler = ChannelFrameHandler(synchroniser, sender, consumers, message_receiver)
-        queue_factory = queue.QueueFactory(sender, synchroniser, handler, consumers, message_receiver, self.loop)
-        channel = Channel(self.next_channel_id, synchroniser, sender, catcher, queue_factory, handler)
 
-        consumers.handler = handler
-        message_receiver.handler = handler
+        handler = ChannelFrameHandler(synchroniser, sender, consumers, catcher)
+        reader = handler.reader
+
+        queue_factory = queue.QueueFactory(sender, synchroniser, reader, consumers, self.loop)
+        channel = Channel(self.next_channel_id, synchroniser, sender, catcher, queue_factory, reader)
 
         self.dispatcher.add_handler(self.next_channel_id, handler)
         try:
             sender.send_ChannelOpen()
-            handler.ready()
+            reader.ready()
             yield from synchroniser.await(spec.ChannelOpenOK)
         except:
             self.dispatcher.remove_handler(self.next_channel_id)
             raise
 
         self.next_channel_id += 1
-        handler.ready()
+        reader.ready()
         return channel
 
 
 class ChannelFrameHandler(bases.FrameHandler):
-    def __init__(self, synchroniser, sender, consumers, message_receiver):
+    def __init__(self, synchroniser, sender, consumers, catcher):
         super().__init__(synchroniser, sender)
         self.consumers = consumers
-        self.message_receiver = message_receiver
+        self.message_receiver = MessageReceiver(synchroniser, sender, consumers, catcher, self.reader)
 
     def handle_ChannelOpenOK(self, frame):
         self.synchroniser.notify(spec.ChannelOpenOK)
@@ -248,11 +247,12 @@ class ChannelFrameHandler(bases.FrameHandler):
 
 
 class MessageReceiver(object):
-    def __init__(self, synchroniser, sender, consumers, catcher):
+    def __init__(self, synchroniser, sender, consumers, catcher, reader):
         self.synchroniser = synchroniser
         self.sender = sender
         self.consumers = consumers
         self.catcher = catcher
+        self.reader = reader
         self.message_builder = None
 
     @asyncio.coroutine
@@ -266,7 +266,7 @@ class MessageReceiver(object):
             payload.exchange,
             payload.routing_key
         )
-        self.handler.ready()
+        self.reader.ready()
 
     @asyncio.coroutine
     def receive_deliver(self, frame):
@@ -279,11 +279,11 @@ class MessageReceiver(object):
             payload.routing_key,
             payload.consumer_tag
         )
-        self.handler.ready()
+        self.reader.ready()
         yield from self.synchroniser.await(frames.ContentHeaderFrame)
         tag, msg = yield from self.synchroniser.await(frames.ContentBodyFrame)
         self.consumers.deliver(tag, msg)
-        self.handler.ready()
+        self.reader.ready()
 
     @asyncio.coroutine
     def receive_return(self, frame):
@@ -295,19 +295,19 @@ class MessageReceiver(object):
             payload.exchange,
             payload.routing_key
         )
-        self.handler.ready()
+        self.reader.ready()
         yield from self.synchroniser.await(frames.ContentHeaderFrame)
         tag, msg = yield from self.synchroniser.await(frames.ContentBodyFrame)
         assert tag is None
 
-        self.handler.ready()  # schedule reading of the next frame before throwing the exception
+        self.reader.ready()  # schedule reading of the next frame before throwing the exception
         self.catcher.handle_returned_message(msg)
 
     @asyncio.coroutine
     def receive_header(self, frame):
         self.synchroniser.notify(frames.ContentHeaderFrame)
         self.message_builder.set_header(frame.payload)
-        self.handler.ready()
+        self.reader.ready()
 
     @asyncio.coroutine
     def receive_body(self, frame):
@@ -317,11 +317,11 @@ class MessageReceiver(object):
             tag = self.message_builder.consumer_tag
             self.synchroniser.notify(frames.ContentBodyFrame, (tag, msg))
             self.message_builder = None
-            # don't call self.handler.ready() if the message is all here -
+            # don't call self.reader.ready() if the message is all here -
             # get() or receive_deliver() will call
             # it when they have finished processing the completed msg
             return
-        self.handler.ready()
+        self.reader.ready()
 
 
 class ChannelMethodSender(bases.Sender):

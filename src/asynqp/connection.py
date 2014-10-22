@@ -78,14 +78,14 @@ def open_connection(loop, protocol, dispatcher, connection_info):
     try:
         dispatcher.add_handler(0, handler)
         protocol.send_protocol_header()
-        handler.ready()
+        handler.reader.ready()
         yield from synchroniser.await(spec.ConnectionStart)
         yield from synchroniser.await(spec.ConnectionTune)
         yield from synchroniser.await(spec.ConnectionOpenOK)
     except:
         dispatcher.remove_handler(0)
         raise
-    handler.ready()
+    handler.reader.ready()
     return connection
 
 
@@ -106,7 +106,7 @@ class ConnectionFrameHandler(bases.FrameHandler):
             {'LOGIN': self.connection_info.username, 'PASSWORD': self.connection_info.password},
             'en_US'
         )
-        self.ready()
+        self.reader.ready()
 
     def handle_ConnectionTune(self, frame):
         # just agree with whatever the server wants. Make this configurable in future
@@ -117,7 +117,7 @@ class ConnectionFrameHandler(bases.FrameHandler):
 
         self.sender.send_Open(self.connection_info.virtual_host)
         self.protocol.start_heartbeat(heartbeat_interval)
-        self.ready()
+        self.reader.ready()
 
     def handle_ConnectionOpenOK(self, frame):
         self.synchroniser.notify(spec.ConnectionOpenOK)

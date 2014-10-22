@@ -22,8 +22,8 @@ class Exchange(object):
 
         the type of the exchange (usually one of ``'fanout'``, ``'direct'``, ``'topic'``, or ``'headers'``).
     """
-    def __init__(self, handler, synchroniser, sender, name, type, durable, auto_delete, internal):
-        self.handler = handler
+    def __init__(self, reader, synchroniser, sender, name, type, durable, auto_delete, internal):
+        self.reader = reader
         self.synchroniser = synchroniser
         self.sender = sender
         self.name = name
@@ -53,5 +53,5 @@ class Exchange(object):
         """
         self.sender.send_ExchangeDelete(self.name, if_unused)
         yield from self.synchroniser.await(spec.ExchangeDeleteOK)
-        self.handler.ready()
+        self.reader.ready()
 
