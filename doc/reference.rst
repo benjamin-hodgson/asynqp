@@ -8,6 +8,8 @@ Connecting to the AMQP broker
 
 .. autofunction:: connect
 
+.. autofunction:: connect_and_open_channel
+
 
 Managing Connections and Channels
 ---------------------------------

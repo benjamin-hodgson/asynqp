@@ -39,3 +39,30 @@ def connect(host='localhost',
 
     connection = yield from open_connection(loop, protocol, dispatcher, ConnectionInfo(username, password, virtual_host))
     return connection
+
+
+@asyncio.coroutine
+def connect_and_open_channel(host='localhost',
+                             port=5672,
+                             username='guest', password='guest',
+                             virtual_host='/', *,
+                             loop=None, **kwargs):
+    """
+    Connect to an AMQP server and open a channel on the connection.
+    This function is a :ref:`coroutine <coroutine>`.
+
+    Parameters of this function are the same as :func:`connect`.
+
+    :return: a tuple of ``(connection, channel)``.
+
+    Equivalent to::
+
+        connection = yield from connect(host, port, username, password, virtual_host, loop=loop, **kwargs)
+        channel = yield from connection.open_channel()
+        return connection, channel
+    """
+    connection = yield from connect(host, port, username, password, virtual_host, loop=loop, **kwargs)
+    channel = yield from connection.open_channel()
+    return connection, channel
+
+connect_and_open_channel.__annotations__ = connect.__annotations__
