@@ -1,5 +1,6 @@
 import asyncio
 from . import spec
+from . import frames
 from .exceptions import AMQPError
 
 
@@ -62,3 +63,24 @@ class QueueWriter(object):
 
     def enqueue(self, frame):
         self.q.put_nowait(frame)
+
+
+class Dispatcher(object):
+    def __init__(self, loop):
+        self.handlers = {}
+        self.loop = loop
+        self.closing = asyncio.Future(loop=loop)
+
+    def add_handler(self, channel_id, handler):
+        self.handlers[channel_id] = handler
+
+    def remove_handler(self, channel_id):
+        del self.handlers[channel_id]
+
+    def dispatch(self, frame):
+        if isinstance(frame, frames.HeartbeatFrame):
+            return
+        if self.closing.done() and not isinstance(frame.payload, (spec.ConnectionClose, spec.ConnectionCloseOK)):
+            return
+        handler = self.handlers[frame.channel_id]
+        handler.enqueue(frame)

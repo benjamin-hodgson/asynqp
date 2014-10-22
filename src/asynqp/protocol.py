@@ -2,6 +2,7 @@ import asyncio
 import struct
 from . import spec
 from . import frames
+from .bases import Dispatcher
 from .exceptions import AMQPError
 
 
@@ -9,6 +10,7 @@ class AMQP(asyncio.Protocol):
     def __init__(self, dispatcher, loop):
         self.dispatcher = dispatcher
         self.partial_frame = b''
+        self.frame_reader = FrameReader()
         self.heartbeat_monitor = HeartbeatMonitor(self, loop, 0)
 
     def connection_made(self, transport):
@@ -18,34 +20,20 @@ class AMQP(asyncio.Protocol):
         while data:
             self.heartbeat_monitor.heartbeat_received()  # the spec says 'any octet may substitute for a heartbeat'
 
-            data = self.partial_frame + data
-            self.partial_frame = b''
-
-            if len(data) < 7:
-                self.partial_frame = data
-                return
-
-            frame_header = data[:7]
-            frame_type, channel_id, size = struct.unpack('!BHL', frame_header)
-
-            if len(data) < size + 8:
-                self.partial_frame = data
-                return
-
-            raw_payload = data[7:7+size]
-            frame_end = data[7+size]
-
-            if frame_end != spec.FRAME_END:
+            try:
+                result = self.frame_reader.read_frame(data)
+            except AMQPError:
                 self.transport.close()
-                raise AMQPError("Frame end byte was incorrect")
+                raise
 
-            frame = frames.read(frame_type, channel_id, raw_payload)
+            if result is None:  # incomplete frame, wait for the rest
+                return
+            frame, remainder = result
+
             self.dispatcher.dispatch(frame)
-
-            remainder = data[8+size:]
             if not remainder:
                 return
-            data = remainder  # loop
+            data = remainder
 
     def send_method(self, channel, method):
         frame = frames.MethodFrame(channel, method)
@@ -61,25 +49,35 @@ class AMQP(asyncio.Protocol):
         self.heartbeat_monitor.start(heartbeat_interval)
 
 
-class Dispatcher(object):
-    def __init__(self, loop):
-        self.handlers = {}
-        self.loop = loop
-        self.closing = asyncio.Future(loop=loop)
+class FrameReader(object):
+    def __init__(self):
+        self.partial_frame = b''
 
-    def add_handler(self, channel_id, handler):
-        self.handlers[channel_id] = handler
+    def read_frame(self, data):
+        data = self.partial_frame + data
+        self.partial_frame = b''
 
-    def remove_handler(self, channel_id):
-        del self.handlers[channel_id]
-
-    def dispatch(self, frame):
-        if isinstance(frame, frames.HeartbeatFrame):
+        if len(data) < 7:
+            self.partial_frame = data
             return
-        if self.closing.done() and not isinstance(frame.payload, (spec.ConnectionClose, spec.ConnectionCloseOK)):
+
+        frame_header = data[:7]
+        frame_type, channel_id, size = struct.unpack('!BHL', frame_header)
+
+        if len(data) < size + 8:
+            self.partial_frame = data
             return
-        handler = self.handlers[frame.channel_id]
-        handler.enqueue(frame)
+
+        raw_payload = data[7:7+size]
+        frame_end = data[7+size]
+
+        if frame_end != spec.FRAME_END:
+            raise AMQPError("Frame end byte was incorrect")
+
+        frame = frames.read(frame_type, channel_id, raw_payload)
+        remainder = data[8+size:]
+
+        return frame, remainder
 
 
 class HeartbeatMonitor(object):
