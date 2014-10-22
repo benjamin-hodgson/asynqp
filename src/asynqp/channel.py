@@ -135,7 +135,7 @@ class Channel(object):
         that were returned by the server.
 
         By default, an exception is raised, which will be handled by
-        :ref:`the event loop's exception handler <BaseEventLoop.set_exception_handler>`.
+        the event loop's exception handler (see :meth:`BaseEventLoop.set_exception_handler <asyncio.BaseEventLoop.set_exception_handler>`).
         If ``handler`` is None, this default behaviour is set.
 
         :param callable handler: A function to be called when a message is returned.
