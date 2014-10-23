@@ -28,11 +28,11 @@ class Channel(object):
 
         the numerical ID of the channel
     """
-    def __init__(self, id, synchroniser, sender, catcher, queue_factory, reader):
+    def __init__(self, id, synchroniser, sender, basic_return_consumer, queue_factory, reader):
         self.id = id
         self.synchroniser = synchroniser
         self.sender = sender
-        self.catcher = catcher
+        self.basic_return_consumer = basic_return_consumer
         self.queue_factory = queue_factory
         self.reader = reader
 
@@ -141,7 +141,7 @@ class Channel(object):
         :param callable handler: A function to be called when a message is returned.
             The callback will be passed the undelivered message.
         """
-        self.catcher.set_callback(handler)
+        self.basic_return_consumer.set_callback(handler)
 
 
 class ChannelFactory(object):
@@ -156,16 +156,17 @@ class ChannelFactory(object):
     def open(self):
         synchroniser = Synchroniser()
 
-        catcher = ReturnedMessageCatcher(self.loop)
         sender = ChannelMethodSender(self.next_channel_id, self.protocol, self.connection_info)
+        basic_return_consumer = BasicReturnConsumer()
         consumers = queue.Consumers(self.loop)
+        consumers.add_consumer(basic_return_consumer)
 
         handler = ChannelFrameHandler(synchroniser, sender)
         reader, writer = bases.create_reader_and_writer(handler)
-        handler.message_receiver = MessageReceiver(synchroniser, sender, consumers, catcher, reader)
+        handler.message_receiver = MessageReceiver(synchroniser, sender, consumers, reader)
 
         queue_factory = queue.QueueFactory(sender, synchroniser, reader, consumers)
-        channel = Channel(self.next_channel_id, synchroniser, sender, catcher, queue_factory, reader)
+        channel = Channel(self.next_channel_id, synchroniser, sender, basic_return_consumer, queue_factory, reader)
 
         self.dispatcher.add_writer(self.next_channel_id, writer)
         try:
@@ -216,7 +217,6 @@ class ChannelFrameHandler(bases.FrameHandler):
         self.synchroniser.notify(spec.BasicConsumeOK, frame.payload.consumer_tag)
 
     def handle_BasicCancelOK(self, frame):
-        consumer_tag = frame.payload.consumer_tag
         self.synchroniser.notify(spec.BasicCancelOK)
 
     def handle_BasicDeliver(self, frame):
@@ -242,11 +242,10 @@ class ChannelFrameHandler(bases.FrameHandler):
 
 
 class MessageReceiver(object):
-    def __init__(self, synchroniser, sender, consumers, catcher, reader):
+    def __init__(self, synchroniser, sender, consumers, reader):
         self.synchroniser = synchroniser
         self.sender = sender
         self.consumers = consumers
-        self.catcher = catcher
         self.reader = reader
         self.message_builder = None
 
@@ -275,10 +274,8 @@ class MessageReceiver(object):
             payload.consumer_tag
         )
         self.reader.ready()
-        yield from self.synchroniser.await(frames.ContentHeaderFrame)
-        tag, msg = yield from self.synchroniser.await(frames.ContentBodyFrame)
-        self.consumers.deliver(tag, msg)
-        self.reader.ready()
+
+        yield from self.async_receive()
 
     @asyncio.coroutine
     def receive_return(self, frame):
@@ -288,15 +285,21 @@ class MessageReceiver(object):
             '',
             '',
             payload.exchange,
-            payload.routing_key
+            payload.routing_key,
+            BasicReturnConsumer.tag
         )
         self.reader.ready()
+
+        yield from self.async_receive()
+
+    @asyncio.coroutine
+    def async_receive(self):
         yield from self.synchroniser.await(frames.ContentHeaderFrame)
         tag, msg = yield from self.synchroniser.await(frames.ContentBodyFrame)
-        assert tag is None
 
-        self.reader.ready()  # schedule reading of the next frame before throwing the exception
-        self.catcher.handle_returned_message(msg)
+        self.consumers.deliver(tag, msg)
+        self.reader.ready()
+
 
     @asyncio.coroutine
     def receive_header(self, frame):
@@ -319,6 +322,7 @@ class MessageReceiver(object):
         self.reader.ready()
 
 
+# basically just a collection of aliases with some arguments hard coded for convenience
 class ChannelMethodSender(bases.Sender):
     def __init__(self, channel_id, protocol, connection_info):
         super().__init__(channel_id, protocol)
@@ -387,17 +391,22 @@ class ChannelMethodSender(bases.Sender):
             self.protocol.send_frame(frame)
 
 
-class ReturnedMessageCatcher(object):
-    def __init__(self, loop):
-        self.loop = loop
-        self.callback = None
+class BasicReturnConsumer(object):
+    tag = -1  # a 'real' tag is a string so there will never be a clash
+
+    def __init__(self):
+        self.callback = self.default_behaviour
+        self.cancelled_future = asyncio.Future()
 
     def set_callback(self, callback):
+        if callback is None:
+            self.callback = self.default_behaviour
+            return
+
         if not callable(callback):
-            raise TypeError("The handler must be a callable with one argument (a dictionary).", callback)
+            raise TypeError("The handler must be a callable with one argument (a message).", callback)
+
         self.callback = callback
 
-    def handle_returned_message(self, msg):
-        if self.callback is None:
-            raise UndeliverableMessage(msg)
-        self.loop.call_soon(self.callback, msg)
+    def default_behaviour(self, msg):
+        raise UndeliverableMessage(msg)

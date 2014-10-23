@@ -1,5 +1,6 @@
 import asyncio
 import re
+from operator import delitem
 from . import spec, frames
 from .exceptions import Deleted
 
@@ -229,6 +230,7 @@ class Consumer(object):
         self.cancelled = False
         self.synchroniser = synchroniser
         self.reader = reader
+        self.cancelled_future = asyncio.Future()
 
     @asyncio.coroutine
     def cancel(self):
@@ -240,6 +242,7 @@ class Consumer(object):
         self.sender.send_BasicCancel(self.tag)
         yield from self.synchroniser.await(spec.BasicCancelOK)
         self.cancelled = True
+        self.cancelled_future.set_result(self)
         self.reader.ready()
 
 
@@ -271,10 +274,9 @@ class Consumers(object):
 
     def add_consumer(self, consumer):
         self.consumers[consumer.tag] = consumer
+        consumer.cancelled_future.add_done_callback(lambda fut: delitem(self.consumers, fut.result().tag))
 
     def deliver(self, tag, msg):
+        assert tag in self.consumers, "Message got delivered to a non existent consumer"
         consumer = self.consumers[tag]
-        if consumer.cancelled:
-            del self.consumers[tag]
-        else:
-            self.loop.call_soon(consumer.callback, msg)
+        self.loop.call_soon(consumer.callback, msg)

@@ -141,7 +141,7 @@ class WhenIStartAConsumerWithSeveralMessagesWaiting(BoundQueueContext):
         self.received = []
 
     def when_I_start_a_consumer(self):
-        self.loop.run_until_complete(asyncio.wait_for(self.start_consumer(), 0.2))
+        self.loop.run_until_complete(asyncio.wait_for(self.start_consumer(), 0.3))
 
     def it_should_deliver_the_messages_to_the_consumer(self):
         assert self.received == [self.message1, self.message2]
@@ -149,7 +149,7 @@ class WhenIStartAConsumerWithSeveralMessagesWaiting(BoundQueueContext):
     @asyncio.coroutine
     def start_consumer(self):
         yield from self.queue.consume(self.received.append)
-        yield from asyncio.sleep(0.02)  # possibly flaky
+        yield from asyncio.sleep(0.05)  # possibly flaky
 
 
 class WhenPublishingAndGettingALongMessage(BoundQueueContext):
