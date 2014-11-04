@@ -106,6 +106,18 @@ class IncomingMessage(Message):
     A message that has been delivered to the client.
 
     Subclass of :class:`Message`.
+
+    .. attribute::delivery_tag
+
+        The *delivery tag* assigned to this message by the AMQP broker.
+
+    .. attribute::exchange_name
+
+        The name of the exchange to which the message was originally published.
+
+    .. attribute::routing_key
+
+        The routing key under which the message was originally published.
     """
     def __init__(self, *args, sender, delivery_tag, exchange_name, routing_key, **kwargs):
         super().__init__(*args, **kwargs)
