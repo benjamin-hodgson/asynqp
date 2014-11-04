@@ -215,7 +215,6 @@ class MessageBuilder(object):
         self.body = b''
         self.consumer_tag = consumer_tag
         self.exchange_name = exchange_name
-        self.exchange_name = exchange_name
         self.routing_key = routing_key
 
     def set_header(self, header):
