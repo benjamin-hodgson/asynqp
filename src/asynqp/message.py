@@ -107,10 +107,12 @@ class IncomingMessage(Message):
 
     Subclass of :class:`Message`.
     """
-    def __init__(self, *args, sender, delivery_tag, **kwargs):
+    def __init__(self, *args, sender, delivery_tag, exchange_name, routing_key, **kwargs):
         super().__init__(*args, **kwargs)
         self.sender = sender
         self.delivery_tag = delivery_tag
+        self.exchange_name = exchange_name
+        self.routing_key = routing_key
 
     def ack(self):
         """
@@ -200,6 +202,9 @@ class MessageBuilder(object):
         self.delivery_tag = delivery_tag
         self.body = b''
         self.consumer_tag = consumer_tag
+        self.exchange_name = exchange_name
+        self.exchange_name = exchange_name
+        self.routing_key = routing_key
 
     def set_header(self, header):
         self.body_length = header.body_length
@@ -214,4 +219,10 @@ class MessageBuilder(object):
         return len(self.body) == self.body_length
 
     def build(self):
-        return IncomingMessage(self.body, sender=self.sender, delivery_tag=self.delivery_tag, **self.properties)
+        return IncomingMessage(
+            self.body,
+            sender=self.sender,
+            delivery_tag=self.delivery_tag,
+            exchange_name=self.exchange_name,
+            routing_key=self.routing_key,
+            **self.properties)

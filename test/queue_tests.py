@@ -184,6 +184,12 @@ class WhenBasicGetOKArrives(QueueContext):
     def it_should_return_the_expected_message(self):
         assert self.task.result() == self.expected_message
 
+    def it_should_put_the_exchange_name_on_the_msg(self):
+        assert self.task.result().exchange_name == 'my.exchange'
+
+    def it_should_put_the_routing_key_on_the_msg(self):
+        assert self.task.result().routing_key == 'routing.key'
+
 
 class WhenISubscribeToAQueue(QueueContext):
     def when_I_start_a_consumer(self):
