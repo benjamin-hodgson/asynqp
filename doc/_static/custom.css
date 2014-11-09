@@ -1,0 +1,12 @@
+span.green {
+    color: #006600;
+    font-weight: bold;
+}
+span.red {
+    color: #FF0000;
+    font-weight: bold;
+}
+span.orange {
+    color: #FF9933;
+    font-weight: bold;
+}

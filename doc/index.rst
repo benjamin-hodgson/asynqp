@@ -66,6 +66,7 @@ Table of contents
    :maxdepth: 2
 
    reference
+   conformance
 
 * :ref:`genindex`
 * :ref:`modindex`

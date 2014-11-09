@@ -1,6 +1,6 @@
 import asyncio
 from .exceptions import AMQPError, Deleted
-from .message import Message
+from .message import Message, IncomingMessage
 from .connection import Connection
 from .channel import Channel
 from .exchange import Exchange
