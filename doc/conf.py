@@ -58,9 +58,9 @@ copyright = '2014, Benjamin Hodgson'
 # built documents.
 #
 # The short X.Y version.
-version = '0.2'
+version = '0.3'
 # The full version, including alpha/beta/rc tags.
-release = '0.2.1'
+release = '0.3'
 
 
 def hide_class_constructor(app, what, name, obj, options, signature, return_annotation):
