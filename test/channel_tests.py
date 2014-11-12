@@ -101,8 +101,9 @@ class WhenAnAsyncMethodArrivesWhileWeAwaitASynchronousOne(OpenChannelContext):
 
     def when_an_async_method_arrives(self):
         frame = frames.MethodFrame(self.channel.id, spec.BasicDeliver('consumer', 2, False, 'exchange', 'routing_key'))
-        self.dispatcher.dispatch(frame)
-        self.tick()
+        with util.silence_expected_destroy_pending_log('receive_deliver'):
+            self.dispatcher.dispatch(frame)
+            self.tick()
 
     def it_should_not_close_the_channel(self):
         assert not self.protocol.send_method.called

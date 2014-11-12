@@ -11,9 +11,7 @@ from unittest import mock
 class LoopContext:
     def given_an_event_loop(self):
         self.loop = asyncio.get_event_loop()
-        # self.loop.set_debug(True)
         asynqp.bases._TEST = True
-        asynqp.channel._TEST = True
 
     def tick(self):
         test_utils.run_briefly(self.loop)
