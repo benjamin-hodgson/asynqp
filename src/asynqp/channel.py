@@ -10,6 +10,9 @@ from .util import Synchroniser
 from .exceptions import UndeliverableMessage
 
 
+_TEST = False
+
+
 VALID_QUEUE_NAME_RE = re.compile(r'^(?!amq\.)(\w|[-.:])*$', flags=re.A)
 VALID_EXCHANGE_NAME_RE = re.compile(r'^(?!amq\.)(\w|[-.:])+$', flags=re.A)
 
@@ -220,7 +223,9 @@ class ChannelFrameHandler(bases.FrameHandler):
         self.synchroniser.notify(spec.BasicCancelOK)
 
     def handle_BasicDeliver(self, frame):
-        asyncio.async(self.message_receiver.receive_deliver(frame))
+        t = asyncio.async(self.message_receiver.receive_deliver(frame))
+        if _TEST:
+            t._log_destroy_pending = False
 
     def handle_ContentHeaderFrame(self, frame):
         asyncio.async(self.message_receiver.receive_header(frame))

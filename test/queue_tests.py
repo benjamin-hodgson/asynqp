@@ -10,7 +10,7 @@ from .base_contexts import OpenChannelContext, QueueContext, ExchangeContext, Bo
 
 class WhenDeclaringAQueue(OpenChannelContext):
     def when_I_declare_a_queue(self):
-        asyncio.async(self.channel.declare_queue('my.nice.queue', durable=True, exclusive=True, auto_delete=True), loop=self.loop)
+        self.async_partial(self.channel.declare_queue('my.nice.queue', durable=True, exclusive=True, auto_delete=True))
         self.tick()
 
     def it_should_send_a_QueueDeclare_method(self):
@@ -21,7 +21,7 @@ class WhenDeclaringAQueue(OpenChannelContext):
 class WhenQueueDeclareOKArrives(OpenChannelContext):
     def given_I_declared_a_queue(self):
         self.queue_name = 'my.nice.queue'
-        self.task = asyncio.async(self.channel.declare_queue(self.queue_name, durable=True, exclusive=True, auto_delete=True), loop=self.loop)
+        self.task = asyncio.async(self.channel.declare_queue(self.queue_name, durable=True, exclusive=True, auto_delete=True))
         self.tick()
 
     def when_QueueDeclareOK_arrives(self):
@@ -75,7 +75,7 @@ class WhenIUseAnIllegalNameForAQueue(OpenChannelContext):
 
 class WhenBindingAQueueToAnExchange(QueueContext, ExchangeContext):
     def when_I_bind_the_queue(self):
-        asyncio.async(self.queue.bind(self.exchange, 'routing.key'))
+        self.async_partial(self.queue.bind(self.exchange, 'routing.key'))
         self.tick()
 
     def it_should_send_QueueBind(self):
@@ -102,7 +102,7 @@ class WhenQueueBindOKArrives(QueueContext, ExchangeContext):
 
 class WhenUnbindingAQueue(BoundQueueContext):
     def when_I_unbind_the_queue(self):
-        asyncio.async(self.binding.unbind())
+        self.async_partial(self.binding.unbind())
         self.tick()
 
     def it_should_send_QueueUnbind(self):
@@ -141,7 +141,7 @@ class WhenIUnbindAQueueTwice(BoundQueueContext):
 
 class WhenIAskForAMessage(QueueContext):
     def when_I_get_a_message(self):
-        asyncio.async(self.queue.get(no_ack=False))
+        self.async_partial(self.queue.get(no_ack=False))
         self.tick()
 
     def it_should_send_BasicGet(self):
@@ -193,7 +193,7 @@ class WhenBasicGetOKArrives(QueueContext):
 
 class WhenISubscribeToAQueue(QueueContext):
     def when_I_start_a_consumer(self):
-        asyncio.async(self.queue.consume(lambda msg: None, no_local=False, no_ack=False, exclusive=False))
+        self.async_partial(self.queue.consume(lambda msg: None, no_local=False, no_ack=False, exclusive=False))
         self.tick()
 
     def it_should_send_BasicConsume(self):
@@ -271,7 +271,7 @@ class WhenAConsumerThrowsAnExceptionAndAnotherMessageArrives(ConsumerContext):
 
 class WhenICancelAConsumer(ConsumerContext):
     def when_I_cancel_the_consumer(self):
-        asyncio.async(self.consumer.cancel())
+        self.async_partial(self.consumer.cancel())
         self.tick()
 
     def it_should_send_a_BasicCancel_method(self):
@@ -293,7 +293,7 @@ class WhenCancelOKArrives(ConsumerContext):
 
 class WhenIPurgeAQueue(QueueContext):
     def because_I_purge_the_queue(self):
-        asyncio.async(self.queue.purge())
+        self.async_partial(self.queue.purge())
         self.tick()
 
     def it_should_send_a_QueuePurge_method(self):
@@ -316,7 +316,7 @@ class WhenQueuePurgeOKArrives(QueueContext):
 
 class WhenDeletingAQueue(QueueContext):
     def because_I_delete_the_queue(self):
-        asyncio.async(self.queue.delete(if_unused=False, if_empty=False))
+        self.async_partial(self.queue.delete(if_unused=False, if_empty=False))
         self.tick()
 
     def it_should_send_a_QueueDelete_method(self):

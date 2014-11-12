@@ -10,7 +10,7 @@ from .base_contexts import OpenConnectionContext, OpenChannelContext
 
 class WhenOpeningAChannel(OpenConnectionContext):
     def when_the_user_wants_to_open_a_channel(self):
-        asyncio.async(self.connection.open_channel(), loop=self.loop)
+        self.async_partial(self.connection.open_channel())
         self.tick()
 
     def it_should_send_a_channel_open_frame(self):
@@ -47,7 +47,7 @@ class WhenOpeningASecondChannel(OpenChannelContext):
 
 class WhenTheApplicationClosesAChannel(OpenChannelContext):
     def when_I_close_the_channel(self):
-        asyncio.async(self.channel.close())
+        self.async_partial(self.channel.close())
         self.tick()
 
     def it_should_send_ChannelClose(self):
@@ -64,9 +64,9 @@ class WhenTheServerClosesAChannel(OpenChannelContext):
         self.protocol.send_method.assert_called_once_with(self.channel.id, spec.ChannelCloseOK())
 
 
-class WhenAnotherMethodArrivesAfterIClosedTheChannel(OpenChannelContext):
+class WhenAnotherMethodArrivesWhileTheChannelIsClosing(OpenChannelContext):
     def given_that_i_closed_the_channel(self):
-        asyncio.async(self.channel.close())
+        self.async_partial(self.channel.close())
         self.tick()
         self.protocol.reset_mock()
 
@@ -95,7 +95,7 @@ class WhenAnotherMethodArrivesAfterTheServerClosedTheChannel(OpenChannelContext)
 
 class WhenAnAsyncMethodArrivesWhileWeAwaitASynchronousOne(OpenChannelContext):
     def given_we_are_awaiting_QueueDeclareOK(self):
-        self.task = asyncio.async(self.channel.declare_queue('my.nice.queue', durable=True, exclusive=True, auto_delete=True), loop=self.loop)
+        self.task = self.async_partial(self.channel.declare_queue('my.nice.queue', durable=True, exclusive=True, auto_delete=True))
         self.tick()
         self.protocol.reset_mock()
 
@@ -113,7 +113,7 @@ class WhenAnAsyncMethodArrivesWhileWeAwaitASynchronousOne(OpenChannelContext):
 
 class WhenAnUnexpectedChannelCloseArrives(OpenChannelContext):
     def given_we_are_awaiting_QueueDeclareOK(self):
-        asyncio.async(self.channel.declare_queue('my.nice.queue', durable=True, exclusive=True, auto_delete=True), loop=self.loop)
+        self.async_partial(self.channel.declare_queue('my.nice.queue', durable=True, exclusive=True, auto_delete=True))
         self.tick()
         self.protocol.reset_mock()
 
@@ -128,7 +128,7 @@ class WhenAnUnexpectedChannelCloseArrives(OpenChannelContext):
 
 class WhenSettingQOS(OpenChannelContext):
     def when_we_are_setting_prefetch_count_only(self):
-        asyncio.async(self.channel.set_qos(prefetch_size=1000, prefetch_count=100, apply_globally=True))
+        self.async_partial(self.channel.set_qos(prefetch_size=1000, prefetch_count=100, apply_globally=True))
         self.tick()
 
     def it_should_send_BasicQos_with_default_values(self):

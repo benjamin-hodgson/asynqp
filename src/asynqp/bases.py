@@ -4,6 +4,9 @@ from . import frames
 from .exceptions import AMQPError
 
 
+_TEST = False
+
+
 class Sender(object):
     def __init__(self, channel_id, protocol):
         self.channel_id = channel_id
@@ -34,6 +37,9 @@ def create_reader_and_writer(handler):
     return reader, writer
 
 
+# When ready() is called, wait for a frame to arrive on the queue.
+# When the frame does arrive, dispatch it to the handler and do nothing
+# until someone calls ready() again.
 class QueueReader(object):
     def __init__(self, handler, q):
         self.handler = handler
@@ -43,10 +49,12 @@ class QueueReader(object):
     def ready(self):
         assert not self.is_waiting, "ready() got called while waiting for a frame to be read"
         self.is_waiting = True
-        asyncio.async(self.read_next())
+        t = asyncio.async(self._read_next())
+        if _TEST:  # this feels hacky to me
+            t._log_destroy_pending = False
 
     @asyncio.coroutine
-    def read_next(self):
+    def _read_next(self):
         assert self.is_waiting, "a frame got read without ready() having been called"
         frame = yield from self.q.get()
         self.is_waiting = False

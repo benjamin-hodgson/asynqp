@@ -1,5 +1,6 @@
 import asyncio
 import asynqp
+import asynqp.bases
 from asyncio import test_utils
 from asynqp import spec
 from asynqp import protocol
@@ -10,9 +11,24 @@ from unittest import mock
 class LoopContext:
     def given_an_event_loop(self):
         self.loop = asyncio.get_event_loop()
+        # self.loop.set_debug(True)
+        asynqp.bases._TEST = True
+        asynqp.channel._TEST = True
 
     def tick(self):
         test_utils.run_briefly(self.loop)
+
+    def cleanup_test_hack(self):
+        asynqp.bases._TEST = False
+
+    def async_partial(self, coro):
+        """
+        Schedule a coroutine which you are not expecting to complete before the end of the test.
+        Disables the error log when the task is destroyed before completing.
+        """
+        t = asyncio.async(coro)
+        t._log_destroy_pending = False
+        return t
 
 
 class MockLoopContext(LoopContext):

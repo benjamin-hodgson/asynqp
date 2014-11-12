@@ -9,7 +9,7 @@ from .base_contexts import ConnectionContext, OpenConnectionContext
 
 class WhenRespondingToConnectionStart(ConnectionContext):
     def given_I_wrote_the_protocol_header(self):
-        asyncio.async(open_connection(self.loop, self.protocol, self.dispatcher, self.connection_info))
+        self.async_partial(open_connection(self.loop, self.protocol, self.dispatcher, self.connection_info))
         self.tick()
 
     def when_ConnectionStart_arrives(self):
@@ -29,7 +29,7 @@ class WhenRespondingToConnectionStart(ConnectionContext):
 
 class WhenRespondingToConnectionTune(ConnectionContext):
     def given_a_started_connection(self):
-        asyncio.async(open_connection(self.loop, self.protocol, self.dispatcher, self.connection_info))
+        self.async_partial(open_connection(self.loop, self.protocol, self.dispatcher, self.connection_info))
         self.tick()
         start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
         self.dispatcher.dispatch(asynqp.frames.MethodFrame(0, start_method))
@@ -78,27 +78,9 @@ class WhenAConnectionThatWasClosedByTheServerReceivesAMethod(OpenConnectionConte
         assert not self.mock_writer.method_calls
 
 
-class WhenAConnectionThatWasClosedByTheApplicationReceivesAMethod(OpenConnectionContext):
-    def given_a_closed_connection(self):
-        asyncio.async(self.connection.close())
-        self.tick()
-
-        start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
-        self.start_frame = asynqp.frames.MethodFrame(0, start_method)
-        self.mock_writer = mock.Mock()
-
-    def when_another_frame_arrives(self):
-        with mock.patch.dict(self.dispatcher.queue_writers, {0: self.mock_writer}):
-            self.dispatcher.dispatch(self.start_frame)
-            self.tick()
-
-    def it_MUST_be_discarded(self):
-        assert not self.mock_writer.method_calls
-
-
 class WhenTheApplicationClosesTheConnection(OpenConnectionContext):
     def when_I_close_the_connection(self):
-        asyncio.async(self.connection.close())
+        self.async_partial(self.connection.close())
         self.tick()
 
     def it_should_send_ConnectionClose_with_no_exception(self):
@@ -118,3 +100,23 @@ class WhenRecievingConnectionCloseOK(OpenConnectionContext):
 
     def it_should_close_the_transport(self):
         assert self.protocol.transport.close.called
+
+
+# TODO: rewrite me to use a handler, not a queue writer
+class WhenAConnectionThatIsClosingReceivesAMethod(OpenConnectionContext):
+    def given_a_closed_connection(self):
+        t = asyncio.async(self.connection.close())
+        t._log_destroy_pending = False
+        self.tick()
+
+        start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
+        self.start_frame = asynqp.frames.MethodFrame(0, start_method)
+        self.mock_writer = mock.Mock()
+
+    def when_another_frame_arrives(self):
+        with mock.patch.dict(self.dispatcher.queue_writers, {0: self.mock_writer}):
+            self.dispatcher.dispatch(self.start_frame)
+            self.tick()
+
+    def it_MUST_be_discarded(self):
+        assert not self.mock_writer.method_calls

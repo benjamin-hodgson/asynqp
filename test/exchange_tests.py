@@ -11,8 +11,7 @@ from .base_contexts import OpenChannelContext, ExchangeContext
 
 class WhenDeclaringAnExchange(OpenChannelContext):
     def when_I_declare_an_exchange(self):
-        asyncio.async(self.channel.declare_exchange('my.nice.exchange', 'fanout', durable=True, auto_delete=False, internal=False),
-                      loop=self.loop)
+        self.async_partial(self.channel.declare_exchange('my.nice.exchange', 'fanout', durable=True, auto_delete=False, internal=False))
         self.tick()
 
     def it_should_send_ExchangeDeclare(self):
@@ -22,8 +21,7 @@ class WhenDeclaringAnExchange(OpenChannelContext):
 
 class WhenExchangeDeclareOKArrives(OpenChannelContext):
     def given_I_declared_an_exchange(self):
-        self.task = asyncio.async(self.channel.declare_exchange('my.nice.exchange', 'fanout', durable=True, auto_delete=False, internal=False),
-                                  loop=self.loop)
+        self.task = asyncio.async(self.channel.declare_exchange('my.nice.exchange', 'fanout', durable=True, auto_delete=False, internal=False))
         self.tick()
 
     def when_the_reply_arrives(self):
@@ -52,8 +50,7 @@ class WhenExchangeDeclareOKArrives(OpenChannelContext):
 # Clients are not allowed to re-declare the default exchange, but they are allowed to publish to it
 class WhenIDeclareTheDefaultExchange(OpenChannelContext):
     def when_I_declare_an_exchange_with_an_empty_name(self):
-        task = asyncio.async(self.channel.declare_exchange('', 'direct', durable=True, auto_delete=False, internal=False),
-                             loop=self.loop)
+        task = asyncio.async(self.channel.declare_exchange('', 'direct', durable=True, auto_delete=False, internal=False))
         self.tick()
         self.exchange = task.result()
 
@@ -163,7 +160,7 @@ class WhenPublishingALongMessage(ExchangeContext):
 
 class WhenDeletingAnExchange(ExchangeContext):
     def when_I_delete_the_exchange(self):
-        asyncio.async(self.exchange.delete(if_unused=True), loop=self.loop)
+        self.async_partial(self.exchange.delete(if_unused=True))
         self.tick()
 
     def it_should_send_ExchangeDelete(self):
