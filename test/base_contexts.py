@@ -6,6 +6,7 @@ from asynqp import spec
 from asynqp import protocol
 from asynqp.connection import ConnectionInfo, open_connection
 from unittest import mock
+from .util import MockServer, FakeTransport
 
 
 class LoopContext:
@@ -32,6 +33,14 @@ class LoopContext:
 class MockLoopContext(LoopContext):
     def given_an_event_loop(self):
         self.loop = mock.Mock(spec=asyncio.AbstractEventLoop)
+
+
+class MockServerContext(LoopContext):
+    def given_a_mock_server_on_the_other_end_of_the_transport(self):
+        self.dispatcher = protocol.Dispatcher()
+        self.protocol = protocol.AMQP(self.dispatcher, self.loop)
+        self.server = MockServer(self.protocol)
+        self.protocol.connection_made(FakeTransport(self.server))
 
 
 class ConnectionContext(LoopContext):

@@ -15,6 +15,7 @@ def read(frame_type, channel_id, raw_payload):
         return ContentBodyFrame(channel_id, raw_payload)
     if frame_type == HeartbeatFrame.frame_type:
         return HeartbeatFrame()
+    raise ValueError("Received an unexpected frame type: " + str(frame_type))
 
 
 class Frame(object):

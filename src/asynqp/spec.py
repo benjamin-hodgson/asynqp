@@ -24,18 +24,17 @@ class Method:
         for (fieldname, fieldcls), value in zip(self.field_info.items(), args):
             self.fields[fieldname] = fieldcls(value)
 
-    def __getattr__(self, name):
-        try:
-            return self.fields[name]
-        except KeyError as e:
-            raise AttributeError('{} object has no attribute {}'.format(type(self).__name__, name)) from e
+    @classmethod
+    def read(cls, stream):
+        method_type = struct.unpack('!HH', stream.read(4))
+        assert method_type == cls.method_type, "How did this happen? Wrong method type for {}: {}".format(cls.__name__, method_type)
 
-    def __eq__(self, other):
-        return (type(self) == type(other)
-                and self.fields == other.fields)
+        args = []
+        for fieldname, fieldcls in cls.field_info.items():
+            args.append(fieldcls.read(stream))
 
+        return cls(*args)
 
-class OutgoingMethod(Method):
     def write(self, stream):
         stream.write(struct.pack('!HH', *self.method_type))
         bits = []
@@ -51,19 +50,15 @@ class OutgoingMethod(Method):
         if bits:
             stream.write(serialisation.pack_bools(*bits))
 
+    def __getattr__(self, name):
+        try:
+            return self.fields[name]
+        except KeyError as e:
+            raise AttributeError('{} object has no attribute {}'.format(type(self).__name__, name)) from e
 
-class IncomingMethod(Method):
-    @classmethod
-    def read(cls, stream):
-        method_type = struct.unpack('!HH', stream.read(4))
-        if method_type != cls.method_type:
-            raise ValueError("How did this happen? Wrong method type for {}: {}".format(cls.__name__, method_type))
-
-        args = []
-        for fieldname, fieldcls in cls.field_info.items():
-            args.append(fieldcls.read(stream))
-
-        return cls(*args)
+    def __eq__(self, other):
+        return (type(self) == type(other)
+                and self.fields == other.fields)
 
 
 # Here, we load up the AMQP XML spec, traverse it,
@@ -143,18 +138,12 @@ def generate_methods(classes):
             name = class_name + method_name
             method_type = (class_id, method_id)
 
-            parents = []
-            if 'server' in method_support:
-                parents.append(OutgoingMethod)
-            if 'client' in method_support:
-                parents.append(IncomingMethod)
-
             # this call to type() is where the magic happens -
             # we are dynamically building subclasses of OutgoingMethod and/or IncomingMethod
             # with strongly-typed fields as defined in the spec.
             # The write() and read() methods of the base classes traverse the fields
             # and generate the correct bytestring
-            cls = type(name, tuple(parents), {'method_type': method_type, 'field_info': fields, 'synchronous': synchronous})
+            cls = type(name, (Method,), {'method_type': method_type, 'field_info': fields, 'synchronous': synchronous})
             cls.__doc__ = method_doc
             methods[name] = methods[method_type] = cls
 

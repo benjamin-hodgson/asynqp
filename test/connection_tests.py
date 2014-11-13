@@ -2,62 +2,74 @@ import asyncio
 import sys
 import asynqp
 from unittest import mock
-from asynqp import spec
-from asynqp.connection import open_connection
-from .base_contexts import ConnectionContext, OpenConnectionContext
+from asynqp import spec, protocol, frames
+from asynqp.connection import open_connection, ConnectionInfo
+from .base_contexts import ConnectionContext, OpenConnectionContext, LoopContext, MockServerContext
 
 
-class WhenRespondingToConnectionStart(ConnectionContext):
+class WhenRespondingToConnectionStart(MockServerContext):
     def given_I_wrote_the_protocol_header(self):
-        self.async_partial(open_connection(self.loop, self.protocol, self.dispatcher, self.connection_info))
+        connection_info = ConnectionInfo('guest', 'guest', '/')
+        self.async_partial(open_connection(self.loop, self.protocol, self.dispatcher, connection_info))
         self.tick()
 
     def when_ConnectionStart_arrives(self):
-        start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
-        self.dispatcher.dispatch(asynqp.frames.MethodFrame(0, start_method))
+        self.server.send_method(0, spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US'))
         self.tick()
 
     def it_should_send_start_ok(self):
         expected_method = spec.ConnectionStartOK(
-            {"product": "asynqp", "version": mock.ANY, "platform": sys.version},
+            {"product": "asynqp", "version": "0.1", "platform": sys.version},
             'AMQPLAIN',
             {'LOGIN': 'guest', 'PASSWORD': 'guest'},
             'en_US'
         )
-        self.protocol.send_method.assert_called_once_with(0, expected_method)
+        self.server.should_have_received_method(0, expected_method)
 
 
-class WhenRespondingToConnectionTune(ConnectionContext):
+class WhenRespondingToConnectionTune(MockServerContext):
     def given_a_started_connection(self):
-        self.async_partial(open_connection(self.loop, self.protocol, self.dispatcher, self.connection_info))
+        connection_info = ConnectionInfo('guest', 'guest', '/')
+        self.async_partial(open_connection(self.loop, self.protocol, self.dispatcher, connection_info))
         self.tick()
-        start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
-        self.dispatcher.dispatch(asynqp.frames.MethodFrame(0, start_method))
+        self.server.send_method(0, spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US'))
         self.tick()
 
     def when_ConnectionTune_arrives(self):
-        tune_frame = asynqp.frames.MethodFrame(0, spec.ConnectionTune(0, 131072, 600))
-        self.dispatcher.dispatch(tune_frame)
+        self.server.send_method(0, spec.ConnectionTune(0, 131072, 600))
         self.tick()
 
     def it_should_send_tune_ok_followed_by_open(self):
-        tune_ok = spec.ConnectionTuneOK(0, 131072, 600)
+        tune_ok_method = spec.ConnectionTuneOK(0, 131072, 600)
         open_method = spec.ConnectionOpen('/', '', False)
-        self.protocol.send_method.assert_has_calls([mock.call(0, tune_ok), mock.call(0, open_method)])
-
-    def it_should_start_heartbeating(self):
-        self.protocol.start_heartbeat.assert_called_once_with(600)
+        self.server.should_have_received_methods(0, [tune_ok_method, open_method])
 
 
-class WhenRespondingToConnectionClose(OpenConnectionContext):
+class WhenRespondingToConnectionClose(MockServerContext):
+    def given_an_open_connection(self):
+        connection_info = ConnectionInfo('guest', 'guest', '/')
+        task = asyncio.async(open_connection(self.loop, self.protocol, self.dispatcher, connection_info))
+        self.tick()
+
+        start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
+        self.server.send_method(0, start_method)
+        self.tick()
+
+        tune_method = spec.ConnectionTune(0, 131072, 600)
+        self.server.send_method(0, tune_method)
+        self.tick()
+
+        self.server.send_method(0, spec.ConnectionOpenOK(''))
+        self.tick()
+
+        self.connection = task.result()
+
     def when_the_close_frame_arrives(self):
-        close_frame = asynqp.frames.MethodFrame(0, spec.ConnectionClose(123, 'you muffed up', 10, 20))
-        self.dispatcher.dispatch(close_frame)
+        self.server.send_method(0, spec.ConnectionClose(123, 'you muffed up', 10, 20))
         self.tick()
 
     def it_should_send_close_ok(self):
-        expected = spec.ConnectionCloseOK()
-        self.protocol.send_method.assert_called_once_with(0, expected)
+        self.server.should_have_received_method(0, spec.ConnectionCloseOK())
 
 
 class WhenAConnectionThatWasClosedByTheServerReceivesAMethod(OpenConnectionContext):

@@ -1,5 +1,62 @@
 import asyncio
 from unittest import mock
+import asynqp.frames
+from asynqp import protocol
+
+
+class MockServer(object):
+    def __init__(self, protocol):
+        self.protocol = protocol
+        self.data = []
+
+    def send_frame(self, frame):
+        self.protocol.data_received(frame.serialise())
+
+    def send_method(self, channel_number, method):
+        frame = asynqp.frames.MethodFrame(channel_number, method)
+        self.send_frame(frame)
+
+    def should_have_received_frames(self, expected_frames, any_order=False):
+        results = (read(x) for x in self.data)
+        frames = [x for x in results if x is not None]
+        if any_order:
+            for frame in expected_frames:
+                assert frame in frames, "{} should have been in {}".format(frame, frames)
+        else:
+            expected_frames = tuple(expected_frames)
+            assert expected_frames in windows(frames, len(expected_frames)), "{} should have been in {}".format(expected_frames, frames)
+
+    def should_have_received_methods(self, channel_number, methods, any_order=False):
+        frames = (asynqp.frames.MethodFrame(channel_number, m) for m in methods)
+        self.should_have_received_frames(frames, any_order)
+
+    def should_have_received_frame(self, expected_frame):
+        self.should_have_received_frames([expected_frame], any_order=True)
+
+    def should_have_received_method(self, channel_number, method):
+        self.should_have_received_methods(channel_number, [method], any_order=True)
+
+
+def read(frame):
+    result = protocol.FrameReader().read_frame(frame)
+    if result is None:
+        return
+    return result[0]
+
+
+def windows(l, size):
+    return zip(*[l[x:] for x in range(size)])
+
+
+class FakeTransport(object):
+    def __init__(self, server):
+        self.server = server
+
+    def write(self, data):
+        self.server.data.append(data)
+
+    def close(self):
+        pass
 
 
 def any(cls):

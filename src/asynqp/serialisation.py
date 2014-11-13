@@ -44,7 +44,7 @@ def read_table(stream):
     return _read_table(stream)[0]
 
 
-@rethrow_as(struct.error, AMQPError('failed to read a table'))
+@rethrow_as(struct.error, AMQPError('failed to read a boolean'))
 def read_bool(stream):
     return _read_bool(stream)[0]
 
