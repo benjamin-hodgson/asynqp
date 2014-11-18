@@ -49,6 +49,13 @@ def read_bool(stream):
     return _read_bool(stream)[0]
 
 
+@rethrow_as(struct.error, AMQPError('failed to read a boolean'))
+def read_bools(byte, number_of_bools):
+    bits = "{0:b}".format(byte)
+    bits = "0" * (number_of_bools - len(bits)) + bits
+    return (b == "1" for b in reversed(bits))
+
+
 def _read_table(stream):
     # TODO: more value types
     TABLE_VALUE_PARSERS = {
@@ -140,7 +147,8 @@ def pack_table(d):
         bytes += pack_short_string(key)
         bytes += b'S'  # todo: more values
         bytes += pack_long_string(value)
-    return pack_long(len(bytes)) + bytes
+    val = pack_long(len(bytes)) + bytes
+    return val
 
 
 def pack_octet(number):

@@ -40,7 +40,40 @@ class MockServerContext(LoopContext):
         self.dispatcher = protocol.Dispatcher()
         self.protocol = protocol.AMQP(self.dispatcher, self.loop)
         self.server = MockServer(self.protocol)
-        self.protocol.connection_made(FakeTransport(self.server))
+        self.transport = FakeTransport(self.server)
+        self.protocol.connection_made(self.transport)
+
+
+class OpenConnectionWithMockServer(MockServerContext):
+    def given_an_open_connection(self):
+        connection_info = ConnectionInfo('guest', 'guest', '/')
+        task = asyncio.async(open_connection(self.loop, self.protocol, self.dispatcher, connection_info))
+        self.tick()
+
+        start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
+        self.server.send_method(0, start_method)
+        self.tick()
+
+        tune_method = spec.ConnectionTune(0, 131072, 600)
+        self.server.send_method(0, tune_method)
+        self.tick()
+
+        self.server.send_method(0, spec.ConnectionOpenOK(''))
+        self.tick()
+
+        self.connection = task.result()
+
+
+class OpenChannelWithMockServer(OpenConnectionWithMockServer):
+    def given_an_open_channel(self):
+        self.channel = self.open_channel()
+
+    def open_channel(self, channel_id=1):
+        task = asyncio.async(self.connection.open_channel(), loop=self.loop)
+        self.tick()
+        self.server.send_method(channel_id, spec.ChannelOpenOK(''))
+        self.tick()
+        return task.result()
 
 
 class ConnectionContext(LoopContext):

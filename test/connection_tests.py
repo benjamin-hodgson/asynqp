@@ -4,7 +4,7 @@ import asynqp
 from unittest import mock
 from asynqp import spec, protocol, frames
 from asynqp.connection import open_connection, ConnectionInfo
-from .base_contexts import ConnectionContext, OpenConnectionContext, LoopContext, MockServerContext
+from .base_contexts import ConnectionContext, OpenConnectionContext, LoopContext, MockServerContext, OpenConnectionWithMockServer
 
 
 class WhenRespondingToConnectionStart(MockServerContext):
@@ -45,25 +45,7 @@ class WhenRespondingToConnectionTune(MockServerContext):
         self.server.should_have_received_methods(0, [tune_ok_method, open_method])
 
 
-class WhenRespondingToConnectionClose(MockServerContext):
-    def given_an_open_connection(self):
-        connection_info = ConnectionInfo('guest', 'guest', '/')
-        task = asyncio.async(open_connection(self.loop, self.protocol, self.dispatcher, connection_info))
-        self.tick()
-
-        start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
-        self.server.send_method(0, start_method)
-        self.tick()
-
-        tune_method = spec.ConnectionTune(0, 131072, 600)
-        self.server.send_method(0, tune_method)
-        self.tick()
-
-        self.server.send_method(0, spec.ConnectionOpenOK(''))
-        self.tick()
-
-        self.connection = task.result()
-
+class WhenRespondingToConnectionClose(OpenConnectionWithMockServer):
     def when_the_close_frame_arrives(self):
         self.server.send_method(0, spec.ConnectionClose(123, 'you muffed up', 10, 20))
         self.tick()
@@ -72,46 +54,27 @@ class WhenRespondingToConnectionClose(MockServerContext):
         self.server.should_have_received_method(0, spec.ConnectionCloseOK())
 
 
-class WhenAConnectionThatWasClosedByTheServerReceivesAMethod(OpenConnectionContext):
-    def given_a_closed_connection(self):
-        close_frame = asynqp.frames.MethodFrame(0, spec.ConnectionClose(123, 'you muffed up', 10, 20))
-        self.dispatcher.dispatch(close_frame)
-        self.tick()
-        self.mock_writer = mock.Mock()
-
-    def when_another_frame_arrives(self):
-        unexpected_frame = asynqp.frames.MethodFrame(1, spec.BasicDeliver('', 1, False, '', ''))
-
-        with mock.patch.dict(self.dispatcher.queue_writers, {1: self.mock_writer}):
-            self.dispatcher.dispatch(unexpected_frame)
-            self.tick()
-
-    def it_MUST_be_discarded(self):
-        assert not self.mock_writer.method_calls
-
-
-class WhenTheApplicationClosesTheConnection(OpenConnectionContext):
+class WhenTheApplicationClosesTheConnection(OpenConnectionWithMockServer):
     def when_I_close_the_connection(self):
         self.async_partial(self.connection.close())
         self.tick()
 
     def it_should_send_ConnectionClose_with_no_exception(self):
         expected = spec.ConnectionClose(0, 'Connection closed by application', 0, 0)
-        self.protocol.send_method.assert_called_once_with(0, expected)
+        self.server.should_have_received_method(0, expected)
 
 
-class WhenRecievingConnectionCloseOK(OpenConnectionContext):
+class WhenRecievingConnectionCloseOK(OpenConnectionWithMockServer):
     def given_a_connection_that_I_closed(self):
         asyncio.async(self.connection.close())
         self.tick()
 
     def when_connection_close_ok_arrives(self):
-        frame = asynqp.frames.MethodFrame(0, spec.ConnectionCloseOK())
-        self.dispatcher.dispatch(frame)
+        self.server.send_method(0, spec.ConnectionCloseOK())
         self.tick()
 
     def it_should_close_the_transport(self):
-        assert self.protocol.transport.close.called
+        assert self.transport.closed
 
 
 # TODO: rewrite me to use a handler, not a queue writer
@@ -128,6 +91,25 @@ class WhenAConnectionThatIsClosingReceivesAMethod(OpenConnectionContext):
     def when_another_frame_arrives(self):
         with mock.patch.dict(self.dispatcher.queue_writers, {0: self.mock_writer}):
             self.dispatcher.dispatch(self.start_frame)
+            self.tick()
+
+    def it_MUST_be_discarded(self):
+        assert not self.mock_writer.method_calls
+
+
+# TODO: rewrite so it doesn't know about dispatcher
+class WhenAConnectionThatWasClosedByTheServerReceivesAMethod(OpenConnectionContext):
+    def given_a_closed_connection(self):
+        close_frame = asynqp.frames.MethodFrame(0, spec.ConnectionClose(123, 'you muffed up', 10, 20))
+        self.dispatcher.dispatch(close_frame)
+        self.tick()
+        self.mock_writer = mock.Mock()
+
+    def when_another_frame_arrives(self):
+        unexpected_frame = asynqp.frames.MethodFrame(1, spec.BasicDeliver('', 1, False, '', ''))
+
+        with mock.patch.dict(self.dispatcher.queue_writers, {1: self.mock_writer}):
+            self.dispatcher.dispatch(unexpected_frame)
             self.tick()
 
     def it_MUST_be_discarded(self):

@@ -16,6 +16,9 @@ class MockServer(object):
         frame = asynqp.frames.MethodFrame(channel_number, method)
         self.send_frame(frame)
 
+    def reset(self):
+        self.data = []
+
     def should_have_received_frames(self, expected_frames, any_order=False):
         results = (read(x) for x in self.data)
         frames = [x for x in results if x is not None]
@@ -36,9 +39,22 @@ class MockServer(object):
     def should_have_received_method(self, channel_number, method):
         self.should_have_received_methods(channel_number, [method], any_order=True)
 
+    def should_not_have_received_method(self, channel_number, method):
+        results = (read(x) for x in self.data)
+        frames = [x for x in results if x is not None]
 
-def read(frame):
-    result = protocol.FrameReader().read_frame(frame)
+        frame = asynqp.frames.MethodFrame(channel_number, method)
+        assert frame not in frames, "{} should not have been in {}".format(frame, frames)
+
+    def should_not_have_received_any(self):
+        assert not self.data, "{} should have been empty".format(self.data)
+
+
+def read(data):
+    if data == b'AMQP\x00\x00\x09\x01':
+        return
+
+    result = protocol.FrameReader().read_frame(data)
     if result is None:
         return
     return result[0]
@@ -51,12 +67,13 @@ def windows(l, size):
 class FakeTransport(object):
     def __init__(self, server):
         self.server = server
+        self.closed = False
 
     def write(self, data):
         self.server.data.append(data)
 
     def close(self):
-        pass
+        self.closed = True
 
 
 def any(cls):

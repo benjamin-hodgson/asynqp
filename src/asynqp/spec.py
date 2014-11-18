@@ -30,8 +30,22 @@ class Method:
         assert method_type == cls.method_type, "How did this happen? Wrong method type for {}: {}".format(cls.__name__, method_type)
 
         args = []
-        for fieldname, fieldcls in cls.field_info.items():
+        number_of_bits = 0
+        for fieldcls in cls.field_info.values():
+            if fieldcls is FIELD_TYPES['bit']:
+                number_of_bits += 1
+                continue
+            elif number_of_bits:  # if we have some bools but this next field is not a bool
+                val = ord(stream.read(1))
+                args.extend(serialisation.read_bools(val, number_of_bits))
+                number_of_bits = 0
+
             args.append(fieldcls.read(stream))
+
+        if number_of_bits:  # if there were some bools right at the end
+            val = ord(stream.read(1))
+            args.extend(serialisation.read_bools(val, number_of_bits))
+            number_of_bits = 0
 
         return cls(*args)
 
