@@ -5,27 +5,27 @@ import asynqp
 from asynqp import message
 from asynqp import frames
 from asynqp import spec
-from .base_contexts import OpenChannelContext, QueueContext, ExchangeContext, BoundQueueContext, ConsumerContext
+from .base_contexts import OpenChannelWithMockServer, QueueWithMockServer, ExchangeWithMockServer, BoundQueueWithMockServer, ConsumerWithMockServer
 
 
-class WhenDeclaringAQueue(OpenChannelContext):
+class WhenDeclaringAQueue(OpenChannelWithMockServer):
     def when_I_declare_a_queue(self):
         self.async_partial(self.channel.declare_queue('my.nice.queue', durable=True, exclusive=True, auto_delete=True))
         self.tick()
 
     def it_should_send_a_QueueDeclare_method(self):
         expected_method = spec.QueueDeclare(0, 'my.nice.queue', False, True, True, True, False, {})
-        self.protocol.send_method.assert_called_once_with(self.channel.id, expected_method)
+        self.server.should_have_received_method(self.channel.id, expected_method)
 
 
-class WhenQueueDeclareOKArrives(OpenChannelContext):
+class WhenQueueDeclareOKArrives(OpenChannelWithMockServer):
     def given_I_declared_a_queue(self):
         self.queue_name = 'my.nice.queue'
         self.task = asyncio.async(self.channel.declare_queue(self.queue_name, durable=True, exclusive=True, auto_delete=True))
         self.tick()
 
     def when_QueueDeclareOK_arrives(self):
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, spec.QueueDeclareOK(self.queue_name, 123, 456)))
+        self.server.send_method(self.channel.id, spec.QueueDeclareOK(self.queue_name, 123, 456))
         self.tick()
         self.result = self.task.result()
 
@@ -42,7 +42,7 @@ class WhenQueueDeclareOKArrives(OpenChannelContext):
         assert self.result.auto_delete
 
 
-class WhenILetTheServerPickTheQueueName(OpenChannelContext):
+class WhenILetTheServerPickTheQueueName(OpenChannelWithMockServer):
     def given_I_declared_a_queue(self):
         self.task = asyncio.async(self.channel.declare_queue('', durable=True, exclusive=True, auto_delete=True), loop=self.loop)
         self.tick()
@@ -50,7 +50,7 @@ class WhenILetTheServerPickTheQueueName(OpenChannelContext):
         self.queue_name = 'randomly.generated.name'
 
     def when_QueueDeclareOK_arrives(self):
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, spec.QueueDeclareOK(self.queue_name, 123, 456)))
+        self.server.send_method(self.channel.id, spec.QueueDeclareOK(self.queue_name, 123, 456))
         self.tick()
         self.result = self.task.result()
 
@@ -58,7 +58,7 @@ class WhenILetTheServerPickTheQueueName(OpenChannelContext):
         assert self.result.name == self.queue_name
 
 
-class WhenIUseAnIllegalNameForAQueue(OpenChannelContext):
+class WhenIUseAnIllegalNameForAQueue(OpenChannelWithMockServer):
     @classmethod
     def examples_of_bad_names(cls):
         yield 'amq.begins.with.amq.'
@@ -73,23 +73,23 @@ class WhenIUseAnIllegalNameForAQueue(OpenChannelContext):
         assert isinstance(self.task.exception(), ValueError)
 
 
-class WhenBindingAQueueToAnExchange(QueueContext, ExchangeContext):
+class WhenBindingAQueueToAnExchange(QueueWithMockServer, ExchangeWithMockServer):
     def when_I_bind_the_queue(self):
         self.async_partial(self.queue.bind(self.exchange, 'routing.key'))
         self.tick()
 
     def it_should_send_QueueBind(self):
         expected_method = spec.QueueBind(0, self.queue.name, self.exchange.name, 'routing.key', False, {})
-        self.protocol.send_method.assert_called_once_with(self.channel.id, expected_method)
+        self.server.should_have_received_method(self.channel.id, expected_method)
 
 
-class WhenQueueBindOKArrives(QueueContext, ExchangeContext):
+class WhenQueueBindOKArrives(QueueWithMockServer, ExchangeWithMockServer):
     def given_I_sent_QueueBind(self):
         self.task = asyncio.async(self.queue.bind(self.exchange, 'routing.key'))
         self.tick()
 
     def when_QueueBindOK_arrives(self):
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, spec.QueueBindOK()))
+        self.server.send_method(self.channel.id, spec.QueueBindOK())
         self.tick()
         self.binding = self.task.result()
 
@@ -100,35 +100,34 @@ class WhenQueueBindOKArrives(QueueContext, ExchangeContext):
         assert self.binding.exchange is self.exchange
 
 
-class WhenUnbindingAQueue(BoundQueueContext):
+class WhenUnbindingAQueue(BoundQueueWithMockServer):
     def when_I_unbind_the_queue(self):
         self.async_partial(self.binding.unbind())
         self.tick()
 
     def it_should_send_QueueUnbind(self):
         expected_method = spec.QueueUnbind(0, self.queue.name, self.exchange.name, 'routing.key', {})
-        self.protocol.send_method.assert_called_once_with(self.channel.id, expected_method)
+        self.server.should_have_received_method(self.channel.id, expected_method)
 
 
-class WhenQueueUnbindOKArrives(BoundQueueContext):
+class WhenQueueUnbindOKArrives(BoundQueueWithMockServer):
     def given_I_unbound_the_queue(self):
         self.task = asyncio.async(self.binding.unbind())
         self.tick()
 
     def when_QueueUnbindOK_arrives(self):
-        frame = frames.Frame(self.channel.id, spec.QueueUnbindOK())
-        self.dispatcher.dispatch(frame)
+        self.server.send_method(self.channel.id, spec.QueueUnbindOK())
         self.tick()
 
     def it_should_be_ok(self):
         assert self.task.result() is None
 
 
-class WhenIUnbindAQueueTwice(BoundQueueContext):
+class WhenIUnbindAQueueTwice(BoundQueueWithMockServer):
     def given_an_unbound_queue(self):
         asyncio.async(self.binding.unbind())
         self.tick()
-        self.dispatcher.dispatch(frames.Frame(self.channel.id, spec.QueueUnbindOK()))
+        self.server.send_method(self.channel.id, spec.QueueUnbindOK())
         self.tick()
 
     def when_I_unbind_the_queue_again(self):
@@ -139,29 +138,29 @@ class WhenIUnbindAQueueTwice(BoundQueueContext):
         assert isinstance(self.task.exception(), asynqp.Deleted)
 
 
-class WhenIAskForAMessage(QueueContext):
+class WhenIAskForAMessage(QueueWithMockServer):
     def when_I_get_a_message(self):
         self.async_partial(self.queue.get(no_ack=False))
         self.tick()
 
     def it_should_send_BasicGet(self):
-        self.protocol.send_method.assert_called_once_with(self.channel.id, spec.BasicGet(0, self.queue.name, False))
+        self.server.should_have_received_method(self.channel.id, spec.BasicGet(0, self.queue.name, False))
 
 
-class WhenBasicGetEmptyArrives(QueueContext):
+class WhenBasicGetEmptyArrives(QueueWithMockServer):
     def given_I_asked_for_a_message(self):
         self.task = asyncio.async(self.queue.get(no_ack=False))
         self.tick()
 
     def when_BasicGetEmpty_arrives(self):
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, spec.BasicGetEmpty('')))
+        self.server.send_method(self.channel.id, spec.BasicGetEmpty(''))
         self.tick()
 
     def it_should_return_None(self):
         assert self.task.result() is None
 
 
-class WhenBasicGetOKArrives(QueueContext):
+class WhenBasicGetOKArrives(QueueWithMockServer):
     def given_I_asked_for_a_message(self):
         self.expected_message = asynqp.Message('body', timestamp=datetime(2014, 5, 5))
         self.task = asyncio.async(self.queue.get(no_ack=False))
@@ -169,15 +168,15 @@ class WhenBasicGetOKArrives(QueueContext):
 
     def when_BasicGetOK_arrives_with_content(self):
         method = spec.BasicGetOK(123, False, 'my.exchange', 'routing.key', 0)
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
+        self.server.send_method(self.channel.id, method)
         self.tick()
 
         header = message.get_header_payload(self.expected_message, spec.BasicGet.method_type[0])
-        self.dispatcher.dispatch(frames.ContentHeaderFrame(self.channel.id, header))
+        self.server.send_frame(frames.ContentHeaderFrame(self.channel.id, header))
         self.tick()
 
         body = message.get_frame_payloads(self.expected_message, 100)[0]
-        self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
+        self.server.send_frame(frames.ContentBodyFrame(self.channel.id, body))
         self.tick()
         self.tick()
 
@@ -191,44 +190,44 @@ class WhenBasicGetOKArrives(QueueContext):
         assert self.task.result().routing_key == 'routing.key'
 
 
-class WhenISubscribeToAQueue(QueueContext):
+class WhenISubscribeToAQueue(QueueWithMockServer):
     def when_I_start_a_consumer(self):
         self.async_partial(self.queue.consume(lambda msg: None, no_local=False, no_ack=False, exclusive=False))
         self.tick()
 
     def it_should_send_BasicConsume(self):
-        self.protocol.send_method.assert_called_once_with(self.channel.id, spec.BasicConsume(0, self.queue.name, '', False, False, False, False, {}))
+        self.server.should_have_received_method(self.channel.id, spec.BasicConsume(0, self.queue.name, '', False, False, False, False, {}))
 
 
-class WhenConsumeOKArrives(QueueContext):
+class WhenConsumeOKArrives(QueueWithMockServer):
     def given_I_started_a_consumer(self):
         self.task = asyncio.async(self.queue.consume(lambda msg: None, no_local=False, no_ack=False, exclusive=False))
         self.tick()
 
     def when_BasicConsumeOK_arrives(self):
         method = spec.BasicConsumeOK('made.up.tag')
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
+        self.server.send_method(self.channel.id, method)
         self.tick()
 
     def it_should_return_a_consumer_with_the_correct_consumer_tag(self):
         assert self.task.result().tag == 'made.up.tag'
 
 
-class WhenBasicDeliverArrives(ConsumerContext):
+class WhenBasicDeliverArrives(ConsumerWithMockServer):
     def given_a_message(self):
         self.expected_message = asynqp.Message('body', timestamp=datetime(2014, 5, 5))
 
     def when_BasicDeliver_arrives_with_content(self):
         method = spec.BasicDeliver(self.consumer.tag, 123, False, 'my.exchange', 'routing.key')
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
+        self.server.send_method(self.channel.id, method)
         self.tick()
 
         header = message.get_header_payload(self.expected_message, spec.BasicGet.method_type[0])
-        self.dispatcher.dispatch(frames.ContentHeaderFrame(self.channel.id, header))
+        self.server.send_frame(frames.ContentHeaderFrame(self.channel.id, header))
         self.tick()
 
         body = message.get_frame_payloads(self.expected_message, 100)[0]
-        self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
+        self.server.send_frame(frames.ContentBodyFrame(self.channel.id, body))
         self.tick()
         self.tick()
 
@@ -237,7 +236,7 @@ class WhenBasicDeliverArrives(ConsumerContext):
 
 
 # test that the call to handler.ready() is not affected by the exception
-class WhenAConsumerThrowsAnExceptionAndAnotherMessageArrives(ConsumerContext):
+class WhenAConsumerThrowsAnExceptionAndAnotherMessageArrives(ConsumerWithMockServer):
     def given_a_consumer_has_thrown_an_exception(self):
         self.loop.set_exception_handler(lambda l, c: None)
         self.expected_message = asynqp.Message('body', timestamp=datetime(2014, 5, 5))
@@ -253,15 +252,15 @@ class WhenAConsumerThrowsAnExceptionAndAnotherMessageArrives(ConsumerContext):
 
     def deliver_msg(self):
         method = spec.BasicDeliver(self.consumer.tag, 123, False, 'my.exchange', 'routing.key')
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
+        self.server.send_method(self.channel.id, method)
         self.tick()
 
         header = message.get_header_payload(self.expected_message, spec.BasicGet.method_type[0])
-        self.dispatcher.dispatch(frames.ContentHeaderFrame(self.channel.id, header))
+        self.server.send_frame(frames.ContentHeaderFrame(self.channel.id, header))
         self.tick()
 
         body = message.get_frame_payloads(self.expected_message, 100)[0]
-        self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
+        self.server.send_frame(frames.ContentBodyFrame(self.channel.id, body))
         self.tick()
         self.tick()
 
@@ -269,79 +268,78 @@ class WhenAConsumerThrowsAnExceptionAndAnotherMessageArrives(ConsumerContext):
         self.loop.set_exception_handler(None)
 
 
-class WhenICancelAConsumer(ConsumerContext):
+class WhenICancelAConsumer(ConsumerWithMockServer):
     def when_I_cancel_the_consumer(self):
         self.async_partial(self.consumer.cancel())
         self.tick()
 
     def it_should_send_a_BasicCancel_method(self):
-        self.protocol.send_method.assert_called_once_with(self.channel.id, spec.BasicCancel(self.consumer.tag, False))
+        self.server.should_have_received_method(self.channel.id, spec.BasicCancel(self.consumer.tag, False))
 
 
-class WhenCancelOKArrives(ConsumerContext):
+class WhenCancelOKArrives(ConsumerWithMockServer):
     def given_I_cancelled_a_consumer(self):
         asyncio.async(self.consumer.cancel())
         self.tick()
 
     def when_BasicCancelOK_arrives(self):
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, spec.BasicCancelOK(self.consumer.tag)))
+        self.server.send_method(self.channel.id, spec.BasicCancelOK(self.consumer.tag))
         self.tick()
 
     def it_should_be_cancelled(self):
         assert self.consumer.cancelled
 
 
-class WhenIPurgeAQueue(QueueContext):
+class WhenIPurgeAQueue(QueueWithMockServer):
     def because_I_purge_the_queue(self):
         self.async_partial(self.queue.purge())
         self.tick()
 
     def it_should_send_a_QueuePurge_method(self):
-        self.protocol.send_method.assert_called_once_with(self.channel.id, spec.QueuePurge(0, self.queue.name, False))
+        self.server.should_have_received_method(self.channel.id, spec.QueuePurge(0, self.queue.name, False))
 
 
-class WhenQueuePurgeOKArrives(QueueContext):
+class WhenQueuePurgeOKArrives(QueueWithMockServer):
     def given_I_called_queue_purge(self):
         self.task = asyncio.async(self.queue.purge())
         self.tick()
 
     def when_QueuePurgeOK_arrives(self):
-        frame = frames.MethodFrame(self.channel.id, spec.QueuePurgeOK(123))
-        self.dispatcher.dispatch(frame)
+        self.server.send_method(self.channel.id, spec.QueuePurgeOK(123))
         self.tick()
 
     def it_should_return(self):
         self.task.result()
 
 
-class WhenDeletingAQueue(QueueContext):
+class WhenDeletingAQueue(QueueWithMockServer):
     def because_I_delete_the_queue(self):
         self.async_partial(self.queue.delete(if_unused=False, if_empty=False))
         self.tick()
 
     def it_should_send_a_QueueDelete_method(self):
-        self.protocol.send_method.assert_called_once_with(self.channel.id, spec.QueueDelete(0, self.queue.name, False, False, False))
+        self.server.should_have_received_method(self.channel.id, spec.QueueDelete(0, self.queue.name, False, False, False))
 
 
-class WhenQueueDeleteOKArrives(QueueContext):
+class WhenQueueDeleteOKArrives(QueueWithMockServer):
     def given_I_deleted_a_queue(self):
         asyncio.async(self.queue.delete(if_unused=False, if_empty=False), loop=self.loop)
         self.tick()
 
     def when_QueueDeleteOK_arrives(self):
         method = spec.QueueDeleteOK(123)
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
+        self.server.send_method(self.channel.id, method)
         self.tick()
 
     def it_should_be_deleted(self):
         assert self.queue.deleted
 
 
-class WhenITryToUseADeletedQueue(QueueContext):
+class WhenITryToUseADeletedQueue(QueueWithMockServer):
     def given_a_deleted_queue(self):
         asyncio.async(self.queue.delete(if_unused=False, if_empty=False), loop=self.loop)
         self.tick()
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, spec.QueueDeleteOK(123)))
+        self.server.send_method(self.channel.id, spec.QueueDeleteOK(123))
         self.tick()
 
     def when_I_try_to_use_the_queue(self):

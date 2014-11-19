@@ -6,7 +6,7 @@ import asynqp
 from asynqp import message
 from asynqp import spec
 from asynqp import frames
-from .base_contexts import QueueContext
+from .base_contexts import QueueWithMockServer
 
 
 class WhenGettingTheContentHeader:
@@ -122,7 +122,7 @@ class WhenGettingFramesForALongMessage:
         assert self.frames == [b'much ', b'longe', b'r bod', b'y']
 
 
-class WhenIAcknowledgeADeliveredMessage(QueueContext):
+class WhenIAcknowledgeADeliveredMessage(QueueWithMockServer):
     def given_I_received_a_message(self):
         self.delivery_tag = 12487
 
@@ -130,29 +130,28 @@ class WhenIAcknowledgeADeliveredMessage(QueueContext):
         task = asyncio.async(self.queue.get())
         self.tick()
         method = spec.BasicGetOK(self.delivery_tag, False, 'my.exchange', 'routing.key', 0)
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
+        self.server.send_method(self.channel.id, method)
         self.tick()
 
         header = message.get_header_payload(msg, spec.BasicGet.method_type[0])
-        self.dispatcher.dispatch(frames.ContentHeaderFrame(self.channel.id, header))
+        self.server.send_frame(frames.ContentHeaderFrame(self.channel.id, header))
         self.tick()
 
         body = message.get_frame_payloads(msg, 100)[0]
-        self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
+        self.server.send_frame(frames.ContentBodyFrame(self.channel.id, body))
         self.tick()
         self.tick()
 
         self.msg = task.result()
-        self.protocol.reset_mock()
 
     def when_I_ack_the_message(self):
         self.msg.ack()
 
     def it_should_send_BasicAck(self):
-        self.protocol.send_method.assert_called_once_with(self.channel.id, spec.BasicAck(self.delivery_tag, False))
+        self.server.should_have_received_method(self.channel.id, spec.BasicAck(self.delivery_tag, False))
 
 
-class WhenIRejectADeliveredMessage(QueueContext):
+class WhenIRejectADeliveredMessage(QueueWithMockServer):
     def given_I_received_a_message(self):
         self.delivery_tag = 12487
 
@@ -160,26 +159,25 @@ class WhenIRejectADeliveredMessage(QueueContext):
         task = asyncio.async(self.queue.get())
         self.tick()
         method = spec.BasicGetOK(self.delivery_tag, False, 'my.exchange', 'routing.key', 0)
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
+        self.server.send_method(self.channel.id, method)
         self.tick()
 
         header = message.get_header_payload(msg, spec.BasicGet.method_type[0])
-        self.dispatcher.dispatch(frames.ContentHeaderFrame(self.channel.id, header))
+        self.server.send_frame(frames.ContentHeaderFrame(self.channel.id, header))
         self.tick()
 
         body = message.get_frame_payloads(msg, 100)[0]
-        self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
+        self.server.send_frame(frames.ContentBodyFrame(self.channel.id, body))
         self.tick()
         self.tick()
 
         self.msg = task.result()
-        self.protocol.reset_mock()
 
     def when_I_reject_the_message(self):
         self.msg.reject(requeue=True)
 
     def it_should_send_BasicReject(self):
-        self.protocol.send_method.assert_called_once_with(self.channel.id, spec.BasicReject(self.delivery_tag, True))
+        self.server.should_have_received_method(self.channel.id, spec.BasicReject(self.delivery_tag, True))
 
 
 class WhenIGetJSONFromADeliveredMessage:

@@ -6,26 +6,26 @@ import asynqp
 from asynqp import spec
 from asynqp import frames
 from asynqp import message
-from .base_contexts import OpenChannelContext, ExchangeContext
+from .base_contexts import OpenChannelWithMockServer, ExchangeWithMockServer
 
 
-class WhenDeclaringAnExchange(OpenChannelContext):
+class WhenDeclaringAnExchange(OpenChannelWithMockServer):
     def when_I_declare_an_exchange(self):
         self.async_partial(self.channel.declare_exchange('my.nice.exchange', 'fanout', durable=True, auto_delete=False, internal=False))
         self.tick()
 
     def it_should_send_ExchangeDeclare(self):
         expected_method = spec.ExchangeDeclare(0, 'my.nice.exchange', 'fanout', False, True, False, False, False, {})
-        self.protocol.send_method.assert_called_once_with(self.channel.id, expected_method)
+        self.server.should_have_received_method(self.channel.id, expected_method)
 
 
-class WhenExchangeDeclareOKArrives(OpenChannelContext):
+class WhenExchangeDeclareOKArrives(OpenChannelWithMockServer):
     def given_I_declared_an_exchange(self):
         self.task = asyncio.async(self.channel.declare_exchange('my.nice.exchange', 'fanout', durable=True, auto_delete=False, internal=False))
         self.tick()
 
     def when_the_reply_arrives(self):
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, spec.ExchangeDeclareOK()))
+        self.server.send_method(self.channel.id, spec.ExchangeDeclareOK())
         self.tick()
         self.result = self.task.result()
 
@@ -48,14 +48,15 @@ class WhenExchangeDeclareOKArrives(OpenChannelContext):
 # "The server MUST pre-declare a direct exchange with no public name
 # to act as the default exchange for content Publish methods and for default queue bindings."
 # Clients are not allowed to re-declare the default exchange, but they are allowed to publish to it
-class WhenIDeclareTheDefaultExchange(OpenChannelContext):
+class WhenIDeclareTheDefaultExchange(OpenChannelWithMockServer):
     def when_I_declare_an_exchange_with_an_empty_name(self):
+        self.server.reset()
         task = asyncio.async(self.channel.declare_exchange('', 'direct', durable=True, auto_delete=False, internal=False))
         self.tick()
         self.exchange = task.result()
 
     def it_should_not_send_exchange_declare(self):
-        assert not self.protocol.send_method.called
+        self.server.should_not_have_received_any()
 
     def it_should_return_an_exchange_with_no_name(self):
         assert self.exchange.name == ''
@@ -73,7 +74,7 @@ class WhenIDeclareTheDefaultExchange(OpenChannelContext):
         assert not self.exchange.internal
 
 
-class WhenIUseAnIllegalExchangeName(OpenChannelContext):
+class WhenIUseAnIllegalExchangeName(OpenChannelWithMockServer):
     @classmethod
     def examples_of_bad_words(cls):
         yield "amq.starts.with.amq."
@@ -88,7 +89,7 @@ class WhenIUseAnIllegalExchangeName(OpenChannelContext):
         assert isinstance(self.exception, ValueError)
 
 
-class WhenPublishingAShortMessage(ExchangeContext):
+class WhenPublishingAShortMessage(ExchangeWithMockServer):
     def given_a_message(self):
         self.correlation_id = str(uuid.uuid4())
         self.message_id = str(uuid.uuid4())
@@ -129,14 +130,14 @@ class WhenPublishingAShortMessage(ExchangeContext):
         ])
         expected_header = frames.ContentHeaderFrame(self.channel.id, header_payload)
         expected_body = frames.ContentBodyFrame(self.channel.id, b'body')
-        assert self.protocol.mock_calls == [
-            mock.call.send_method(self.channel.id, expected_method),
-            mock.call.send_frame(expected_header),
-            mock.call.send_frame(expected_body)
-        ]
+        self.server.should_have_received_frames([
+            frames.MethodFrame(self.channel.id, expected_method),
+            expected_header,
+            expected_body
+        ], any_order=False)
 
 
-class WhenPublishingALongMessage(ExchangeContext):
+class WhenPublishingALongMessage(ExchangeWithMockServer):
     def given_a_message(self):
         self.body1 = b"a" * (self.frame_max - 8)
         self.body2 = b"b" * (self.frame_max - 8)
@@ -151,30 +152,30 @@ class WhenPublishingALongMessage(ExchangeContext):
         expected_body1 = frames.ContentBodyFrame(self.channel.id, self.body1)
         expected_body2 = frames.ContentBodyFrame(self.channel.id, self.body2)
         expected_body3 = frames.ContentBodyFrame(self.channel.id, self.body3)
-        self.protocol.send_frame.assert_has_calls([
-            mock.call(expected_body1),
-            mock.call(expected_body2),
-            mock.call(expected_body3)
+        self.server.should_have_received_frames([
+            expected_body1,
+            expected_body2,
+            expected_body3
         ], any_order=False)
 
 
-class WhenDeletingAnExchange(ExchangeContext):
+class WhenDeletingAnExchange(ExchangeWithMockServer):
     def when_I_delete_the_exchange(self):
         self.async_partial(self.exchange.delete(if_unused=True))
         self.tick()
 
     def it_should_send_ExchangeDelete(self):
-        self.protocol.send_method.assert_called_once_with(self.channel.id, spec.ExchangeDelete(0, self.exchange.name, True, False))
+        self.server.should_have_received_method(self.channel.id, spec.ExchangeDelete(0, self.exchange.name, True, False))
 
 
-class WhenExchangeDeleteOKArrives(ExchangeContext):
+class WhenExchangeDeleteOKArrives(ExchangeWithMockServer):
     def given_I_deleted_the_exchange(self):
         asyncio.async(self.exchange.delete(if_unused=True), loop=self.loop)
         self.tick()
 
     def when_confirmation_arrives(self):
-        frame = frames.MethodFrame(self.channel.id, spec.ExchangeDeleteOK())
-        self.dispatcher.dispatch(frame)
+        self.server.send_method(self.channel.id, spec.ExchangeDeleteOK())
+        self.tick()
 
-    def it_should_be_ok(self):
+    def it_should_not_throw(self):
         pass

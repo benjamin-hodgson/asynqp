@@ -5,7 +5,7 @@ from unittest import mock
 from asynqp import spec, frames
 from asynqp import message
 from . import util
-from .base_contexts import OpenConnectionContext, OpenChannelContext, OpenConnectionWithMockServer, OpenChannelWithMockServer
+from .base_contexts import OpenConnectionWithMockServer, OpenChannelWithMockServer
 
 
 class WhenOpeningAChannel(OpenConnectionWithMockServer):
@@ -115,33 +115,32 @@ class WhenAnUnexpectedChannelCloseArrives(OpenChannelWithMockServer):
         self.tick()
 
     def it_should_send_ChannelCloseOK(self):
-        self.server.should_have_received_method(1, spec.ChannelCloseOK())
+        self.server.should_have_received_method(self.channel.id, spec.ChannelCloseOK())
 
 
-class WhenSettingQOS(OpenChannelContext):
+class WhenSettingQOS(OpenChannelWithMockServer):
     def when_we_are_setting_prefetch_count_only(self):
         self.async_partial(self.channel.set_qos(prefetch_size=1000, prefetch_count=100, apply_globally=True))
         self.tick()
 
     def it_should_send_BasicQos_with_default_values(self):
-        self.protocol.send_method.assert_called_once_with(1, spec.BasicQos(1000, 100, True))
+        self.server.should_have_received_method(self.channel.id, spec.BasicQos(1000, 100, True))
 
 
-class WhenBasicQOSOkArrives(OpenChannelContext):
+class WhenBasicQOSOkArrives(OpenChannelWithMockServer):
     def given_we_are_setting_qos_settings(self):
         self.task = asyncio.async(self.channel.set_qos(prefetch_size=1000, prefetch_count=100, apply_globally=True))
         self.tick()
 
     def when_BasicQosOk_arrives(self):
-        frame = frames.MethodFrame(self.channel.id, spec.BasicQosOK())
-        self.dispatcher.dispatch(frame)
+        self.server.send_method(self.channel.id, spec.BasicQosOK())
         self.tick()
 
     def it_should_yield_result(self):
         assert self.task.done()
 
 
-class WhenBasicReturnArrivesAndIHaveDefinedAHandler(OpenChannelContext):
+class WhenBasicReturnArrivesAndIHaveDefinedAHandler(OpenChannelWithMockServer):
     def given_a_message(self):
         self.expected_message = asynqp.Message('body')
 
@@ -151,15 +150,15 @@ class WhenBasicReturnArrivesAndIHaveDefinedAHandler(OpenChannelContext):
 
     def when_BasicReturn_arrives_with_content(self):
         method = spec.BasicReturn(123, "you messed up", "the.exchange", "the.routing.key")
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
+        self.server.send_frame(frames.MethodFrame(self.channel.id, method))
         self.tick()
 
         header = message.get_header_payload(self.expected_message, spec.BasicGet.method_type[0])
-        self.dispatcher.dispatch(frames.ContentHeaderFrame(self.channel.id, header))
+        self.server.send_frame(frames.ContentHeaderFrame(self.channel.id, header))
         self.tick()
 
         body = message.get_frame_payloads(self.expected_message, 100)[0]
-        self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
+        self.server.send_frame(frames.ContentBodyFrame(self.channel.id, body))
         self.tick()
         self.tick()
 
@@ -167,7 +166,7 @@ class WhenBasicReturnArrivesAndIHaveDefinedAHandler(OpenChannelContext):
         self.callback.assert_called_once_with(self.expected_message)
 
 
-class WhenBasicReturnArrivesAndIHaveNotDefinedAHandler(OpenChannelContext):
+class WhenBasicReturnArrivesAndIHaveNotDefinedAHandler(OpenChannelWithMockServer):
     def given_I_am_listening_for_asyncio_exceptions(self):
         self.expected_message = asynqp.Message('body')
 
@@ -176,15 +175,15 @@ class WhenBasicReturnArrivesAndIHaveNotDefinedAHandler(OpenChannelContext):
 
     def when_BasicReturn_arrives(self):
         method = spec.BasicReturn(123, "you messed up", "the.exchange", "the.routing.key")
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
+        self.server.send_frame(frames.MethodFrame(self.channel.id, method))
         self.tick()
 
         header = message.get_header_payload(self.expected_message, spec.BasicGet.method_type[0])
-        self.dispatcher.dispatch(frames.ContentHeaderFrame(self.channel.id, header))
+        self.server.send_frame(frames.ContentHeaderFrame(self.channel.id, header))
         self.tick()
 
         body = message.get_frame_payloads(self.expected_message, 100)[0]
-        self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
+        self.server.send_frame(frames.ContentBodyFrame(self.channel.id, body))
         self.tick()
         self.tick()
 
@@ -199,14 +198,14 @@ class WhenBasicReturnArrivesAndIHaveNotDefinedAHandler(OpenChannelContext):
 
 
 # test that the call to handler.ready() happens at the correct time
-class WhenBasicReturnArrivesAfterThrowingTheExceptionOnce(OpenChannelContext):
+class WhenBasicReturnArrivesAfterThrowingTheExceptionOnce(OpenChannelWithMockServer):
     def given_I_am_listening_for_asyncio_exceptions(self):
         self.expected_message = asynqp.Message('body')
 
         self.exception = None
         self.loop.set_exception_handler(lambda l, c: setattr(self, "exception", c["exception"]))
 
-        self.return_msg()  # cause the exception to be thrown
+        self.return_msg()  # cause basic_return exception to be thrown
         self.exception = None  # reset self.exception
 
     def when_BasicReturn_arrives(self):
@@ -220,21 +219,21 @@ class WhenBasicReturnArrivesAfterThrowingTheExceptionOnce(OpenChannelContext):
 
     def return_msg(self):
         method = spec.BasicReturn(123, "you messed up", "the.exchange", "the.routing.key")
-        self.dispatcher.dispatch(frames.MethodFrame(self.channel.id, method))
+        self.server.send_frame(frames.MethodFrame(self.channel.id, method))
         self.tick()
 
         header = message.get_header_payload(self.expected_message, spec.BasicGet.method_type[0])
-        self.dispatcher.dispatch(frames.ContentHeaderFrame(self.channel.id, header))
+        self.server.send_frame(frames.ContentHeaderFrame(self.channel.id, header))
         self.tick()
 
         body = message.get_frame_payloads(self.expected_message, 100)[0]
-        self.dispatcher.dispatch(frames.ContentBodyFrame(self.channel.id, body))
+        self.server.send_frame(frames.ContentBodyFrame(self.channel.id, body))
         self.tick()
         self.tick()
 
 
 
-class WhenTheHandlerIsNotCallable(OpenChannelContext):
+class WhenTheHandlerIsNotCallable(OpenChannelWithMockServer):
     def when_I_set_the_handler(self):
         self.exception = contexts.catch(self.channel.set_return_handler, "i am not callable")
 

@@ -4,7 +4,7 @@ import asynqp
 from unittest import mock
 from asynqp import spec, protocol, frames
 from asynqp.connection import open_connection, ConnectionInfo
-from .base_contexts import ConnectionContext, OpenConnectionContext, LoopContext, MockServerContext, OpenConnectionWithMockServer
+from .base_contexts import LegacyOpenConnectionContext, MockServerContext, OpenConnectionWithMockServer
 
 
 class WhenRespondingToConnectionStart(MockServerContext):
@@ -78,7 +78,7 @@ class WhenRecievingConnectionCloseOK(OpenConnectionWithMockServer):
 
 
 # TODO: rewrite me to use a handler, not a queue writer
-class WhenAConnectionThatIsClosingReceivesAMethod(OpenConnectionContext):
+class WhenAConnectionThatIsClosingReceivesAMethod(LegacyOpenConnectionContext):
     def given_a_closed_connection(self):
         t = asyncio.async(self.connection.close())
         t._log_destroy_pending = False
@@ -98,7 +98,7 @@ class WhenAConnectionThatIsClosingReceivesAMethod(OpenConnectionContext):
 
 
 # TODO: rewrite so it doesn't know about dispatcher
-class WhenAConnectionThatWasClosedByTheServerReceivesAMethod(OpenConnectionContext):
+class WhenAConnectionThatWasClosedByTheServerReceivesAMethod(LegacyOpenConnectionContext):
     def given_a_closed_connection(self):
         close_frame = asynqp.frames.MethodFrame(0, spec.ConnectionClose(123, 'you muffed up', 10, 20))
         self.dispatcher.dispatch(close_frame)

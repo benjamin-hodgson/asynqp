@@ -9,8 +9,11 @@ class MockServer(object):
         self.protocol = protocol
         self.data = []
 
+    def send_bytes(self, b):
+        self.protocol.data_received(b)
+
     def send_frame(self, frame):
-        self.protocol.data_received(frame.serialise())
+        self.send_bytes(frame.serialise())
 
     def send_method(self, channel_number, method):
         frame = asynqp.frames.MethodFrame(channel_number, method)
@@ -48,6 +51,9 @@ class MockServer(object):
 
     def should_not_have_received_any(self):
         assert not self.data, "{} should have been empty".format(self.data)
+
+    def should_have_received_bytes(self, b):
+        assert b in self.data
 
 
 def read(data):

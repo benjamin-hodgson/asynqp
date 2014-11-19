@@ -30,11 +30,6 @@ class LoopContext:
         return t
 
 
-class MockLoopContext(LoopContext):
-    def given_an_event_loop(self):
-        self.loop = mock.Mock(spec=asyncio.AbstractEventLoop)
-
-
 class MockServerContext(LoopContext):
     def given_a_mock_server_on_the_other_end_of_the_transport(self):
         self.dispatcher = protocol.Dispatcher()
@@ -55,6 +50,7 @@ class OpenConnectionWithMockServer(MockServerContext):
         self.tick()
 
         tune_method = spec.ConnectionTune(0, 131072, 600)
+        self.frame_max = tune_method.frame_max
         self.server.send_method(0, tune_method)
         self.tick()
 
@@ -76,7 +72,56 @@ class OpenChannelWithMockServer(OpenConnectionWithMockServer):
         return task.result()
 
 
-class ConnectionContext(LoopContext):
+class QueueWithMockServer(OpenChannelWithMockServer):
+    def given_a_queue(self):
+        queue_name = 'my.nice.queue'
+        task = asyncio.async(self.channel.declare_queue(queue_name, durable=True, exclusive=True, auto_delete=True), loop=self.loop)
+        self.tick()
+        self.server.send_method(self.channel.id, spec.QueueDeclareOK(queue_name, 123, 456))
+        self.tick()
+        self.queue = task.result()
+
+
+class ExchangeWithMockServer(OpenChannelWithMockServer):
+    def given_an_exchange(self):
+        self.exchange = self.make_exchange('my.nice.exchange')
+
+    def make_exchange(self, name):
+        task = asyncio.async(self.channel.declare_exchange(name, 'fanout', durable=True, auto_delete=False, internal=False),
+                             loop=self.loop)
+        self.tick()
+        self.server.send_method(self.channel.id, spec.ExchangeDeclareOK())
+        self.tick()
+        return task.result()
+
+
+class BoundQueueWithMockServer(QueueWithMockServer, ExchangeWithMockServer):
+    def given_a_bound_queue(self):
+        task = asyncio.async(self.queue.bind(self.exchange, 'routing.key'))
+        self.tick()
+        self.server.send_method(self.channel.id, spec.QueueBindOK())
+        self.tick()
+        self.binding = task.result()
+
+
+class ConsumerWithMockServer(QueueWithMockServer):
+    def given_a_consumer(self):
+        self.callback = mock.Mock()
+        del self.callback._is_coroutine  # :(
+
+        task = asyncio.async(self.queue.consume(self.callback, no_local=False, no_ack=False, exclusive=False))
+        self.tick()
+        self.server.send_method(self.channel.id, spec.BasicConsumeOK('made.up.tag'))
+        self.tick()
+        self.consumer = task.result()
+
+
+class MockLoopContext(LoopContext):
+    def given_an_event_loop(self):
+        self.loop = mock.Mock(spec=asyncio.AbstractEventLoop)
+
+
+class LegacyConnectionContext(LoopContext):
     def given_the_pieces_i_need_for_a_connection(self):
         self.protocol = mock.Mock(spec=protocol.AMQP)
         self.protocol.transport = mock.Mock()
@@ -86,7 +131,7 @@ class ConnectionContext(LoopContext):
         self.connection_info = ConnectionInfo('guest', 'guest', '/')
 
 
-class OpenConnectionContext(ConnectionContext):
+class LegacyOpenConnectionContext(LegacyConnectionContext):
     def given_an_open_connection(self):
         task = asyncio.async(open_connection(self.loop, self.protocol, self.dispatcher, self.connection_info))
         self.tick()
@@ -122,68 +167,3 @@ class MockDispatcherContext(LoopContext):
         self.dispatcher = mock.Mock(spec=protocol.Dispatcher)
         self.protocol = protocol.AMQP(self.dispatcher, self.loop)
         self.protocol.connection_made(self.transport)
-
-
-class OpenChannelContext(OpenConnectionContext):
-    def given_an_open_channel(self):
-        self.channel = self.open_channel()
-        self.protocol.reset_mock()
-
-    def open_channel(self, channel_id=1):
-        task = asyncio.async(self.connection.open_channel(), loop=self.loop)
-        self.tick()
-        open_ok_frame = asynqp.frames.MethodFrame(channel_id, spec.ChannelOpenOK(''))
-        self.dispatcher.dispatch(open_ok_frame)
-        self.tick()
-        return task.result()
-
-
-class QueueContext(OpenChannelContext):
-    def given_a_queue(self):
-        queue_name = 'my.nice.queue'
-        task = asyncio.async(self.channel.declare_queue(queue_name, durable=True, exclusive=True, auto_delete=True), loop=self.loop)
-        self.tick()
-        frame = asynqp.frames.MethodFrame(self.channel.id, spec.QueueDeclareOK(queue_name, 123, 456))
-        self.dispatcher.dispatch(frame)
-        self.tick()
-        self.queue = task.result()
-
-        self.protocol.reset_mock()
-
-
-class ExchangeContext(OpenChannelContext):
-    def given_an_exchange(self):
-        self.exchange = self.make_exchange('my.nice.exchange')
-        self.protocol.reset_mock()
-
-    def make_exchange(self, name):
-        task = asyncio.async(self.channel.declare_exchange(name, 'fanout', durable=True, auto_delete=False, internal=False),
-                             loop=self.loop)
-        self.tick()
-        frame = asynqp.frames.MethodFrame(self.channel.id, spec.ExchangeDeclareOK())
-        self.dispatcher.dispatch(frame)
-        self.tick()
-        return task.result()
-
-
-class BoundQueueContext(QueueContext, ExchangeContext):
-    def given_a_bound_queue(self):
-        task = asyncio.async(self.queue.bind(self.exchange, 'routing.key'))
-        self.tick()
-        self.dispatcher.dispatch(asynqp.frames.MethodFrame(self.channel.id, spec.QueueBindOK()))
-        self.tick()
-        self.binding = task.result()
-        self.protocol.reset_mock()
-
-
-class ConsumerContext(QueueContext):
-    def given_a_consumer(self):
-        self.callback = mock.Mock()
-        del self.callback._is_coroutine  # :(
-
-        task = asyncio.async(self.queue.consume(self.callback, no_local=False, no_ack=False, exclusive=False))
-        self.tick()
-        self.dispatcher.dispatch(asynqp.frames.MethodFrame(self.channel.id, spec.BasicConsumeOK('made.up.tag')))
-        self.tick()
-        self.consumer = task.result()
-        self.protocol.reset_mock()
