@@ -11,7 +11,6 @@ from .base_contexts import OpenConnectionContext, OpenChannelContext
 class WhenOpeningAChannel(OpenConnectionContext):
     def when_the_user_wants_to_open_a_channel(self):
         self.async_partial(self.connection.open_channel())
-        self.tick()
 
     def it_should_send_a_channel_open_frame(self):
         self.server.should_have_received_method(1, spec.ChannelOpen(''))
@@ -24,7 +23,6 @@ class WhenChannelOpenOKArrives(OpenConnectionContext):
 
     def when_channel_open_ok_arrives(self):
         self.server.send_method(1, spec.ChannelOpenOK(''))
-        self.tick()
 
     def it_should_have_the_correct_channel_id(self):
         assert self.task.result().id == 1
@@ -44,7 +42,6 @@ class WhenOpeningASecondChannel(OpenChannelContext):
 class WhenTheApplicationClosesAChannel(OpenChannelContext):
     def when_I_close_the_channel(self):
         self.async_partial(self.channel.close())
-        self.tick()
 
     def it_should_send_ChannelClose(self):
         self.server.should_have_received_method(1, spec.ChannelClose(0, 'Channel closed by application', 0, 0))
@@ -53,7 +50,6 @@ class WhenTheApplicationClosesAChannel(OpenChannelContext):
 class WhenTheServerClosesAChannel(OpenChannelContext):
     def when_the_server_shuts_the_channel_down(self):
         self.server.send_method(self.channel.id, spec.ChannelClose(123, 'i am tired of you', 40, 50))
-        self.tick()
 
     def it_should_send_ChannelCloseOK(self):
         self.server.should_have_received_method(self.channel.id, spec.ChannelCloseOK())
@@ -62,12 +58,10 @@ class WhenTheServerClosesAChannel(OpenChannelContext):
 class WhenAnotherMethodArrivesWhileTheChannelIsClosing(OpenChannelContext):
     def given_that_i_closed_the_channel(self):
         self.async_partial(self.channel.close())
-        self.tick()
         self.server.reset()
 
     def when_another_method_arrives(self):
         self.server.send_method(self.channel.id, spec.ChannelOpenOK(''))
-        self.tick()
 
     def it_MUST_discard_the_method(self):
         self.server.should_not_have_received_any()
@@ -76,12 +70,10 @@ class WhenAnotherMethodArrivesWhileTheChannelIsClosing(OpenChannelContext):
 class WhenAnotherMethodArrivesAfterTheServerClosedTheChannel(OpenChannelContext):
     def given_the_server_closed_the_channel(self):
         self.server.send_method(self.channel.id, spec.ChannelClose(123, 'i am tired of you', 40, 50))
-        self.tick()
         self.server.reset()
 
     def when_another_method_arrives(self):
         self.server.send_method(self.channel.id, spec.ChannelOpenOK(''))
-        self.tick()
 
     def it_MUST_discard_the_method(self):
         self.server.should_not_have_received_any()
@@ -90,13 +82,11 @@ class WhenAnotherMethodArrivesAfterTheServerClosedTheChannel(OpenChannelContext)
 class WhenAnAsyncMethodArrivesWhileWeAwaitASynchronousOne(OpenChannelContext):
     def given_we_are_awaiting_QueueDeclareOK(self):
         self.task = self.async_partial(self.channel.declare_queue('my.nice.queue', durable=True, exclusive=True, auto_delete=True))
-        self.tick()
         self.server.reset()
 
     def when_an_async_method_arrives(self):
         with util.silence_expected_destroy_pending_log('receive_deliver'):
             self.server.send_method(self.channel.id, spec.BasicDeliver('consumer', 2, False, 'exchange', 'routing_key'))
-            self.tick()
 
     def it_should_not_close_the_channel(self):
         self.server.should_not_have_received_any()
@@ -108,11 +98,9 @@ class WhenAnAsyncMethodArrivesWhileWeAwaitASynchronousOne(OpenChannelContext):
 class WhenAnUnexpectedChannelCloseArrives(OpenChannelContext):
     def given_we_are_awaiting_QueueDeclareOK(self):
         self.async_partial(self.channel.declare_queue('my.nice.queue', durable=True, exclusive=True, auto_delete=True))
-        self.tick()
 
     def when_ChannelClose_arrives(self):
         self.server.send_method(self.channel.id, spec.ChannelClose(123, 'i am tired of you', 40, 50))
-        self.tick()
 
     def it_should_send_ChannelCloseOK(self):
         self.server.should_have_received_method(self.channel.id, spec.ChannelCloseOK())
@@ -121,7 +109,6 @@ class WhenAnUnexpectedChannelCloseArrives(OpenChannelContext):
 class WhenSettingQOS(OpenChannelContext):
     def when_we_are_setting_prefetch_count_only(self):
         self.async_partial(self.channel.set_qos(prefetch_size=1000, prefetch_count=100, apply_globally=True))
-        self.tick()
 
     def it_should_send_BasicQos_with_default_values(self):
         self.server.should_have_received_method(self.channel.id, spec.BasicQos(1000, 100, True))
@@ -134,7 +121,6 @@ class WhenBasicQOSOkArrives(OpenChannelContext):
 
     def when_BasicQosOk_arrives(self):
         self.server.send_method(self.channel.id, spec.BasicQosOK())
-        self.tick()
 
     def it_should_yield_result(self):
         assert self.task.done()
@@ -151,15 +137,12 @@ class WhenBasicReturnArrivesAndIHaveDefinedAHandler(OpenChannelContext):
     def when_BasicReturn_arrives_with_content(self):
         method = spec.BasicReturn(123, "you messed up", "the.exchange", "the.routing.key")
         self.server.send_frame(frames.MethodFrame(self.channel.id, method))
-        self.tick()
 
         header = message.get_header_payload(self.expected_message, spec.BasicGet.method_type[0])
         self.server.send_frame(frames.ContentHeaderFrame(self.channel.id, header))
-        self.tick()
 
         body = message.get_frame_payloads(self.expected_message, 100)[0]
         self.server.send_frame(frames.ContentBodyFrame(self.channel.id, body))
-        self.tick()
         self.tick()
 
     def it_should_send_the_message_to_the_callback(self):
@@ -176,15 +159,12 @@ class WhenBasicReturnArrivesAndIHaveNotDefinedAHandler(OpenChannelContext):
     def when_BasicReturn_arrives(self):
         method = spec.BasicReturn(123, "you messed up", "the.exchange", "the.routing.key")
         self.server.send_frame(frames.MethodFrame(self.channel.id, method))
-        self.tick()
 
         header = message.get_header_payload(self.expected_message, spec.BasicGet.method_type[0])
         self.server.send_frame(frames.ContentHeaderFrame(self.channel.id, header))
-        self.tick()
 
         body = message.get_frame_payloads(self.expected_message, 100)[0]
         self.server.send_frame(frames.ContentBodyFrame(self.channel.id, body))
-        self.tick()
         self.tick()
 
     def it_should_throw_an_exception(self):
@@ -220,15 +200,12 @@ class WhenBasicReturnArrivesAfterThrowingTheExceptionOnce(OpenChannelContext):
     def return_msg(self):
         method = spec.BasicReturn(123, "you messed up", "the.exchange", "the.routing.key")
         self.server.send_frame(frames.MethodFrame(self.channel.id, method))
-        self.tick()
 
         header = message.get_header_payload(self.expected_message, spec.BasicGet.method_type[0])
         self.server.send_frame(frames.ContentHeaderFrame(self.channel.id, header))
-        self.tick()
 
         body = message.get_frame_payloads(self.expected_message, 100)[0]
         self.server.send_frame(frames.ContentBodyFrame(self.channel.id, body))
-        self.tick()
         self.tick()
 
 

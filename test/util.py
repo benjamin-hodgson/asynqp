@@ -5,12 +5,14 @@ from asynqp import protocol
 
 
 class MockServer(object):
-    def __init__(self, protocol):
+    def __init__(self, protocol, tick):
         self.protocol = protocol
+        self.tick = tick
         self.data = []
 
     def send_bytes(self, b):
         self.protocol.data_received(b)
+        self.tick()
 
     def send_frame(self, frame):
         self.send_bytes(frame.serialise())

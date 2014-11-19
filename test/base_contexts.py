@@ -27,6 +27,7 @@ class LoopContext:
         """
         t = asyncio.async(coro)
         t._log_destroy_pending = False
+        self.tick()
         return t
 
 
@@ -34,7 +35,7 @@ class MockServerContext(LoopContext):
     def given_a_mock_server_on_the_other_end_of_the_transport(self):
         self.dispatcher = protocol.Dispatcher()
         self.protocol = protocol.AMQP(self.dispatcher, self.loop)
-        self.server = MockServer(self.protocol)
+        self.server = MockServer(self.protocol, self.tick)
         self.transport = FakeTransport(self.server)
         self.protocol.connection_made(self.transport)
 
@@ -47,15 +48,12 @@ class OpenConnectionContext(MockServerContext):
 
         start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
         self.server.send_method(0, start_method)
-        self.tick()
 
         tune_method = spec.ConnectionTune(0, 131072, 600)
         self.frame_max = tune_method.frame_max
         self.server.send_method(0, tune_method)
-        self.tick()
 
         self.server.send_method(0, spec.ConnectionOpenOK(''))
-        self.tick()
 
         self.connection = task.result()
 
@@ -68,7 +66,6 @@ class OpenChannelContext(OpenConnectionContext):
         task = asyncio.async(self.connection.open_channel(), loop=self.loop)
         self.tick()
         self.server.send_method(channel_id, spec.ChannelOpenOK(''))
-        self.tick()
         return task.result()
 
 
@@ -78,7 +75,6 @@ class QueueContext(OpenChannelContext):
         task = asyncio.async(self.channel.declare_queue(queue_name, durable=True, exclusive=True, auto_delete=True), loop=self.loop)
         self.tick()
         self.server.send_method(self.channel.id, spec.QueueDeclareOK(queue_name, 123, 456))
-        self.tick()
         self.queue = task.result()
 
 
@@ -91,7 +87,6 @@ class ExchangeContext(OpenChannelContext):
                              loop=self.loop)
         self.tick()
         self.server.send_method(self.channel.id, spec.ExchangeDeclareOK())
-        self.tick()
         return task.result()
 
 
@@ -100,7 +95,6 @@ class BoundQueueContext(QueueContext, ExchangeContext):
         task = asyncio.async(self.queue.bind(self.exchange, 'routing.key'))
         self.tick()
         self.server.send_method(self.channel.id, spec.QueueBindOK())
-        self.tick()
         self.binding = task.result()
 
 
@@ -112,7 +106,6 @@ class ConsumerContext(QueueContext):
         task = asyncio.async(self.queue.consume(self.callback, no_local=False, no_ack=False, exclusive=False))
         self.tick()
         self.server.send_method(self.channel.id, spec.BasicConsumeOK('made.up.tag'))
-        self.tick()
         self.consumer = task.result()
 
 

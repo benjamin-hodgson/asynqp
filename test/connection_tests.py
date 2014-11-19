@@ -11,11 +11,9 @@ class WhenRespondingToConnectionStart(MockServerContext):
     def given_I_wrote_the_protocol_header(self):
         connection_info = ConnectionInfo('guest', 'guest', '/')
         self.async_partial(open_connection(self.loop, self.protocol, self.dispatcher, connection_info))
-        self.tick()
 
     def when_ConnectionStart_arrives(self):
         self.server.send_method(0, spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US'))
-        self.tick()
 
     def it_should_send_start_ok(self):
         expected_method = spec.ConnectionStartOK(
@@ -31,13 +29,10 @@ class WhenRespondingToConnectionTune(MockServerContext):
     def given_a_started_connection(self):
         connection_info = ConnectionInfo('guest', 'guest', '/')
         self.async_partial(open_connection(self.loop, self.protocol, self.dispatcher, connection_info))
-        self.tick()
         self.server.send_method(0, spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US'))
-        self.tick()
 
     def when_ConnectionTune_arrives(self):
         self.server.send_method(0, spec.ConnectionTune(0, 131072, 600))
-        self.tick()
 
     def it_should_send_tune_ok_followed_by_open(self):
         tune_ok_method = spec.ConnectionTuneOK(0, 131072, 600)
@@ -48,7 +43,6 @@ class WhenRespondingToConnectionTune(MockServerContext):
 class WhenRespondingToConnectionClose(OpenConnectionContext):
     def when_the_close_frame_arrives(self):
         self.server.send_method(0, spec.ConnectionClose(123, 'you muffed up', 10, 20))
-        self.tick()
 
     def it_should_send_close_ok(self):
         self.server.should_have_received_method(0, spec.ConnectionCloseOK())
@@ -57,7 +51,6 @@ class WhenRespondingToConnectionClose(OpenConnectionContext):
 class WhenTheApplicationClosesTheConnection(OpenConnectionContext):
     def when_I_close_the_connection(self):
         self.async_partial(self.connection.close())
-        self.tick()
 
     def it_should_send_ConnectionClose_with_no_exception(self):
         expected = spec.ConnectionClose(0, 'Connection closed by application', 0, 0)
@@ -71,7 +64,6 @@ class WhenRecievingConnectionCloseOK(OpenConnectionContext):
 
     def when_connection_close_ok_arrives(self):
         self.server.send_method(0, spec.ConnectionCloseOK())
-        self.tick()
 
     def it_should_close_the_transport(self):
         assert self.transport.closed

@@ -131,15 +131,12 @@ class WhenIAcknowledgeADeliveredMessage(QueueContext):
         self.tick()
         method = spec.BasicGetOK(self.delivery_tag, False, 'my.exchange', 'routing.key', 0)
         self.server.send_method(self.channel.id, method)
-        self.tick()
 
         header = message.get_header_payload(msg, spec.BasicGet.method_type[0])
         self.server.send_frame(frames.ContentHeaderFrame(self.channel.id, header))
-        self.tick()
 
         body = message.get_frame_payloads(msg, 100)[0]
         self.server.send_frame(frames.ContentBodyFrame(self.channel.id, body))
-        self.tick()
         self.tick()
 
         self.msg = task.result()
@@ -160,15 +157,12 @@ class WhenIRejectADeliveredMessage(QueueContext):
         self.tick()
         method = spec.BasicGetOK(self.delivery_tag, False, 'my.exchange', 'routing.key', 0)
         self.server.send_method(self.channel.id, method)
-        self.tick()
 
         header = message.get_header_payload(msg, spec.BasicGet.method_type[0])
         self.server.send_frame(frames.ContentHeaderFrame(self.channel.id, header))
-        self.tick()
 
         body = message.get_frame_payloads(msg, 100)[0]
         self.server.send_frame(frames.ContentBodyFrame(self.channel.id, body))
-        self.tick()
         self.tick()
 
         self.msg = task.result()

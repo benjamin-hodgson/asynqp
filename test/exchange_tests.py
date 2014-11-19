@@ -12,7 +12,6 @@ from .base_contexts import OpenChannelContext, ExchangeContext
 class WhenDeclaringAnExchange(OpenChannelContext):
     def when_I_declare_an_exchange(self):
         self.async_partial(self.channel.declare_exchange('my.nice.exchange', 'fanout', durable=True, auto_delete=False, internal=False))
-        self.tick()
 
     def it_should_send_ExchangeDeclare(self):
         expected_method = spec.ExchangeDeclare(0, 'my.nice.exchange', 'fanout', False, True, False, False, False, {})
@@ -26,7 +25,6 @@ class WhenExchangeDeclareOKArrives(OpenChannelContext):
 
     def when_the_reply_arrives(self):
         self.server.send_method(self.channel.id, spec.ExchangeDeclareOK())
-        self.tick()
         self.result = self.task.result()
 
     def it_should_have_the_correct_name(self):
@@ -162,7 +160,6 @@ class WhenPublishingALongMessage(ExchangeContext):
 class WhenDeletingAnExchange(ExchangeContext):
     def when_I_delete_the_exchange(self):
         self.async_partial(self.exchange.delete(if_unused=True))
-        self.tick()
 
     def it_should_send_ExchangeDelete(self):
         self.server.should_have_received_method(self.channel.id, spec.ExchangeDelete(0, self.exchange.name, True, False))
@@ -175,7 +172,6 @@ class WhenExchangeDeleteOKArrives(ExchangeContext):
 
     def when_confirmation_arrives(self):
         self.server.send_method(self.channel.id, spec.ExchangeDeleteOK())
-        self.tick()
 
     def it_should_not_throw(self):
         pass

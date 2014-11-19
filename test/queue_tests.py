@@ -11,7 +11,6 @@ from .base_contexts import OpenChannelContext, QueueContext, ExchangeContext, Bo
 class WhenDeclaringAQueue(OpenChannelContext):
     def when_I_declare_a_queue(self):
         self.async_partial(self.channel.declare_queue('my.nice.queue', durable=True, exclusive=True, auto_delete=True))
-        self.tick()
 
     def it_should_send_a_QueueDeclare_method(self):
         expected_method = spec.QueueDeclare(0, 'my.nice.queue', False, True, True, True, False, {})
@@ -26,7 +25,6 @@ class WhenQueueDeclareOKArrives(OpenChannelContext):
 
     def when_QueueDeclareOK_arrives(self):
         self.server.send_method(self.channel.id, spec.QueueDeclareOK(self.queue_name, 123, 456))
-        self.tick()
         self.result = self.task.result()
 
     def it_should_have_the_correct_queue_name(self):
@@ -51,7 +49,6 @@ class WhenILetTheServerPickTheQueueName(OpenChannelContext):
 
     def when_QueueDeclareOK_arrives(self):
         self.server.send_method(self.channel.id, spec.QueueDeclareOK(self.queue_name, 123, 456))
-        self.tick()
         self.result = self.task.result()
 
     def it_should_return_a_queue_with_the_correct_name(self):
@@ -76,7 +73,6 @@ class WhenIUseAnIllegalNameForAQueue(OpenChannelContext):
 class WhenBindingAQueueToAnExchange(QueueContext, ExchangeContext):
     def when_I_bind_the_queue(self):
         self.async_partial(self.queue.bind(self.exchange, 'routing.key'))
-        self.tick()
 
     def it_should_send_QueueBind(self):
         expected_method = spec.QueueBind(0, self.queue.name, self.exchange.name, 'routing.key', False, {})
@@ -90,7 +86,6 @@ class WhenQueueBindOKArrives(QueueContext, ExchangeContext):
 
     def when_QueueBindOK_arrives(self):
         self.server.send_method(self.channel.id, spec.QueueBindOK())
-        self.tick()
         self.binding = self.task.result()
 
     def then_the_returned_binding_should_have_the_correct_queue(self):
@@ -103,7 +98,6 @@ class WhenQueueBindOKArrives(QueueContext, ExchangeContext):
 class WhenUnbindingAQueue(BoundQueueContext):
     def when_I_unbind_the_queue(self):
         self.async_partial(self.binding.unbind())
-        self.tick()
 
     def it_should_send_QueueUnbind(self):
         expected_method = spec.QueueUnbind(0, self.queue.name, self.exchange.name, 'routing.key', {})
@@ -117,7 +111,6 @@ class WhenQueueUnbindOKArrives(BoundQueueContext):
 
     def when_QueueUnbindOK_arrives(self):
         self.server.send_method(self.channel.id, spec.QueueUnbindOK())
-        self.tick()
 
     def it_should_be_ok(self):
         assert self.task.result() is None
@@ -128,7 +121,6 @@ class WhenIUnbindAQueueTwice(BoundQueueContext):
         asyncio.async(self.binding.unbind())
         self.tick()
         self.server.send_method(self.channel.id, spec.QueueUnbindOK())
-        self.tick()
 
     def when_I_unbind_the_queue_again(self):
         self.task = asyncio.async(self.binding.unbind())
@@ -141,7 +133,6 @@ class WhenIUnbindAQueueTwice(BoundQueueContext):
 class WhenIAskForAMessage(QueueContext):
     def when_I_get_a_message(self):
         self.async_partial(self.queue.get(no_ack=False))
-        self.tick()
 
     def it_should_send_BasicGet(self):
         self.server.should_have_received_method(self.channel.id, spec.BasicGet(0, self.queue.name, False))
@@ -154,7 +145,6 @@ class WhenBasicGetEmptyArrives(QueueContext):
 
     def when_BasicGetEmpty_arrives(self):
         self.server.send_method(self.channel.id, spec.BasicGetEmpty(''))
-        self.tick()
 
     def it_should_return_None(self):
         assert self.task.result() is None
@@ -169,15 +159,12 @@ class WhenBasicGetOKArrives(QueueContext):
     def when_BasicGetOK_arrives_with_content(self):
         method = spec.BasicGetOK(123, False, 'my.exchange', 'routing.key', 0)
         self.server.send_method(self.channel.id, method)
-        self.tick()
 
         header = message.get_header_payload(self.expected_message, spec.BasicGet.method_type[0])
         self.server.send_frame(frames.ContentHeaderFrame(self.channel.id, header))
-        self.tick()
 
         body = message.get_frame_payloads(self.expected_message, 100)[0]
         self.server.send_frame(frames.ContentBodyFrame(self.channel.id, body))
-        self.tick()
         self.tick()
 
     def it_should_return_the_expected_message(self):
@@ -193,7 +180,6 @@ class WhenBasicGetOKArrives(QueueContext):
 class WhenISubscribeToAQueue(QueueContext):
     def when_I_start_a_consumer(self):
         self.async_partial(self.queue.consume(lambda msg: None, no_local=False, no_ack=False, exclusive=False))
-        self.tick()
 
     def it_should_send_BasicConsume(self):
         self.server.should_have_received_method(self.channel.id, spec.BasicConsume(0, self.queue.name, '', False, False, False, False, {}))
@@ -207,7 +193,6 @@ class WhenConsumeOKArrives(QueueContext):
     def when_BasicConsumeOK_arrives(self):
         method = spec.BasicConsumeOK('made.up.tag')
         self.server.send_method(self.channel.id, method)
-        self.tick()
 
     def it_should_return_a_consumer_with_the_correct_consumer_tag(self):
         assert self.task.result().tag == 'made.up.tag'
@@ -220,15 +205,12 @@ class WhenBasicDeliverArrives(ConsumerContext):
     def when_BasicDeliver_arrives_with_content(self):
         method = spec.BasicDeliver(self.consumer.tag, 123, False, 'my.exchange', 'routing.key')
         self.server.send_method(self.channel.id, method)
-        self.tick()
 
         header = message.get_header_payload(self.expected_message, spec.BasicGet.method_type[0])
         self.server.send_frame(frames.ContentHeaderFrame(self.channel.id, header))
-        self.tick()
 
         body = message.get_frame_payloads(self.expected_message, 100)[0]
         self.server.send_frame(frames.ContentBodyFrame(self.channel.id, body))
-        self.tick()
         self.tick()
 
     def it_should_send_the_message_to_the_callback(self):
@@ -253,15 +235,12 @@ class WhenAConsumerThrowsAnExceptionAndAnotherMessageArrives(ConsumerContext):
     def deliver_msg(self):
         method = spec.BasicDeliver(self.consumer.tag, 123, False, 'my.exchange', 'routing.key')
         self.server.send_method(self.channel.id, method)
-        self.tick()
 
         header = message.get_header_payload(self.expected_message, spec.BasicGet.method_type[0])
         self.server.send_frame(frames.ContentHeaderFrame(self.channel.id, header))
-        self.tick()
 
         body = message.get_frame_payloads(self.expected_message, 100)[0]
         self.server.send_frame(frames.ContentBodyFrame(self.channel.id, body))
-        self.tick()
         self.tick()
 
     def cleanup_the_exception_handler(self):
@@ -271,7 +250,6 @@ class WhenAConsumerThrowsAnExceptionAndAnotherMessageArrives(ConsumerContext):
 class WhenICancelAConsumer(ConsumerContext):
     def when_I_cancel_the_consumer(self):
         self.async_partial(self.consumer.cancel())
-        self.tick()
 
     def it_should_send_a_BasicCancel_method(self):
         self.server.should_have_received_method(self.channel.id, spec.BasicCancel(self.consumer.tag, False))
@@ -284,7 +262,6 @@ class WhenCancelOKArrives(ConsumerContext):
 
     def when_BasicCancelOK_arrives(self):
         self.server.send_method(self.channel.id, spec.BasicCancelOK(self.consumer.tag))
-        self.tick()
 
     def it_should_be_cancelled(self):
         assert self.consumer.cancelled
@@ -293,7 +270,6 @@ class WhenCancelOKArrives(ConsumerContext):
 class WhenIPurgeAQueue(QueueContext):
     def because_I_purge_the_queue(self):
         self.async_partial(self.queue.purge())
-        self.tick()
 
     def it_should_send_a_QueuePurge_method(self):
         self.server.should_have_received_method(self.channel.id, spec.QueuePurge(0, self.queue.name, False))
@@ -306,7 +282,6 @@ class WhenQueuePurgeOKArrives(QueueContext):
 
     def when_QueuePurgeOK_arrives(self):
         self.server.send_method(self.channel.id, spec.QueuePurgeOK(123))
-        self.tick()
 
     def it_should_return(self):
         self.task.result()
@@ -315,7 +290,6 @@ class WhenQueuePurgeOKArrives(QueueContext):
 class WhenDeletingAQueue(QueueContext):
     def because_I_delete_the_queue(self):
         self.async_partial(self.queue.delete(if_unused=False, if_empty=False))
-        self.tick()
 
     def it_should_send_a_QueueDelete_method(self):
         self.server.should_have_received_method(self.channel.id, spec.QueueDelete(0, self.queue.name, False, False, False))
@@ -329,7 +303,6 @@ class WhenQueueDeleteOKArrives(QueueContext):
     def when_QueueDeleteOK_arrives(self):
         method = spec.QueueDeleteOK(123)
         self.server.send_method(self.channel.id, method)
-        self.tick()
 
     def it_should_be_deleted(self):
         assert self.queue.deleted
@@ -340,7 +313,6 @@ class WhenITryToUseADeletedQueue(QueueContext):
         asyncio.async(self.queue.delete(if_unused=False, if_empty=False), loop=self.loop)
         self.tick()
         self.server.send_method(self.channel.id, spec.QueueDeleteOK(123))
-        self.tick()
 
     def when_I_try_to_use_the_queue(self):
         self.task = asyncio.async(self.queue.get())
