@@ -4,7 +4,7 @@ import asynqp
 from unittest import mock
 from asynqp import spec, protocol, frames
 from asynqp.connection import open_connection, ConnectionInfo
-from .base_contexts import LegacyOpenConnectionContext, MockServerContext, OpenConnectionWithMockServer
+from .base_contexts import LegacyOpenConnectionContext, MockServerContext, OpenConnectionContext
 
 
 class WhenRespondingToConnectionStart(MockServerContext):
@@ -45,7 +45,7 @@ class WhenRespondingToConnectionTune(MockServerContext):
         self.server.should_have_received_methods(0, [tune_ok_method, open_method])
 
 
-class WhenRespondingToConnectionClose(OpenConnectionWithMockServer):
+class WhenRespondingToConnectionClose(OpenConnectionContext):
     def when_the_close_frame_arrives(self):
         self.server.send_method(0, spec.ConnectionClose(123, 'you muffed up', 10, 20))
         self.tick()
@@ -54,7 +54,7 @@ class WhenRespondingToConnectionClose(OpenConnectionWithMockServer):
         self.server.should_have_received_method(0, spec.ConnectionCloseOK())
 
 
-class WhenTheApplicationClosesTheConnection(OpenConnectionWithMockServer):
+class WhenTheApplicationClosesTheConnection(OpenConnectionContext):
     def when_I_close_the_connection(self):
         self.async_partial(self.connection.close())
         self.tick()
@@ -64,7 +64,7 @@ class WhenTheApplicationClosesTheConnection(OpenConnectionWithMockServer):
         self.server.should_have_received_method(0, expected)
 
 
-class WhenRecievingConnectionCloseOK(OpenConnectionWithMockServer):
+class WhenRecievingConnectionCloseOK(OpenConnectionContext):
     def given_a_connection_that_I_closed(self):
         asyncio.async(self.connection.close())
         self.tick()

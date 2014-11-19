@@ -39,7 +39,7 @@ class MockServerContext(LoopContext):
         self.protocol.connection_made(self.transport)
 
 
-class OpenConnectionWithMockServer(MockServerContext):
+class OpenConnectionContext(MockServerContext):
     def given_an_open_connection(self):
         connection_info = ConnectionInfo('guest', 'guest', '/')
         task = asyncio.async(open_connection(self.loop, self.protocol, self.dispatcher, connection_info))
@@ -60,7 +60,7 @@ class OpenConnectionWithMockServer(MockServerContext):
         self.connection = task.result()
 
 
-class OpenChannelWithMockServer(OpenConnectionWithMockServer):
+class OpenChannelContext(OpenConnectionContext):
     def given_an_open_channel(self):
         self.channel = self.open_channel()
 
@@ -72,7 +72,7 @@ class OpenChannelWithMockServer(OpenConnectionWithMockServer):
         return task.result()
 
 
-class QueueWithMockServer(OpenChannelWithMockServer):
+class QueueContext(OpenChannelContext):
     def given_a_queue(self):
         queue_name = 'my.nice.queue'
         task = asyncio.async(self.channel.declare_queue(queue_name, durable=True, exclusive=True, auto_delete=True), loop=self.loop)
@@ -82,7 +82,7 @@ class QueueWithMockServer(OpenChannelWithMockServer):
         self.queue = task.result()
 
 
-class ExchangeWithMockServer(OpenChannelWithMockServer):
+class ExchangeContext(OpenChannelContext):
     def given_an_exchange(self):
         self.exchange = self.make_exchange('my.nice.exchange')
 
@@ -95,7 +95,7 @@ class ExchangeWithMockServer(OpenChannelWithMockServer):
         return task.result()
 
 
-class BoundQueueWithMockServer(QueueWithMockServer, ExchangeWithMockServer):
+class BoundQueueContext(QueueContext, ExchangeContext):
     def given_a_bound_queue(self):
         task = asyncio.async(self.queue.bind(self.exchange, 'routing.key'))
         self.tick()
@@ -104,7 +104,7 @@ class BoundQueueWithMockServer(QueueWithMockServer, ExchangeWithMockServer):
         self.binding = task.result()
 
 
-class ConsumerWithMockServer(QueueWithMockServer):
+class ConsumerContext(QueueContext):
     def given_a_consumer(self):
         self.callback = mock.Mock()
         del self.callback._is_coroutine  # :(

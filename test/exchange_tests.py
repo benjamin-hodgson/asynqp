@@ -6,10 +6,10 @@ import asynqp
 from asynqp import spec
 from asynqp import frames
 from asynqp import message
-from .base_contexts import OpenChannelWithMockServer, ExchangeWithMockServer
+from .base_contexts import OpenChannelContext, ExchangeContext
 
 
-class WhenDeclaringAnExchange(OpenChannelWithMockServer):
+class WhenDeclaringAnExchange(OpenChannelContext):
     def when_I_declare_an_exchange(self):
         self.async_partial(self.channel.declare_exchange('my.nice.exchange', 'fanout', durable=True, auto_delete=False, internal=False))
         self.tick()
@@ -19,7 +19,7 @@ class WhenDeclaringAnExchange(OpenChannelWithMockServer):
         self.server.should_have_received_method(self.channel.id, expected_method)
 
 
-class WhenExchangeDeclareOKArrives(OpenChannelWithMockServer):
+class WhenExchangeDeclareOKArrives(OpenChannelContext):
     def given_I_declared_an_exchange(self):
         self.task = asyncio.async(self.channel.declare_exchange('my.nice.exchange', 'fanout', durable=True, auto_delete=False, internal=False))
         self.tick()
@@ -48,7 +48,7 @@ class WhenExchangeDeclareOKArrives(OpenChannelWithMockServer):
 # "The server MUST pre-declare a direct exchange with no public name
 # to act as the default exchange for content Publish methods and for default queue bindings."
 # Clients are not allowed to re-declare the default exchange, but they are allowed to publish to it
-class WhenIDeclareTheDefaultExchange(OpenChannelWithMockServer):
+class WhenIDeclareTheDefaultExchange(OpenChannelContext):
     def when_I_declare_an_exchange_with_an_empty_name(self):
         self.server.reset()
         task = asyncio.async(self.channel.declare_exchange('', 'direct', durable=True, auto_delete=False, internal=False))
@@ -74,7 +74,7 @@ class WhenIDeclareTheDefaultExchange(OpenChannelWithMockServer):
         assert not self.exchange.internal
 
 
-class WhenIUseAnIllegalExchangeName(OpenChannelWithMockServer):
+class WhenIUseAnIllegalExchangeName(OpenChannelContext):
     @classmethod
     def examples_of_bad_words(cls):
         yield "amq.starts.with.amq."
@@ -89,7 +89,7 @@ class WhenIUseAnIllegalExchangeName(OpenChannelWithMockServer):
         assert isinstance(self.exception, ValueError)
 
 
-class WhenPublishingAShortMessage(ExchangeWithMockServer):
+class WhenPublishingAShortMessage(ExchangeContext):
     def given_a_message(self):
         self.correlation_id = str(uuid.uuid4())
         self.message_id = str(uuid.uuid4())
@@ -137,7 +137,7 @@ class WhenPublishingAShortMessage(ExchangeWithMockServer):
         ], any_order=False)
 
 
-class WhenPublishingALongMessage(ExchangeWithMockServer):
+class WhenPublishingALongMessage(ExchangeContext):
     def given_a_message(self):
         self.body1 = b"a" * (self.frame_max - 8)
         self.body2 = b"b" * (self.frame_max - 8)
@@ -159,7 +159,7 @@ class WhenPublishingALongMessage(ExchangeWithMockServer):
         ], any_order=False)
 
 
-class WhenDeletingAnExchange(ExchangeWithMockServer):
+class WhenDeletingAnExchange(ExchangeContext):
     def when_I_delete_the_exchange(self):
         self.async_partial(self.exchange.delete(if_unused=True))
         self.tick()
@@ -168,7 +168,7 @@ class WhenDeletingAnExchange(ExchangeWithMockServer):
         self.server.should_have_received_method(self.channel.id, spec.ExchangeDelete(0, self.exchange.name, True, False))
 
 
-class WhenExchangeDeleteOKArrives(ExchangeWithMockServer):
+class WhenExchangeDeleteOKArrives(ExchangeContext):
     def given_I_deleted_the_exchange(self):
         asyncio.async(self.exchange.delete(if_unused=True), loop=self.loop)
         self.tick()

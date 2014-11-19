@@ -6,7 +6,7 @@ import asynqp
 from asynqp import message
 from asynqp import spec
 from asynqp import frames
-from .base_contexts import QueueWithMockServer
+from .base_contexts import QueueContext
 
 
 class WhenGettingTheContentHeader:
@@ -122,7 +122,7 @@ class WhenGettingFramesForALongMessage:
         assert self.frames == [b'much ', b'longe', b'r bod', b'y']
 
 
-class WhenIAcknowledgeADeliveredMessage(QueueWithMockServer):
+class WhenIAcknowledgeADeliveredMessage(QueueContext):
     def given_I_received_a_message(self):
         self.delivery_tag = 12487
 
@@ -151,7 +151,7 @@ class WhenIAcknowledgeADeliveredMessage(QueueWithMockServer):
         self.server.should_have_received_method(self.channel.id, spec.BasicAck(self.delivery_tag, False))
 
 
-class WhenIRejectADeliveredMessage(QueueWithMockServer):
+class WhenIRejectADeliveredMessage(QueueContext):
     def given_I_received_a_message(self):
         self.delivery_tag = 12487
 

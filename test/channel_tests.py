@@ -5,10 +5,10 @@ from unittest import mock
 from asynqp import spec, frames
 from asynqp import message
 from . import util
-from .base_contexts import OpenConnectionWithMockServer, OpenChannelWithMockServer
+from .base_contexts import OpenConnectionContext, OpenChannelContext
 
 
-class WhenOpeningAChannel(OpenConnectionWithMockServer):
+class WhenOpeningAChannel(OpenConnectionContext):
     def when_the_user_wants_to_open_a_channel(self):
         self.async_partial(self.connection.open_channel())
         self.tick()
@@ -17,7 +17,7 @@ class WhenOpeningAChannel(OpenConnectionWithMockServer):
         self.server.should_have_received_method(1, spec.ChannelOpen(''))
 
 
-class WhenChannelOpenOKArrives(OpenConnectionWithMockServer):
+class WhenChannelOpenOKArrives(OpenConnectionContext):
     def given_the_user_has_called_open_channel(self):
         self.task = asyncio.async(self.connection.open_channel())
         self.tick()
@@ -30,7 +30,7 @@ class WhenChannelOpenOKArrives(OpenConnectionWithMockServer):
         assert self.task.result().id == 1
 
 
-class WhenOpeningASecondChannel(OpenChannelWithMockServer):
+class WhenOpeningASecondChannel(OpenChannelContext):
     def when_the_user_opens_another_channel(self):
         self.result = self.open_channel(2)
 
@@ -41,7 +41,7 @@ class WhenOpeningASecondChannel(OpenChannelWithMockServer):
         assert self.result.id == 2
 
 
-class WhenTheApplicationClosesAChannel(OpenChannelWithMockServer):
+class WhenTheApplicationClosesAChannel(OpenChannelContext):
     def when_I_close_the_channel(self):
         self.async_partial(self.channel.close())
         self.tick()
@@ -50,7 +50,7 @@ class WhenTheApplicationClosesAChannel(OpenChannelWithMockServer):
         self.server.should_have_received_method(1, spec.ChannelClose(0, 'Channel closed by application', 0, 0))
 
 
-class WhenTheServerClosesAChannel(OpenChannelWithMockServer):
+class WhenTheServerClosesAChannel(OpenChannelContext):
     def when_the_server_shuts_the_channel_down(self):
         self.server.send_method(self.channel.id, spec.ChannelClose(123, 'i am tired of you', 40, 50))
         self.tick()
@@ -59,7 +59,7 @@ class WhenTheServerClosesAChannel(OpenChannelWithMockServer):
         self.server.should_have_received_method(self.channel.id, spec.ChannelCloseOK())
 
 
-class WhenAnotherMethodArrivesWhileTheChannelIsClosing(OpenChannelWithMockServer):
+class WhenAnotherMethodArrivesWhileTheChannelIsClosing(OpenChannelContext):
     def given_that_i_closed_the_channel(self):
         self.async_partial(self.channel.close())
         self.tick()
@@ -73,7 +73,7 @@ class WhenAnotherMethodArrivesWhileTheChannelIsClosing(OpenChannelWithMockServer
         self.server.should_not_have_received_any()
 
 
-class WhenAnotherMethodArrivesAfterTheServerClosedTheChannel(OpenChannelWithMockServer):
+class WhenAnotherMethodArrivesAfterTheServerClosedTheChannel(OpenChannelContext):
     def given_the_server_closed_the_channel(self):
         self.server.send_method(self.channel.id, spec.ChannelClose(123, 'i am tired of you', 40, 50))
         self.tick()
@@ -87,7 +87,7 @@ class WhenAnotherMethodArrivesAfterTheServerClosedTheChannel(OpenChannelWithMock
         self.server.should_not_have_received_any()
 
 
-class WhenAnAsyncMethodArrivesWhileWeAwaitASynchronousOne(OpenChannelWithMockServer):
+class WhenAnAsyncMethodArrivesWhileWeAwaitASynchronousOne(OpenChannelContext):
     def given_we_are_awaiting_QueueDeclareOK(self):
         self.task = self.async_partial(self.channel.declare_queue('my.nice.queue', durable=True, exclusive=True, auto_delete=True))
         self.tick()
@@ -105,7 +105,7 @@ class WhenAnAsyncMethodArrivesWhileWeAwaitASynchronousOne(OpenChannelWithMockSer
         assert not self.task.done()
 
 
-class WhenAnUnexpectedChannelCloseArrives(OpenChannelWithMockServer):
+class WhenAnUnexpectedChannelCloseArrives(OpenChannelContext):
     def given_we_are_awaiting_QueueDeclareOK(self):
         self.async_partial(self.channel.declare_queue('my.nice.queue', durable=True, exclusive=True, auto_delete=True))
         self.tick()
@@ -118,7 +118,7 @@ class WhenAnUnexpectedChannelCloseArrives(OpenChannelWithMockServer):
         self.server.should_have_received_method(self.channel.id, spec.ChannelCloseOK())
 
 
-class WhenSettingQOS(OpenChannelWithMockServer):
+class WhenSettingQOS(OpenChannelContext):
     def when_we_are_setting_prefetch_count_only(self):
         self.async_partial(self.channel.set_qos(prefetch_size=1000, prefetch_count=100, apply_globally=True))
         self.tick()
@@ -127,7 +127,7 @@ class WhenSettingQOS(OpenChannelWithMockServer):
         self.server.should_have_received_method(self.channel.id, spec.BasicQos(1000, 100, True))
 
 
-class WhenBasicQOSOkArrives(OpenChannelWithMockServer):
+class WhenBasicQOSOkArrives(OpenChannelContext):
     def given_we_are_setting_qos_settings(self):
         self.task = asyncio.async(self.channel.set_qos(prefetch_size=1000, prefetch_count=100, apply_globally=True))
         self.tick()
@@ -140,7 +140,7 @@ class WhenBasicQOSOkArrives(OpenChannelWithMockServer):
         assert self.task.done()
 
 
-class WhenBasicReturnArrivesAndIHaveDefinedAHandler(OpenChannelWithMockServer):
+class WhenBasicReturnArrivesAndIHaveDefinedAHandler(OpenChannelContext):
     def given_a_message(self):
         self.expected_message = asynqp.Message('body')
 
@@ -166,7 +166,7 @@ class WhenBasicReturnArrivesAndIHaveDefinedAHandler(OpenChannelWithMockServer):
         self.callback.assert_called_once_with(self.expected_message)
 
 
-class WhenBasicReturnArrivesAndIHaveNotDefinedAHandler(OpenChannelWithMockServer):
+class WhenBasicReturnArrivesAndIHaveNotDefinedAHandler(OpenChannelContext):
     def given_I_am_listening_for_asyncio_exceptions(self):
         self.expected_message = asynqp.Message('body')
 
@@ -198,7 +198,7 @@ class WhenBasicReturnArrivesAndIHaveNotDefinedAHandler(OpenChannelWithMockServer
 
 
 # test that the call to handler.ready() happens at the correct time
-class WhenBasicReturnArrivesAfterThrowingTheExceptionOnce(OpenChannelWithMockServer):
+class WhenBasicReturnArrivesAfterThrowingTheExceptionOnce(OpenChannelContext):
     def given_I_am_listening_for_asyncio_exceptions(self):
         self.expected_message = asynqp.Message('body')
 
@@ -233,7 +233,7 @@ class WhenBasicReturnArrivesAfterThrowingTheExceptionOnce(OpenChannelWithMockSer
 
 
 
-class WhenTheHandlerIsNotCallable(OpenChannelWithMockServer):
+class WhenTheHandlerIsNotCallable(OpenChannelContext):
     def when_I_set_the_handler(self):
         self.exception = contexts.catch(self.channel.set_return_handler, "i am not callable")
 
