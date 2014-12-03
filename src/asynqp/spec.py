@@ -166,7 +166,7 @@ def generate_methods(classes):
 
 METHODS, CONSTANTS = load_spec()
 
-# what the hack? 'response' is almost always a table but the protocol spec says it's a longstr.
+# what the hack? 'response' is always a table but the protocol spec says it's a longstr.
 METHODS['ConnectionStartOK'].field_info['response'] = amqptypes.Table
 
 # Also pretty hacky

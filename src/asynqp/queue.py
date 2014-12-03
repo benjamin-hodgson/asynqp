@@ -274,6 +274,7 @@ class Consumers(object):
 
     def add_consumer(self, consumer):
         self.consumers[consumer.tag] = consumer
+        # so the consumer gets garbage collected when it is cancelled
         consumer.cancelled_future.add_done_callback(lambda fut: delitem(self.consumers, fut.result().tag))
 
     def deliver(self, tag, msg):

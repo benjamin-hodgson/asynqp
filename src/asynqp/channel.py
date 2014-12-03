@@ -300,7 +300,6 @@ class MessageReceiver(object):
         self.consumers.deliver(tag, msg)
         self.reader.ready()
 
-
     @asyncio.coroutine
     def receive_header(self, frame):
         self.synchroniser.notify(frames.ContentHeaderFrame)
@@ -316,7 +315,7 @@ class MessageReceiver(object):
             self.synchroniser.notify(frames.ContentBodyFrame, (tag, msg))
             self.message_builder = None
             # don't call self.reader.ready() if the message is all here -
-            # get() or receive_deliver() will call
+            # get() or async_receive() will call
             # it when they have finished processing the completed msg
             return
         self.reader.ready()
@@ -344,8 +343,7 @@ class ChannelMethodSender(bases.Sender):
         self.send_method(spec.QueueBind(0, queue_name, exchange_name, routing_key, False, {}))
 
     def send_QueueUnbind(self, queue_name, exchange_name, routing_key):
-        method = spec.QueueUnbind(0, queue_name, exchange_name, routing_key, {})
-        self.protocol.send_method(self.channel_id, method)
+        self.send_method(spec.QueueUnbind(0, queue_name, exchange_name, routing_key, {}))
 
     def send_QueuePurge(self, queue_name):
         self.send_method(spec.QueuePurge(0, queue_name, False))
