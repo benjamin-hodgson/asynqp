@@ -2,7 +2,7 @@ import asyncio
 import struct
 from . import spec
 from . import frames
-from .bases import Dispatcher
+from .routing import Dispatcher
 from .exceptions import AMQPError
 
 

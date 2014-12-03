@@ -3,7 +3,7 @@ import sys
 from . import channel
 from . import bases
 from . import spec
-from .util import Synchroniser
+from . import routing
 
 
 class ConnectionInfo(object):
@@ -70,13 +70,13 @@ class Connection(object):
 
 @asyncio.coroutine
 def open_connection(loop, protocol, dispatcher, connection_info):
-    synchroniser = Synchroniser()
+    synchroniser = routing.Synchroniser()
 
     sender = ConnectionMethodSender(protocol)
     connection = Connection(loop, protocol, synchroniser, sender, dispatcher, connection_info)
     handler = ConnectionFrameHandler(synchroniser, sender, protocol, connection)
 
-    reader, writer = bases.create_reader_and_writer(handler)
+    reader, writer = routing.create_reader_and_writer(handler)
 
     try:
         dispatcher.add_writer(0, writer)

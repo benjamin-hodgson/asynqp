@@ -29,7 +29,8 @@ def connect(host='localhost',
 
     :return: the :class:`Connection` object.
     """
-    from .protocol import AMQP, Dispatcher
+    from .protocol import AMQP
+    from .routing import Dispatcher
     from .connection import ConnectionInfo, open_connection
 
     loop = asyncio.get_event_loop() if loop is None else loop

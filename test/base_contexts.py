@@ -1,6 +1,6 @@
 import asyncio
 import asynqp
-import asynqp.bases
+import asynqp.routing
 from asyncio import test_utils
 from asynqp import spec
 from asynqp import protocol
@@ -12,13 +12,13 @@ from .util import MockServer, FakeTransport
 class LoopContext:
     def given_an_event_loop(self):
         self.loop = asyncio.get_event_loop()
-        asynqp.bases._TEST = True
+        asynqp.routing._TEST = True
 
     def tick(self):
         test_utils.run_briefly(self.loop)
 
     def cleanup_test_hack(self):
-        asynqp.bases._TEST = False
+        asynqp.routing._TEST = False
 
     def async_partial(self, coro):
         """

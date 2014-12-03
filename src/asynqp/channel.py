@@ -6,7 +6,7 @@ from . import spec
 from . import queue
 from . import exchange
 from . import message
-from .util import Synchroniser
+from . import routing
 from .exceptions import UndeliverableMessage
 
 
@@ -97,7 +97,7 @@ class Channel(object):
         """
         self.sender.send_Close(0, 'Channel closed by application', 0, 0)
         yield from self.synchroniser.await(spec.ChannelCloseOK)
-        # don't say self.reader.ready - stop reading frames from the q
+        # don't call self.reader.ready - stop reading frames from the q
 
     @asyncio.coroutine
     def set_qos(self, prefetch_size=0, prefetch_count=0, apply_globally=False):
@@ -154,7 +154,7 @@ class ChannelFactory(object):
 
     @asyncio.coroutine
     def open(self):
-        synchroniser = Synchroniser()
+        synchroniser = routing.Synchroniser()
 
         sender = ChannelMethodSender(self.next_channel_id, self.protocol, self.connection_info)
         basic_return_consumer = BasicReturnConsumer()
@@ -162,7 +162,7 @@ class ChannelFactory(object):
         consumers.add_consumer(basic_return_consumer)
 
         handler = ChannelFrameHandler(synchroniser, sender)
-        reader, writer = bases.create_reader_and_writer(handler)
+        reader, writer = routing.create_reader_and_writer(handler)
         handler.message_receiver = MessageReceiver(synchroniser, sender, consumers, reader)
 
         queue_factory = queue.QueueFactory(sender, synchroniser, reader, consumers)
