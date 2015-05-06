@@ -1,7 +1,6 @@
 import asyncio
 import uuid
 from datetime import datetime
-from unittest import mock
 import asynqp
 from asynqp import spec
 from asynqp import frames

@@ -2,7 +2,6 @@ import asyncio
 import struct
 from . import spec
 from . import frames
-from .routing import Dispatcher
 from .exceptions import AMQPError
 
 
@@ -68,14 +67,14 @@ class FrameReader(object):
             self.partial_frame = data
             return
 
-        raw_payload = data[7:7+size]
-        frame_end = data[7+size]
+        raw_payload = data[7:7 + size]
+        frame_end = data[7 + size]
 
         if frame_end != spec.FRAME_END:
             raise AMQPError("Frame end byte was incorrect")
 
         frame = frames.read(frame_type, channel_id, raw_payload)
-        remainder = data[8+size:]
+        remainder = data[8 + size:]
 
         return frame, remainder
 

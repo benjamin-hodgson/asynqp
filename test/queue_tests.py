@@ -1,6 +1,5 @@
 import asyncio
 from datetime import datetime
-from unittest import mock
 import asynqp
 from asynqp import message
 from asynqp import frames

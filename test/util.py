@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import contextmanager
 from unittest import mock
 import asynqp.frames
 from asynqp import protocol
@@ -94,10 +95,10 @@ def any(cls):
     return _any()
 
 
-from contextlib import contextmanager
 @contextmanager
 def silence_expected_destroy_pending_log(expected_coro_name=''):
     real_async = asyncio.async
+
     def async(*args, **kwargs):
         t = real_async(*args, **kwargs)
         if expected_coro_name in repr(t):

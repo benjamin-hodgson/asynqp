@@ -33,7 +33,7 @@ class LoopContext:
 
 class MockServerContext(LoopContext):
     def given_a_mock_server_on_the_other_end_of_the_transport(self):
-        self.dispatcher = protocol.Dispatcher()
+        self.dispatcher = asynqp.routing.Dispatcher()
         self.protocol = protocol.AMQP(self.dispatcher, self.loop)
         self.server = MockServer(self.protocol, self.tick)
         self.transport = FakeTransport(self.server)
@@ -120,7 +120,7 @@ class LegacyConnectionContext(LoopContext):
         self.protocol.transport = mock.Mock()
         self.protocol.send_frame._is_coroutine = False  # :(
 
-        self.dispatcher = protocol.Dispatcher()
+        self.dispatcher = asynqp.routing.Dispatcher()
         self.connection_info = ConnectionInfo('guest', 'guest', '/')
 
 
@@ -149,7 +149,7 @@ class LegacyOpenConnectionContext(LegacyConnectionContext):
 class ProtocolContext(LoopContext):
     def given_a_connected_protocol(self):
         self.transport = mock.Mock(spec=asyncio.Transport)
-        self.dispatcher = protocol.Dispatcher()
+        self.dispatcher = asynqp.routing.Dispatcher()
         self.protocol = protocol.AMQP(self.dispatcher, self.loop)
         self.protocol.connection_made(self.transport)
 
@@ -157,6 +157,6 @@ class ProtocolContext(LoopContext):
 class MockDispatcherContext(LoopContext):
     def given_a_connected_protocol(self):
         self.transport = mock.Mock(spec=asyncio.Transport)
-        self.dispatcher = mock.Mock(spec=protocol.Dispatcher)
+        self.dispatcher = mock.Mock(spec=asynqp.routing.Dispatcher)
         self.protocol = protocol.AMQP(self.dispatcher, self.loop)
         self.protocol.connection_made(self.transport)

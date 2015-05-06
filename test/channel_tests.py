@@ -209,7 +209,6 @@ class WhenBasicReturnArrivesAfterThrowingTheExceptionOnce(OpenChannelContext):
         self.tick()
 
 
-
 class WhenTheHandlerIsNotCallable(OpenChannelContext):
     def when_I_set_the_handler(self):
         self.exception = contexts.catch(self.channel.set_return_handler, "i am not callable")

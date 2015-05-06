@@ -54,4 +54,3 @@ class Exchange(object):
         self.sender.send_ExchangeDelete(self.name, if_unused)
         yield from self.synchroniser.await(spec.ExchangeDeleteOK)
         self.reader.ready()
-

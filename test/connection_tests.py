@@ -2,7 +2,7 @@ import asyncio
 import sys
 import asynqp
 from unittest import mock
-from asynqp import spec, protocol, frames
+from asynqp import spec
 from asynqp.connection import open_connection, ConnectionInfo
 from .base_contexts import LegacyOpenConnectionContext, MockServerContext, OpenConnectionContext
 

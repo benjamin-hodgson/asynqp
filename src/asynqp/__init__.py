@@ -1,10 +1,10 @@
 import asyncio
-from .exceptions import AMQPError, Deleted
-from .message import Message, IncomingMessage
-from .connection import Connection
-from .channel import Channel
-from .exchange import Exchange
-from .queue import Queue, QueueBinding, Consumer
+from .exceptions import AMQPError, Deleted  # noqa
+from .message import Message, IncomingMessage  # noqa
+from .connection import Connection  # noqa
+from .channel import Channel  # noqa
+from .exchange import Exchange  # noqa
+from .queue import Queue, QueueBinding, Consumer  # noqa
 
 
 @asyncio.coroutine

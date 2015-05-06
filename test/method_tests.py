@@ -1,5 +1,4 @@
 import asynqp
-from unittest import mock
 from asynqp import spec
 from asynqp import frames
 from asynqp import amqptypes
@@ -165,4 +164,3 @@ class WhenBasicGetOKArrives(MockDispatcherContext):
 
     def it_should_deserialise_it_to_the_correct_method(self):
         self.dispatcher.dispatch.assert_called_once_with(self.expected_frame)
-

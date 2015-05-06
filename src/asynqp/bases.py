@@ -1,9 +1,3 @@
-import asyncio
-from . import spec
-from . import frames
-from .exceptions import AMQPError
-
-
 class Sender(object):
     def __init__(self, channel_id, protocol):
         self.channel_id = channel_id
