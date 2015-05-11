@@ -5,6 +5,10 @@ To contribute to this project, submit a [pull request](https://help.github.com/a
 3. [Open a pull request](https://help.github.com/articles/creating-a-pull-request) in this repo to merge your topic branch into the mainstream
 4. I'll review your changes and merge your pull request as soon as possible
 
+If you want to contribute to the project, but are not sure what you want to work on,
+I am always happy for help on any of the [open issues](https://github.com/benjamin-hodgson/asynqp/issues)
+in the GitHub tracker.
+
 This project is built using Test-Driven-Development.
 So if you're planning to contribute a feature or bugfix, please **ensure that
 it is covered by tests** before submitting it for review. Use your best judgment to
