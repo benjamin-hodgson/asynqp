@@ -1,5 +1,6 @@
 import asyncio
 import asynqp
+import socket
 import contexts
 
 
@@ -52,6 +53,22 @@ class WhenConnectingToRabbit:
 
     def cleanup_the_connection(self):
         self.loop.run_until_complete(asyncio.wait_for(self.connection.close(), 0.2))
+
+
+class WhenConnectingToRabbitWithAnExistingSocket:
+    def given_the_loop(self):
+        self.loop = asyncio.get_event_loop()
+        self.sock = socket.create_connection(("localhost", 5672))
+
+    def when_I_connect(self):
+        self.connection = self.loop.run_until_complete(asyncio.wait_for(asynqp.connect(sock=self.sock), 0.2))
+
+    def it_should_connect(self):
+        assert self.connection is not None
+
+    def cleanup_the_connection(self):
+        self.loop.run_until_complete(asyncio.wait_for(self.connection.close(), 0.2))
+        self.sock.close()
 
 
 class WhenOpeningAChannel(ConnectionContext):
