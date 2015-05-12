@@ -3,6 +3,7 @@ import json
 import uuid
 from datetime import datetime
 import asynqp
+from asynqp import amqptypes
 from asynqp import message
 from asynqp import spec
 from asynqp import frames
@@ -184,3 +185,38 @@ class WhenIGetJSONFromADeliveredMessage:
 
     def it_should_give_me_the_body(self):
         assert self.result == self.body
+
+
+class WhenSettingAProperty:
+    def given_a_message(self):
+        self.msg = asynqp.Message("abc")
+
+    def when_I_set_a_property(self):
+        self.msg.content_type = "application/json"
+
+    def it_should_cast_it_to_the_correct_amqp_type(self):
+        assert isinstance(self.msg.content_type, amqptypes.ShortStr)
+        assert self.msg.content_type == amqptypes.ShortStr("application/json")
+
+
+class WhenSettingAPropertyAndIHaveAlreadyCastItMyself:
+    def given_a_message(self):
+        self.msg = asynqp.Message("abc")
+        self.val = amqptypes.ShortStr("application/json")
+
+    def when_I_set_a_property(self):
+        self.msg.content_type = self.val
+
+    def it_should_not_attempt_to_cast_it(self):
+        assert self.msg.content_type is self.val
+
+
+class WhenSettingAnAttributeThatIsNotAProperty:
+    def given_a_message(self):
+        self.msg = asynqp.Message("abc")
+
+    def when_I_set_a_property(self):
+        self.msg.foo = 123
+
+    def it_should_not_attempt_to_cast_it(self):
+        assert self.msg.foo == 123

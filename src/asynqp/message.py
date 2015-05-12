@@ -75,22 +75,29 @@ class Message(object):
 
         timestamp = timestamp if timestamp is not None else datetime.now()
 
-        self.properties = OrderedDict()
+        self._properties = OrderedDict()
         for name, amqptype in self.property_types.items():
             value = locals()[name]
             if value is not None:
                 value = amqptype(value)
-            self.properties[name] = value
+            self._properties[name] = value
 
     def __eq__(self, other):
         return (self.body == other.body
-                and self.properties == other.properties)
+                and self._properties == other._properties)
 
     def __getattr__(self, name):
         try:
-            return self.properties[name]
+            return self._properties[name]
         except KeyError as e:
             raise AttributeError from e
+
+    def __setattr__(self, name, value):
+        amqptype = self.property_types.get(name)
+        if amqptype is not None:
+            self._properties[name] = value if isinstance(value, amqptype) else amqptype(value)
+            return
+        super().__setattr__(name, value)
 
     def json(self):
         """
@@ -143,7 +150,7 @@ class IncomingMessage(Message):
 
 
 def get_header_payload(message, class_id):
-    return ContentHeaderPayload(class_id, len(message.body), list(message.properties.values()))
+    return ContentHeaderPayload(class_id, len(message.body), list(message._properties.values()))
 
 
 # NB: the total frame size will be 8 bytes larger than frame_body_size
