@@ -19,7 +19,9 @@ class Message(object):
         dicts will be converted to a string using JSON.
     :param dict headers: a dictionary of message headers
     :param str content_type: MIME content type
-    :param str content_encoding: MIME encoding
+        (defaults to 'application/json' if :code:`body` is a :class:`dict`,
+        or 'application/octet-stream' otherwise)
+    :param str content_encoding: MIME encoding (defaults to 'utf-8')
     :param int delivery_mode: 1 for non-persistent, 2 for persistent
     :param int priority: message priority - integer between 0 and 9
     :param str correlation_id: correlation id of the message *(for applications)*
