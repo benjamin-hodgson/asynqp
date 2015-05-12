@@ -49,7 +49,7 @@ def connect(host='localhost',
     dispatcher = Dispatcher()
     transport, protocol = yield from loop.create_connection(lambda: AMQP(dispatcher, loop), **kwargs)
 
-    connection = yield from open_connection(loop, protocol, dispatcher, ConnectionInfo(username, password, virtual_host))
+    connection = yield from open_connection(loop, transport, protocol, dispatcher, ConnectionInfo(username, password, virtual_host))
     return connection
 
 

@@ -43,7 +43,7 @@ class MockServerContext(LoopContext):
 class OpenConnectionContext(MockServerContext):
     def given_an_open_connection(self):
         connection_info = ConnectionInfo('guest', 'guest', '/')
-        task = asyncio.async(open_connection(self.loop, self.protocol, self.dispatcher, connection_info))
+        task = asyncio.async(open_connection(self.loop, self.transport, self.protocol, self.dispatcher, connection_info))
         self.tick()
 
         start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
@@ -126,7 +126,7 @@ class LegacyConnectionContext(LoopContext):
 
 class LegacyOpenConnectionContext(LegacyConnectionContext):
     def given_an_open_connection(self):
-        task = asyncio.async(open_connection(self.loop, self.protocol, self.dispatcher, self.connection_info))
+        task = asyncio.async(open_connection(self.loop, self.protocol.transport, self.protocol, self.dispatcher, self.connection_info))
         self.tick()
 
         start_frame = asynqp.frames.MethodFrame(0, spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US'))

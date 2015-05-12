@@ -30,8 +30,18 @@ class Connection(object):
     .. attribute:: closed
 
         a :class:`~asyncio.Future` which is done when the handshake to close the connection has finished
+
+    .. attribute:: transport
+
+        The :class:`~asyncio.BaseTransport` over which the connection is communicating with the server
+
+    .. attribute:: protocol
+
+        The :class:`~asyncio.Protocol` which is paired with the transport
     """
-    def __init__(self, loop, protocol, synchroniser, sender, dispatcher, connection_info):
+    def __init__(self, loop, transport, protocol, synchroniser, sender, dispatcher, connection_info):
+        self.transport = transport
+        self.protocol = protocol
         self.synchroniser = synchroniser
         self.sender = sender
         self.channel_factory = channel.ChannelFactory(loop, protocol, dispatcher, connection_info)
@@ -69,11 +79,11 @@ class Connection(object):
 
 
 @asyncio.coroutine
-def open_connection(loop, protocol, dispatcher, connection_info):
+def open_connection(loop, transport, protocol, dispatcher, connection_info):
     synchroniser = routing.Synchroniser()
 
     sender = ConnectionMethodSender(protocol)
-    connection = Connection(loop, protocol, synchroniser, sender, dispatcher, connection_info)
+    connection = Connection(loop, transport, protocol, synchroniser, sender, dispatcher, connection_info)
     handler = ConnectionFrameHandler(synchroniser, sender, protocol, connection)
 
     reader, writer = routing.create_reader_and_writer(handler)

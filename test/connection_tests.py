@@ -10,7 +10,7 @@ from .base_contexts import LegacyOpenConnectionContext, MockServerContext, OpenC
 class WhenRespondingToConnectionStart(MockServerContext):
     def given_I_wrote_the_protocol_header(self):
         connection_info = ConnectionInfo('guest', 'guest', '/')
-        self.async_partial(open_connection(self.loop, self.protocol, self.dispatcher, connection_info))
+        self.async_partial(open_connection(self.loop, self.transport, self.protocol, self.dispatcher, connection_info))
 
     def when_ConnectionStart_arrives(self):
         self.server.send_method(0, spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US'))
@@ -28,7 +28,7 @@ class WhenRespondingToConnectionStart(MockServerContext):
 class WhenRespondingToConnectionTune(MockServerContext):
     def given_a_started_connection(self):
         connection_info = ConnectionInfo('guest', 'guest', '/')
-        self.async_partial(open_connection(self.loop, self.protocol, self.dispatcher, connection_info))
+        self.async_partial(open_connection(self.loop, self.transport, self.protocol, self.dispatcher, connection_info))
         self.server.send_method(0, spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US'))
 
     def when_ConnectionTune_arrives(self):
