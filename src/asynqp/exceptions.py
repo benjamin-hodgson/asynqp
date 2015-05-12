@@ -1,3 +1,10 @@
+__all__ = [
+    "AMQPError",
+    "UndeliverableMessage",
+    "Deleted"
+]
+
+
 class AMQPError(IOError):
     pass
 
