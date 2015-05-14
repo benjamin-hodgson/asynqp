@@ -10,7 +10,8 @@ from .queue import Queue, QueueBinding, Consumer
 __all__ = [
     "AMQPError", "UndeliverableMessage", "Deleted",
     "Message", "IncomingMessage",
-    "Connection", "Channel", "Exchange", "Queue", "QueueBinding", "Consumer"
+    "Connection", "Channel", "Exchange", "Queue", "QueueBinding", "Consumer",
+    "connect", "connect_and_open_channel"
 ]
 
 
