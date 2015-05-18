@@ -2,6 +2,7 @@ import asyncio
 import asynqp
 import socket
 import contexts
+from .util import testing_exception_handler
 
 
 class ConnectionContext:
@@ -216,3 +217,115 @@ class WhenBasicCancelIsInterleavedWithAnotherMethod(BoundQueueContext):
 
     def it_should_not_throw(self):
         assert self.exception is None
+
+
+class WhenAConnectionIsClosed:
+    def given_an_exception_handler_and_connection(self):
+        self.loop = asyncio.get_event_loop()
+        self.connection_closed_error_raised = False
+        self.loop.set_exception_handler(self.exception_handler)
+        self.connection = self.loop.run_until_complete(asynqp.connect())
+
+    def exception_handler(self, loop, context):
+        exception = context.get('exception')
+        if type(exception) is asynqp.exceptions.ConnectionClosedError:
+            self.connection_closed_error_raised = True
+        else:
+            self.loop.default_exception_handler(context)
+
+    def when_the_connection_is_closed(self):
+        self.loop.run_until_complete(self.connection.close())
+
+    def it_should_raise_a_connection_closed_error(self):
+        assert self.connection_closed_error_raised is True
+
+    def cleanup(self):
+        self.loop.set_exception_handler(testing_exception_handler)
+
+
+class WhenAConnectionIsLost:
+    def given_an_exception_handler_and_connection(self):
+        self.loop = asyncio.get_event_loop()
+        self.connection_lost_error_raised = False
+        self.loop.set_exception_handler(self.exception_handler)
+        self.connection = self.loop.run_until_complete(asynqp.connect())
+
+    def exception_handler(self, loop, context):
+        exception = context.get('exception')
+        if type(exception) is asynqp.exceptions.ConnectionLostError:
+            self.connection_lost_error_raised = True
+            self.loop.stop()
+        else:
+            self.loop.default_exception_handler(context)
+
+    def when_the_heartbeat_times_out(self):
+        self.loop.call_soon(self.connection
+                            .protocol
+                            .heartbeat_monitor.heartbeat_timed_out)
+        self.loop.run_forever()
+
+    def it_should_raise_a_connection_closed_error(self):
+        assert self.connection_lost_error_raised is True
+
+    def cleanup(self):
+        self.loop.set_exception_handler(testing_exception_handler)
+
+
+class WhenAConnectionIsClosedCloseConnection:
+    def given_a_connection(self):
+        self.loop = asyncio.get_event_loop()
+        self.connection = self.loop.run_until_complete(asynqp.connect())
+
+    def when_connection_is_closed(self):
+        self.connection.transport.close()
+
+    def it_should_not_hang(self):
+        self.loop.run_until_complete(asyncio.wait_for(self.connection.close(), 0.2))
+
+
+class WhenAConnectionIsClosedCloseChannel:
+    def given_a_channel(self):
+        self.loop = asyncio.get_event_loop()
+        self.connection = self.loop.run_until_complete(asynqp.connect())
+        self.channel = self.loop.run_until_complete(self.connection.open_channel())
+
+    def when_connection_is_closed(self):
+        self.connection.transport.close()
+
+    def it_should_not_hang(self):
+        self.loop.run_until_complete(asyncio.wait_for(self.channel.close(), 0.2))
+
+
+class WhenAConnectionIsClosedCancelConsuming:
+    def given_a_consumer(self):
+        asynqp.routing._TEST = True
+        self.loop = asyncio.get_event_loop()
+        self.connection = self.loop.run_until_complete(asynqp.connect())
+        self.channel = self.loop.run_until_complete(self.connection.open_channel())
+        self.exchange = self.loop.run_until_complete(
+            self.channel.declare_exchange(name='name',
+                                          type='direct',
+                                          durable=False,
+                                          auto_delete=True))
+
+        self.queue = self.loop.run_until_complete(
+            self.channel.declare_queue(name='',
+                                       durable=False,
+                                       exclusive=True,
+                                       auto_delete=True))
+
+        self.loop.run_until_complete(self.queue.bind(self.exchange,
+                                                     'name'))
+
+        self.consumer = self.loop.run_until_complete(
+            self.queue.consume(lambda x: x, exclusive=True)
+        )
+
+    def when_connection_is_closed(self):
+        self.connection.transport.close()
+
+    def it_should_not_hang(self):
+        self.loop.run_until_complete(asyncio.wait_for(self.consumer.cancel(), 0.2))
+
+    def cleanup(self):
+        asynqp.routing._TEST = False

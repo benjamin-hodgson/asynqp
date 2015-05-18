@@ -19,3 +19,6 @@ class FrameHandler(object):
             meth = getattr(self, 'handle_' + type(frame.payload).__name__)
 
         meth(frame)
+
+    def handle_ConnectionClosedPoisonPillFrame(self, frame):
+        self.synchroniser.notify_connection_closed()

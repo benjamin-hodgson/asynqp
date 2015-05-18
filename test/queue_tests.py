@@ -5,6 +5,7 @@ from asynqp import message
 from asynqp import frames
 from asynqp import spec
 from .base_contexts import OpenChannelContext, QueueContext, ExchangeContext, BoundQueueContext, ConsumerContext
+from .util import testing_exception_handler
 
 
 class WhenDeclaringAQueue(OpenChannelContext):
@@ -243,7 +244,7 @@ class WhenAConsumerThrowsAnExceptionAndAnotherMessageArrives(ConsumerContext):
         self.tick()
 
     def cleanup_the_exception_handler(self):
-        self.loop.set_exception_handler(None)
+        self.loop.set_exception_handler(testing_exception_handler)
 
 
 class WhenICancelAConsumer(ConsumerContext):

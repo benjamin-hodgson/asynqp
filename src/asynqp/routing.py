@@ -26,13 +26,31 @@ class Dispatcher(object):
         writer = self.queue_writers[frame.channel_id]
         writer.enqueue(frame)
 
+    def dispatch_all(self, frame):
+        for writer in self.queue_writers.values():
+            writer.enqueue(frame)
+
 
 class Synchroniser(object):
+    _blocking_methods = set((spec.BasicCancelOK,  # Consumer.cancel
+                             spec.ChannelCloseOK,  # Channel.close
+                             spec.ConnectionCloseOK))  # Connection.close
+
     def __init__(self):
         self._futures = OrderedManyToManyMap()
+        self.connection_closed = False
 
     def await(self, *expected_methods):
         fut = asyncio.Future()
+
+        if self.connection_closed:
+            for method in expected_methods:
+                if method in self._blocking_methods and not fut.done():
+                    fut.set_result(None)
+            if not fut.done():
+                fut.set_exception(ConnectionError)
+            return fut
+
         self._futures.add_item(expected_methods, fut)
         return fut
 
@@ -40,6 +58,27 @@ class Synchroniser(object):
         fut = self._futures.get_leftmost(method)
         fut.set_result(result)
         self._futures.remove_item(fut)
+
+    def notify_connection_closed(self):
+        self.connection_closed = True
+        # Give a proper notification to blocking methods
+        for method in self._blocking_methods:
+            while True:
+                try:
+                    self.notify(method)
+                except StopIteration:
+                    break
+
+        # Set an exception for all others
+        for method in self._futures.keys():
+            if method not in self._blocking_methods:
+                while True:
+                    try:
+                        fut = self._futures.get_leftmost(method)
+                        fut.set_exception(ConnectionError)
+                        self._futures.remove_item(fut)
+                    except StopIteration:
+                        break
 
 
 def create_reader_and_writer(handler):
@@ -95,6 +134,9 @@ class OrderedManyToManyMap(object):
 
     def get_leftmost(self, key):
         return self._items[key].first()
+
+    def keys(self):
+        return self._items.keys()
 
 
 class OrderedSet(collections.MutableSet):

@@ -48,7 +48,13 @@ def connect(host='localhost',
         kwargs['port'] = port
 
     dispatcher = Dispatcher()
-    transport, protocol = yield from loop.create_connection(lambda: AMQP(dispatcher, loop), **kwargs)
+    try:
+        transport, protocol = yield from loop.create_connection(lambda: AMQP(dispatcher, loop), **kwargs)
+    except (ConnectionRefusedError, OSError):
+        # Throw a single exception instead of two
+        raise ConnectionRefusedError('Failed to connect - host: {} port: {}'
+                                     ' username: {} password: {} virtual_host: {}'
+                                     .format(host, port, username, password, virtual_host))
 
     connection = yield from open_connection(loop, transport, protocol, dispatcher, ConnectionInfo(username, password, virtual_host))
     return connection
