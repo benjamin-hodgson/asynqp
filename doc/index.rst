@@ -42,6 +42,7 @@ Example
         # Acknowledge a delivered message
         received_message.ack()
 
+        yield from channel.close()
         yield from connection.close()
 
 
