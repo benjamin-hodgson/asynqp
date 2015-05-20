@@ -52,7 +52,7 @@ class AMQP(asyncio.Protocol):
         if exc is None:
             raise ConnectionClosedError('The connection was closed')
         else:
-            raise ConnectionLostError('The connection was unexpectedly lost')
+            raise ConnectionLostError('The connection was unexpectedly lost') from exc
 
     def _send_connection_closed_poison_pill(self):
         frame = frames.ConnectionClosedPoisonPillFrame()
