@@ -64,3 +64,11 @@ class HeartbeatFrame(Frame):
 
     def __init__(self):
         pass
+
+
+class ConnectionClosedPoisonPillFrame(Frame):
+    channel_id = 0
+    payload = b''
+
+    def __init__(self):
+        pass

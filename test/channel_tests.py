@@ -174,7 +174,7 @@ class WhenBasicReturnArrivesAndIHaveNotDefinedAHandler(OpenChannelContext):
         assert self.exception.args == (self.expected_message,)
 
     def cleanup_the_exception_handler(self):
-        self.loop.set_exception_handler(None)
+        self.loop.set_exception_handler(util.testing_exception_handler)
 
 
 # test that the call to handler.ready() happens at the correct time
@@ -195,7 +195,7 @@ class WhenBasicReturnArrivesAfterThrowingTheExceptionOnce(OpenChannelContext):
         assert self.exception is not None
 
     def cleanup_the_exception_handler(self):
-        self.loop.set_exception_handler(None)
+        self.loop.set_exception_handler(util.testing_exception_handler)
 
     def return_msg(self):
         method = spec.BasicReturn(123, "you messed up", "the.exchange", "the.routing.key")

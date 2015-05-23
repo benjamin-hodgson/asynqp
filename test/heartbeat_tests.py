@@ -2,6 +2,7 @@ from unittest import mock
 from asynqp import spec
 from asynqp import frames
 from asynqp import protocol
+from asynqp.exceptions import ConnectionLostError
 from .base_contexts import ProtocolContext, MockLoopContext
 
 
@@ -69,3 +70,15 @@ class WhenTheHeartbeatTimesOut(MockLoopContext):
 
     def it_should_send_connection_close(self):
         self.protocol.send_method.assert_called_once_with(0, spec.ConnectionClose(501, 'Heartbeat timed out', 0, 0))
+
+
+class WhenTheHeartbeatTimesOutCallProtocolConnectionLost(MockLoopContext):
+    def given_a_hearbeat_monitor(self):
+        self.protocol = mock.Mock(spec=protocol.AMQP)
+        self.heartbeat_monitor = protocol.HeartbeatMonitor(self.protocol, self.loop, 5)
+
+    def when_the_heartbeat_times_out(self):
+        self.heartbeat_monitor.heartbeat_timed_out()
+
+    def it_should_call_protocol_lost_connection(self):
+        self.protocol.connection_lost.assert_called_once_with(ConnectionLostError)

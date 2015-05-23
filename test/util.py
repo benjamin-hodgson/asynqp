@@ -3,6 +3,19 @@ from contextlib import contextmanager
 from unittest import mock
 import asynqp.frames
 from asynqp import protocol
+from asynqp.exceptions import ConnectionClosedError
+
+
+def testing_exception_handler(loop, context):
+    '''
+    Hides the expected ``ConnectionClosedErrors`` and
+    ``ConnectionLostErros`` during tests
+    '''
+    exception = context.get('exception')
+    if exception and isinstance(exception, ConnectionClosedError):
+        pass
+    else:
+        loop.default_exception_handler(context)
 
 
 class MockServer(object):
