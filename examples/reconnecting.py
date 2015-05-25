@@ -84,7 +84,8 @@ def setup_producer(connection):
 def start(loop):
     '''
     Creates a connection, starts the consumer and producer.
-    If it fails to reconnect, it waits 1 second then try again
+    If it fails, it will attempt to reconnect after waiting
+    1 second
     '''
     global CONNECTION
     global CONSUMER
@@ -93,7 +94,8 @@ def start(loop):
         CONNECTION = yield from setup_connection(loop)
         CONSUMER = yield from setup_consumer(CONNECTION)
         PRODUCER = loop.create_task(setup_producer(CONNECTION))
-    except ConnectionError:
+    # Multiple exceptions may be thrown, ConnectionError, OsError
+    except Exception:
         print('failed to connect, trying again.')
         yield from asyncio.sleep(1)
         loop.create_task(start(loop))
@@ -121,7 +123,7 @@ def stop():
         try:
             yield from CONNECTION.close()
         except InvalidStateError:
-            pass  # should be automatically closed, so this is expected
+            pass  # could be automatically closed, so this is expected
         CONNECTION = None
 
 
@@ -131,7 +133,7 @@ def connection_lost_handler(loop, context):
     ConnectionErrors.
 
     The exceptions we can catch follow this inheritance scheme
-        |
+
         - ConnectionError - base
             |
             - asynqp.exceptions.ConnectionClosedError - connection closed properly
