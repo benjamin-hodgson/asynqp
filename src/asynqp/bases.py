@@ -21,4 +21,4 @@ class FrameHandler(object):
         meth(frame)
 
     def handle_ConnectionClosedPoisonPillFrame(self, frame):
-        self.synchroniser.notify_connection_closed()
+        self.synchroniser.killall(ConnectionError)

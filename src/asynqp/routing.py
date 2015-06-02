@@ -59,9 +59,9 @@ class Synchroniser(object):
         fut.set_result(result)
         self._futures.remove_item(fut)
 
-    def notify_connection_closed(self):
+    def killall(self, exc):
         self.connection_closed = True
-        # Give a proper notification to blocking methods
+        # Give a proper notification to methods which are waiting for closure
         for method in self._blocking_methods:
             while True:
                 try:
@@ -72,13 +72,9 @@ class Synchroniser(object):
         # Set an exception for all others
         for method in self._futures.keys():
             if method not in self._blocking_methods:
-                while True:
-                    try:
-                        fut = self._futures.get_leftmost(method)
-                        fut.set_exception(ConnectionError)
-                        self._futures.remove_item(fut)
-                    except StopIteration:
-                        break
+                for fut in self._futures.get_all(method):
+                    fut.set_exception(exc)
+                    self._futures.remove_item(fut)
 
 
 def create_reader_and_writer(handler):
@@ -135,8 +131,11 @@ class OrderedManyToManyMap(object):
     def get_leftmost(self, key):
         return self._items[key].first()
 
+    def get_all(self, key):
+        return list(self._items[key])
+
     def keys(self):
-        return self._items.keys()
+        return (k for k, v in self._items.items() if v)
 
 
 class OrderedSet(collections.MutableSet):
@@ -165,4 +164,4 @@ class OrderedSet(collections.MutableSet):
             pass
 
     def first(self):
-        return next(iter(self._map))
+        return next(iter(self))

@@ -230,6 +230,7 @@ class ChannelFrameHandler(bases.FrameHandler):
 
     def handle_ChannelClose(self, frame):
         self.sender.send_CloseOK()
+        self.synchroniser.killall(ConnectionError)
 
     def handle_ChannelCloseOK(self, frame):
         self.synchroniser.notify(spec.ChannelCloseOK)

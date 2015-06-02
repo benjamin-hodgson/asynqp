@@ -97,13 +97,18 @@ class WhenAnAsyncMethodArrivesWhileWeAwaitASynchronousOne(OpenChannelContext):
 
 class WhenAnUnexpectedChannelCloseArrives(OpenChannelContext):
     def given_we_are_awaiting_QueueDeclareOK(self):
-        self.async_partial(self.channel.declare_queue('my.nice.queue', durable=True, exclusive=True, auto_delete=True))
+        self.task = asyncio.async(self.channel.declare_queue('my.nice.queue', durable=True, exclusive=True, auto_delete=True))
+        self.tick()
 
     def when_ChannelClose_arrives(self):
-        self.server.send_method(self.channel.id, spec.ChannelClose(123, 'i am tired of you', 40, 50))
+        self.server.send_method(self.channel.id, spec.ChannelClose(403, "i just dont like you", 50, 10))
+        self.tick()
 
     def it_should_send_ChannelCloseOK(self):
         self.server.should_have_received_method(self.channel.id, spec.ChannelCloseOK())
+
+    def it_should_throw_an_exception(self):
+        assert self.task.exception() is not None
 
 
 class WhenSettingQOS(OpenChannelContext):
