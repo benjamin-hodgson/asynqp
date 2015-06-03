@@ -1,13 +1,6 @@
 import datetime
 from . import serialisation
 
-
-MAX_OCTET = 0xFF
-MAX_SHORT = 0xFFFF
-MAX_LONG = 0xFFFFFFFF
-MAX_LONG_LONG = 0xFFFFFFFFFFFFFFFF
-
-
 class Bit(object):
     def __init__(self, value):
         if isinstance(value, type(self)):
@@ -33,8 +26,10 @@ class Bit(object):
 
 
 class Octet(int):
+    MIN = 0
+    MAX = (1<<8)-1
     def __new__(cls, value):
-        if not (0 <= value <= MAX_OCTET):
+        if not (Octet.MIN <= value <= Octet.MAX):
             raise TypeError('Could not construct an Octet from value {}'.format(value))
         return super().__new__(cls, value)
 
@@ -47,8 +42,10 @@ class Octet(int):
 
 
 class Short(int):
+    MIN = -(1<<15)
+    MAX = (1<<15)-1
     def __new__(cls, value):
-        if not (0 <= value <= MAX_SHORT):
+        if not (Short.MIN <= value <= Short.MAX):
             raise TypeError('Could not construct a Short from value {}'.format(value))
         return super().__new__(cls, value)
 
@@ -60,9 +57,26 @@ class Short(int):
         return cls(serialisation.read_short(stream))
 
 
-class Long(int):
+class UnsignedShort(int):
+    MIN = 0
+    MAX = (1<<16)-1
     def __new__(cls, value):
-        if not (0 <= value <= MAX_LONG):
+        if not (UnsignedShort.MIN <= value <= UnsignedShort.MAX):
+            raise TypeError('Could not construct an UnsignedShort from value {}'.format(value))
+        return super().__new__(cls, value)
+
+    def write(self, stream):
+        stream.write(serialisation.pack_unsigned_short(self))
+
+    @classmethod
+    def read(cls, stream):
+        return cls(serialisation.read_unsigned_short(stream))
+
+class Long(int):
+    MIN = -(1<<31)
+    MAX = (1<<31)-1
+    def __new__(cls, value):
+        if not (Long.MIN <= value <= Long.MAX):
             raise TypeError('Could not construct a Long from value {}'.format(value))
         return super().__new__(cls, value)
 
@@ -73,10 +87,28 @@ class Long(int):
     def read(cls, stream):
         return cls(serialisation.read_long(stream))
 
+class UnsignedLong(int):
+    MIN = 0
+    MAX = (1<<32)-1
+
+    def __new__(cls, value):
+        if not (UnsignedLong.MIN <= value <= UnsignedLong.MAX):
+            raise TypeError('Could not construct a UnsignedLong from value {}'.format(value))
+        return super().__new__(cls, value)
+
+    def write(self, stream):
+        stream.write(serialisation.pack_unsigned_long(self))
+
+    @classmethod
+    def read(cls, stream):
+        return cls(serialisation.read_unsigned_long(stream))
 
 class LongLong(int):
+    MIN = -(1<<63)
+    MAX = (1<<63)-1
+
     def __new__(cls, value):
-        if not (0 <= value <= MAX_LONG_LONG):
+        if not (LongLong.MIN <= value <= LongLong.MAX):
             raise TypeError('Could not construct a LongLong from value {}'.format(value))
         return super().__new__(cls, value)
 
@@ -87,10 +119,26 @@ class LongLong(int):
     def read(cls, stream):
         return cls(serialisation.read_long_long(stream))
 
+class UnsignedLongLong(int):
+    MIN = 0
+    MAX = (1<<64)-1
+
+    def __new__(cls, value):
+        if not (UnsignedLongLong.MIN <= value <= UnsignedLongLong.MAX):
+            raise TypeError('Could not construct a UnsignedLongLong from value {}'.format(value))
+        return super().__new__(cls, value)
+
+    def write(self, stream):
+        stream.write(serialisation.pack_unsigned_long_long(self))
+
+    @classmethod
+    def read(cls, stream):
+        return cls(serialisation.read_unsigned_long_long(stream))
+
 
 class ShortStr(str):
     def __new__(cls, value):
-        if len(value) > MAX_OCTET:
+        if len(value) > Octet.MAX:
             raise TypeError('Could not construct a ShortStr from value {}'.format(value))
         return super().__new__(cls, value)
 
@@ -107,7 +155,7 @@ class ShortStr(str):
 
 class LongStr(str):
     def __new__(cls, value):
-        if len(value) > MAX_LONG:
+        if len(value) > UnsignedLong.MAX:
             raise TypeError('Could not construct a LongStr from value {}'.format(value))
         return super().__new__(cls, value)
 
@@ -154,8 +202,11 @@ FIELD_TYPES = {
     'bit': Bit,
     'octet': Octet,
     'short': Short,
+    'unsignedshort': UnsignedShort,
     'long': Long,
+    'unsignedlong': UnsignedLong,
     'longlong': LongLong,
+    'unsignedlonglong': UnsignedLongLong,
     'table': Table,
     'longstr': LongStr,
     'shortstr': ShortStr,
