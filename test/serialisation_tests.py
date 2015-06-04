@@ -18,6 +18,24 @@ class WhenParsingATable:
         assert self.result == expected
 
 
+class WhenPackingAndUnpackingATable:
+    @classmethod
+    def examples_of_tables(cls):
+        for encoded, table in WhenParsingATable.examples_of_tables():
+            yield table
+        yield {'a': (1 << 16), 'b': (1 << 15)}
+        yield {'c': 65535, 'd': -65535}
+        yield {'e': -65536}
+        yield {'f': -(1 << 63), 'g': ((1 << 64) - 1)}
+        yield {'f': (1 << 32), 'g': (1 << 63)}
+
+    def because_we_pack_and_unpack_the_table(self, table):
+        self.result = serialisation.read_table(BytesIO(serialisation.pack_table(table)))
+
+    def it_should_return_the_table(self, table):
+        assert self.result == table
+
+
 class WhenParsingABadTable:
     @classmethod
     def examples_of_bad_tables(self):

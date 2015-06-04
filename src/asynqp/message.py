@@ -180,9 +180,9 @@ class ContentHeaderPayload(object):
                 and self.properties == other.properties)
 
     def write(self, stream):
-        stream.write(serialisation.pack_short(self.class_id))
-        stream.write(serialisation.pack_short(0))  # weight
-        stream.write(serialisation.pack_long_long(self.body_length))
+        stream.write(serialisation.pack_unsigned_short(self.class_id))
+        stream.write(serialisation.pack_unsigned_short(0))  # weight
+        stream.write(serialisation.pack_unsigned_long_long(self.body_length))
 
         bytesio = BytesIO()
 
@@ -195,17 +195,17 @@ class ContentHeaderPayload(object):
                 val.write(bytesio)
             bitshift -= 1
 
-        stream.write(serialisation.pack_short(property_flags))
+        stream.write(serialisation.pack_unsigned_short(property_flags))
         stream.write(bytesio.getvalue())
 
     @classmethod
     def read(cls, raw):
         bytesio = BytesIO(raw)
-        class_id = serialisation.read_short(bytesio)
-        weight = serialisation.read_short(bytesio)
+        class_id = serialisation.read_unsigned_short(bytesio)
+        weight = serialisation.read_unsigned_short(bytesio)
         assert weight == 0
-        body_length = serialisation.read_long_long(bytesio)
-        property_flags_short = serialisation.read_short(bytesio)
+        body_length = serialisation.read_unsigned_long_long(bytesio)
+        property_flags_short = serialisation.read_unsigned_short(bytesio)
 
         properties = []
         for amqptype, flag in zip(Message.property_types.values(), bin(property_flags_short)[2:]):
