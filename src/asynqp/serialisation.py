@@ -27,21 +27,26 @@ def read_octet(stream):
 def read_short(stream):
     return _read_short(stream)[0]
 
+
 @rethrow_as(struct.error, AMQPError('failed to read an unsigned short'))
 def read_unsigned_short(stream):
     return _read_unsigned_short(stream)[0]
+
 
 @rethrow_as(struct.error, AMQPError('failed to read a long'))
 def read_long(stream):
     return _read_long(stream)[0]
 
+
 @rethrow_as(struct.error, AMQPError('failed to read an unsigned long'))
 def read_unsigned_long(stream):
     return _read_unsigned_long(stream)[0]
 
+
 @rethrow_as(struct.error, AMQPError('failed to read a long long'))
 def read_long_long(stream):
     return _read_long_long(stream)[0]
+
 
 @rethrow_as(struct.error, AMQPError('failed to read an unsigned long long'))
 def read_unsigned_long_long(stream):
@@ -140,6 +145,7 @@ def _read_short(stream):
     x, = struct.unpack('!h', stream.read(2))
     return x, 2
 
+
 def _read_unsigned_short(stream):
     x, = struct.unpack('!H', stream.read(2))
     return x, 2
@@ -148,6 +154,7 @@ def _read_unsigned_short(stream):
 def _read_long(stream):
     x, = struct.unpack('!l', stream.read(4))
     return x, 4
+
 
 def _read_unsigned_long(stream):
     x, = struct.unpack('!L', stream.read(4))
@@ -224,14 +231,18 @@ def pack_table(d):
 def pack_octet(number):
     return struct.pack('!B', number)
 
+
 def pack_short(number):
     return struct.pack('!h', number)
+
 
 def pack_unsigned_short(number):
     return struct.pack('!H', number)
 
+
 def pack_long(number):
     return struct.pack('!l', number)
+
 
 def pack_unsigned_long(number):
     return struct.pack('!L', number)
@@ -240,12 +251,14 @@ def pack_unsigned_long(number):
 def pack_long_long(number):
     return struct.pack('!q', number)
 
+
 def pack_unsigned_long_long(number):
     return struct.pack('!Q', number)
 
 
 def pack_bool(b):
     return struct.pack('!?', b)
+
 
 def pack_bools(*bs):
     tot = 0

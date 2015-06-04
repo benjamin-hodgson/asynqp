@@ -1,6 +1,7 @@
 import datetime
 from . import serialisation
 
+
 class Bit(object):
     def __init__(self, value):
         if isinstance(value, type(self)):
@@ -27,7 +28,8 @@ class Bit(object):
 
 class Octet(int):
     MIN = 0
-    MAX = (1<<8)-1
+    MAX = (1 << 8) - 1
+
     def __new__(cls, value):
         if not (Octet.MIN <= value <= Octet.MAX):
             raise TypeError('Could not construct an Octet from value {}'.format(value))
@@ -42,8 +44,9 @@ class Octet(int):
 
 
 class Short(int):
-    MIN = -(1<<15)
-    MAX = (1<<15)-1
+    MIN = -(1 << 15)
+    MAX = (1 << 15) - 1
+
     def __new__(cls, value):
         if not (Short.MIN <= value <= Short.MAX):
             raise TypeError('Could not construct a Short from value {}'.format(value))
@@ -59,7 +62,8 @@ class Short(int):
 
 class UnsignedShort(int):
     MIN = 0
-    MAX = (1<<16)-1
+    MAX = (1 << 16) - 1
+
     def __new__(cls, value):
         if not (UnsignedShort.MIN <= value <= UnsignedShort.MAX):
             raise TypeError('Could not construct an UnsignedShort from value {}'.format(value))
@@ -72,9 +76,11 @@ class UnsignedShort(int):
     def read(cls, stream):
         return cls(serialisation.read_unsigned_short(stream))
 
+
 class Long(int):
-    MIN = -(1<<31)
-    MAX = (1<<31)-1
+    MIN = -(1 << 31)
+    MAX = (1 << 31) - 1
+
     def __new__(cls, value):
         if not (Long.MIN <= value <= Long.MAX):
             raise TypeError('Could not construct a Long from value {}'.format(value))
@@ -87,9 +93,10 @@ class Long(int):
     def read(cls, stream):
         return cls(serialisation.read_long(stream))
 
+
 class UnsignedLong(int):
     MIN = 0
-    MAX = (1<<32)-1
+    MAX = (1 << 32) - 1
 
     def __new__(cls, value):
         if not (UnsignedLong.MIN <= value <= UnsignedLong.MAX):
@@ -103,9 +110,10 @@ class UnsignedLong(int):
     def read(cls, stream):
         return cls(serialisation.read_unsigned_long(stream))
 
+
 class LongLong(int):
-    MIN = -(1<<63)
-    MAX = (1<<63)-1
+    MIN = -(1 << 63)
+    MAX = (1 << 63) - 1
 
     def __new__(cls, value):
         if not (LongLong.MIN <= value <= LongLong.MAX):
@@ -119,9 +127,10 @@ class LongLong(int):
     def read(cls, stream):
         return cls(serialisation.read_long_long(stream))
 
+
 class UnsignedLongLong(int):
     MIN = 0
-    MAX = (1<<64)-1
+    MAX = (1 << 64) - 1
 
     def __new__(cls, value):
         if not (UnsignedLongLong.MIN <= value <= UnsignedLongLong.MAX):
