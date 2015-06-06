@@ -92,7 +92,6 @@ def read_bools(byte, number_of_bools):
 def read_timestamp(stream):
     return _read_timestamp(stream)[0]
 
-
 def qpid_rabbit_mq_table():
     # TODO: fix amqp 0.9.1 compatibility
     # TODO: Add missing types
