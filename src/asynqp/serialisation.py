@@ -99,7 +99,7 @@ def _read_table(stream):
     consumed = 0
     table = {}
 
-    table_length, initial_long_size = _read_long(stream)
+    table_length, initial_long_size = _read_unsigned_long(stream)
     consumed += initial_long_size
 
     while consumed < table_length + initial_long_size:
@@ -224,7 +224,7 @@ def pack_table(d):
         else:
             raise NotImplementedError()
 
-    val = pack_long(len(bytes)) + bytes
+    val = pack_unsigned_long(len(bytes)) + bytes
     return val
 
 
