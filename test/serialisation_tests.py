@@ -1,5 +1,6 @@
 from io import BytesIO
 import contexts
+import datetime
 from asynqp import serialisation, AMQPError
 
 
@@ -28,13 +29,13 @@ class WhenPackingAndUnpackingATable:
         yield {'e': -65536}
         yield {'f': -(1 << 63), 'g': ((1 << 64) - 1)}
         yield {'f': (1 << 32), 'g': (1 << 63)}
+        yield {'t': datetime.datetime(2038, 1, 1, 3, 14, 9, 123000) }
 
     def because_we_pack_and_unpack_the_table(self, table):
         self.result = serialisation.read_table(BytesIO(serialisation.pack_table(table)))
 
     def it_should_return_the_table(self, table):
         assert self.result == table
-
 
 class WhenParsingABadTable:
     @classmethod
@@ -78,4 +79,28 @@ class WhenPackingBools:
         self.result = serialisation.pack_bools(*bools)
 
     def it_should_pack_them_correctly(self, bools, expected):
+        assert self.result == expected
+
+class WhenParsingATimeStamp:
+    @classmethod
+    def examples_of_time_stamps(cls):
+        yield b'\x00\x00\x01\xf3\xa3\x16\x9d\xe3', datetime.datetime(2038, 1, 1, 3, 14, 9, 123000)
+
+    def because_we_read_a_time_stamp(self, binary, _):
+        self.result = serialisation.read_time_stamp(BytesIO(binary))
+
+    def it_should_reat_it_correctly(self, _, expected):
+        assert self.result == expected
+
+class WhenWritingATimeStamp:
+    @classmethod
+    def examples_of_time_stamps(cls):
+        for encoded, timeval in WhenParsingATimeStamp.examples_of_time_stamps():
+            yield timeval, encoded
+
+    def because_I_pack_them(self, timeval, _):
+        print(repr(timeval))
+        self.result = serialisation.pack_time_stamp(timeval)
+
+    def it_should_pack_them_correctly(self, _, expected):
         assert self.result == expected
