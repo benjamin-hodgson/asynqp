@@ -91,7 +91,7 @@ class WhenParsingATimeStamp:
     def because_we_read_a_time_stamp(self, binary, _):
         self.result = serialisation.read_time_stamp(BytesIO(binary))
 
-    def it_should_reat_it_correctly(self, _, expected):
+    def it_should_read_it_correctly(self, _, expected):
         assert self.result == expected
 
 
