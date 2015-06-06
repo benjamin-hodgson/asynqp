@@ -29,13 +29,14 @@ class WhenPackingAndUnpackingATable:
         yield {'e': -65536}
         yield {'f': -(1 << 63), 'g': ((1 << 64) - 1)}
         yield {'f': (1 << 32), 'g': (1 << 63)}
-        yield {'t': datetime.datetime(2038, 1, 1, 3, 14, 9, 123000) }
+        yield {'t': datetime.datetime(2038, 1, 1, 3, 14, 9, 123000)}
 
     def because_we_pack_and_unpack_the_table(self, table):
         self.result = serialisation.read_table(BytesIO(serialisation.pack_table(table)))
 
     def it_should_return_the_table(self, table):
         assert self.result == table
+
 
 class WhenParsingABadTable:
     @classmethod
@@ -81,6 +82,7 @@ class WhenPackingBools:
     def it_should_pack_them_correctly(self, bools, expected):
         assert self.result == expected
 
+
 class WhenParsingATimeStamp:
     @classmethod
     def examples_of_time_stamps(cls):
@@ -91,6 +93,7 @@ class WhenParsingATimeStamp:
 
     def it_should_reat_it_correctly(self, _, expected):
         assert self.result == expected
+
 
 class WhenWritingATimeStamp:
     @classmethod
