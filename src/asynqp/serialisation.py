@@ -1,6 +1,6 @@
 import struct
 from .exceptions import AMQPError
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def rethrow_as(expected_cls, to_throw):
@@ -180,7 +180,8 @@ def _read_unsigned_long_long(stream):
 
 def _read_time_stamp(stream):
     x, = struct.unpack('!Q', stream.read(8))
-    return datetime.fromtimestamp(x * 1e-3), 8
+    # From datetime.fromutctimestamp converts it to a local timestamp without timezone information
+    return datetime.fromtimestamp(x * 1e-3, timezone.utc), 8
 
 
 ###########################################################
