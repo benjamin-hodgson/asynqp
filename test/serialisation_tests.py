@@ -82,9 +82,9 @@ class WhenPackingBools:
         assert self.result == expected
 
 
-class WhenParsingATimeStamp:
+class WhenParsingATimestamp:
     @classmethod
-    def examples_of_time_stamps(cls):
+    def examples_of_timestamps(cls):
         # The timestamp should be zero relative to epoch
         yield b'\x00\x00\x00\x00\x00\x00\x00\x00', datetime(1970, 1, 1, tzinfo=timezone.utc)
         # And independent of the timezone
@@ -94,36 +94,36 @@ class WhenParsingATimeStamp:
         # Cannot validate, that it is unsigned, as it is
         # yield b'\x80\x00\x00\x00\x00\x00\x00\x00', datetime(1970, 1, 1, microsecond=1000, tzinfo=timezone.utc)
 
-    def because_we_read_a_time_stamp(self, binary, _):
-        self.result = serialisation.read_time_stamp(BytesIO(binary))
+    def because_we_read_a_timestamp(self, binary, _):
+        self.result = serialisation.read_timestamp(BytesIO(binary))
 
     def it_should_read_it_correctly(self, _, expected):
         assert self.result == expected
 
 
-class WhenWritingATimeStamp:
+class WhenWritingATimestamp:
     @classmethod
-    def examples_of_time_stamps(cls):
-        for encoded, timeval in WhenParsingATimeStamp.examples_of_time_stamps():
+    def examples_of_timestamps(cls):
+        for encoded, timeval in WhenParsingATimestamp.examples_of_timestamps():
             yield timeval, encoded
 
     def because_I_pack_them(self, timeval, _):
-        self.result = serialisation.pack_time_stamp(timeval)
+        self.result = serialisation.pack_timestamp(timeval)
 
     def it_should_pack_them_correctly(self, _, expected):
         assert self.result == expected
 
 
-class WhenPackingAndUnpackingATimeStamp:
+class WhenPackingAndUnpackingATimestamp:
     # Ensure, we do not add some offset by the serialisation process
     @classmethod
-    def examples_of_time_stamps(cls):
+    def examples_of_timestamps(cls):
         yield datetime(1970, 1, 1, tzinfo=timezone.utc)
         yield datetime(1979, 1, 1, tzinfo=timezone(timedelta(hours=1, minutes=30)))
 
     def because_I_pack_them(self, timeval):
-        packed = serialisation.pack_time_stamp(timeval)
-        unpacked = serialisation.read_time_stamp(BytesIO(packed))
+        packed = serialisation.pack_timestamp(timeval)
+        unpacked = serialisation.read_timestamp(BytesIO(packed))
         self.result = unpacked - timeval
 
     def it_should_pack_them_correctly(self, timeval):
