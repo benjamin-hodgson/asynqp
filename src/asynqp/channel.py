@@ -37,7 +37,7 @@ class Channel(object):
         self.reader = reader
 
     @asyncio.coroutine
-    def declare_exchange(self, name, type, *, durable=True, auto_delete=False, internal=False):
+    def declare_exchange(self, name, type, *, durable=True, auto_delete=False, internal=False, arguments=None):
         """
         Declare an :class:`Exchange` on the broker. If the exchange does not exist, it will be created.
 
@@ -59,14 +59,14 @@ class Channel(object):
                              "Valid names consist of letters, digits, hyphen, underscore, period, or colon, "
                              "and do not begin with 'amq.'")
 
-        self.sender.send_ExchangeDeclare(name, type, durable, auto_delete, internal)
+        self.sender.send_ExchangeDeclare(name, type, durable, auto_delete, internal, arguments or {})
         yield from self.synchroniser.await(spec.ExchangeDeclareOK)
         ex = exchange.Exchange(self.reader, self.synchroniser, self.sender, name, type, durable, auto_delete, internal)
         self.reader.ready()
         return ex
 
     @asyncio.coroutine
-    def declare_queue(self, name='', *, durable=True, exclusive=False, auto_delete=False):
+    def declare_queue(self, name=None, *, durable=True, exclusive=False, auto_delete=False, arguments=None):
         """
         Declare a queue on the broker. If the queue does not exist, it will be created.
 
@@ -85,7 +85,7 @@ class Channel(object):
 
         :return: The new :class:`Queue` object.
         """
-        q = yield from self.queue_factory.declare(name, durable, exclusive, auto_delete)
+        q = yield from self.queue_factory.declare(name or '', durable, exclusive, auto_delete, arguments or {})
         return q
 
     @asyncio.coroutine
@@ -331,20 +331,20 @@ class ChannelMethodSender(bases.Sender):
     def send_ChannelOpen(self):
         self.send_method(spec.ChannelOpen(''))
 
-    def send_ExchangeDeclare(self, name, type, durable, auto_delete, internal):
-        self.send_method(spec.ExchangeDeclare(0, name, type, False, durable, auto_delete, internal, False, {}))
+    def send_ExchangeDeclare(self, name, type, durable, auto_delete, internal, arguments):
+        self.send_method(spec.ExchangeDeclare(0, name, type, False, durable, auto_delete, internal, False, arguments))
 
     def send_ExchangeDelete(self, name, if_unused):
         self.send_method(spec.ExchangeDelete(0, name, if_unused, False))
 
-    def send_QueueDeclare(self, name, durable, exclusive, auto_delete):
-        self.send_method(spec.QueueDeclare(0, name, False, durable, exclusive, auto_delete, False, {}))
+    def send_QueueDeclare(self, name, durable, exclusive, auto_delete, arguments):
+        self.send_method(spec.QueueDeclare(0, name, False, durable, exclusive, auto_delete, False, arguments))
 
-    def send_QueueBind(self, queue_name, exchange_name, routing_key):
-        self.send_method(spec.QueueBind(0, queue_name, exchange_name, routing_key, False, {}))
+    def send_QueueBind(self, queue_name, exchange_name, routing_key, arguments):
+        self.send_method(spec.QueueBind(0, queue_name, exchange_name, routing_key, False, arguments))
 
-    def send_QueueUnbind(self, queue_name, exchange_name, routing_key):
-        self.send_method(spec.QueueUnbind(0, queue_name, exchange_name, routing_key, {}))
+    def send_QueueUnbind(self, queue_name, exchange_name, routing_key, arguments):
+        self.send_method(spec.QueueUnbind(0, queue_name, exchange_name, routing_key, arguments))
 
     def send_QueuePurge(self, queue_name):
         self.send_method(spec.QueuePurge(0, queue_name, False))
@@ -356,8 +356,8 @@ class ChannelMethodSender(bases.Sender):
         self.send_method(spec.BasicPublish(0, exchange_name, routing_key, mandatory, False))
         self.send_content(message)
 
-    def send_BasicConsume(self, queue_name, no_local, no_ack, exclusive):
-        self.send_method(spec.BasicConsume(0, queue_name, '', no_local, no_ack, exclusive, False, {}))
+    def send_BasicConsume(self, queue_name, no_local, no_ack, exclusive, arguments):
+        self.send_method(spec.BasicConsume(0, queue_name, '', no_local, no_ack, exclusive, False, arguments))
 
     def send_BasicCancel(self, consumer_tag):
         self.send_method(spec.BasicCancel(consumer_tag, False))

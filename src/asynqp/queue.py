@@ -46,7 +46,7 @@ class Queue(object):
         self.deleted = False
 
     @asyncio.coroutine
-    def bind(self, exchange, routing_key):
+    def bind(self, exchange, routing_key, arguments=None):
         """
         Bind a queue to an exchange, with the supplied routing key.
 
@@ -63,14 +63,14 @@ class Queue(object):
         if self.deleted:
             raise Deleted("Queue {} was deleted".format(self.name))
 
-        self.sender.send_QueueBind(self.name, exchange.name, routing_key)
+        self.sender.send_QueueBind(self.name, exchange.name, routing_key, arguments or {})
         yield from self.synchroniser.await(spec.QueueBindOK)
         b = QueueBinding(self.reader, self.sender, self.synchroniser, self, exchange, routing_key)
         self.reader.ready()
         return b
 
     @asyncio.coroutine
-    def consume(self, callback, *, no_local=False, no_ack=False, exclusive=False):
+    def consume(self, callback, *, no_local=False, no_ack=False, exclusive=False, arguments=None):
         """
         Start a consumer on the queue. Messages will be delivered asynchronously to the consumer.
         The callback function will be called whenever a new message arrives on the queue.
@@ -89,7 +89,7 @@ class Queue(object):
         if self.deleted:
             raise Deleted("Queue {} was deleted".format(self.name))
 
-        self.sender.send_BasicConsume(self.name, no_local, no_ack, exclusive)
+        self.sender.send_BasicConsume(self.name, no_local, no_ack, exclusive, arguments or {})
         tag = yield from self.synchroniser.await(spec.BasicConsumeOK)
         consumer = Consumer(tag, callback, self.sender, self.synchroniser, self.reader)
         self.consumers.add_consumer(consumer)
@@ -188,7 +188,7 @@ class QueueBinding(object):
         self.deleted = False
 
     @asyncio.coroutine
-    def unbind(self):
+    def unbind(self, arguments=None):
         """
         Unbind the queue from the exchange.
 
@@ -197,7 +197,7 @@ class QueueBinding(object):
         if self.deleted:
             raise Deleted("Queue {} was already unbound from exchange {}".format(self.queue.name, self.exchange.name))
 
-        self.sender.send_QueueUnbind(self.queue.name, self.exchange.name, self.routing_key)
+        self.sender.send_QueueUnbind(self.queue.name, self.exchange.name, self.routing_key, arguments or {})
         yield from self.synchroniser.await(spec.QueueUnbindOK)
         self.deleted = True
         self.reader.ready()
@@ -254,13 +254,13 @@ class QueueFactory(object):
         self.consumers = consumers
 
     @asyncio.coroutine
-    def declare(self, name, durable, exclusive, auto_delete):
+    def declare(self, name, durable, exclusive, auto_delete, arguments=None):
         if not VALID_QUEUE_NAME_RE.match(name):
             raise ValueError("Not a valid queue name.\n"
                              "Valid names consist of letters, digits, hyphen, underscore, period, or colon, "
                              "and do not begin with 'amq.'")
 
-        self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete)
+        self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete, arguments or {})
         name = yield from self.synchroniser.await(spec.QueueDeclareOK)
         q = Queue(self.reader, self.consumers, self.synchroniser, self.sender, name, durable, exclusive, auto_delete)
         self.reader.ready()
