@@ -36,6 +36,20 @@ class WhenPackingAndUnpackingATable:
         assert self.result == table
 
 
+class WhenParsingAHugeTable:
+    @classmethod
+    def examples_of_huge_tables(self):
+        # That would be -1 for an signed int
+        yield b"\xFF\xFF\xFF\xFF\xFF"
+
+    def because_we_read_the_table(self, bytes):
+        # We expect the serialisation to read over the bounds, but only if it is unsigned
+        self.exception = contexts.catch(serialisation.read_table, BytesIO(bytes))
+
+    def it_should_throw_an_AMQPError(self):
+        assert isinstance(self.exception, AMQPError)
+
+
 class WhenParsingABadTable:
     @classmethod
     def examples_of_bad_tables(self):
