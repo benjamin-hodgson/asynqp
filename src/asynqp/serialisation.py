@@ -70,6 +70,12 @@ def read_table(stream):
     return _read_table(stream)[0]
 
 
+@rethrow_as(KeyError, AMQPError('failed to read an array'))
+@rethrow_as(struct.error, AMQPError('failed to read an array'))
+def read_array(stream):
+    return _read_array(stream)[0]
+
+
 @rethrow_as(struct.error, AMQPError('failed to read a boolean'))
 def read_bool(stream):
     return _read_bool(stream)[0]
@@ -87,27 +93,31 @@ def read_timestamp(stream):
     return _read_timestamp(stream)[0]
 
 
-def _read_table(stream):
-    # TODO: more value types
+def qpid_rabbit_mq_table():
+    # TODO: fix amqp 0.9.1 compatibility
+    # TODO: Add missing types
     TABLE_VALUE_PARSERS = {
         b't': _read_bool,
-        b's': _read_short_string,
-        b'S': _read_long_string,
-        b'F': _read_table,
-        b'u': _read_unsigned_short,
-        b'U': _read_short,
-        b'i': _read_unsigned_long,
+        b'b': _read_signed_byte,
+        b's': _read_short,
         b'I': _read_long,
-        b'l': _read_unsigned_long_long,
-        b'L': _read_long_long,
+        b'l': _read_long_long,
+        b'S': _read_long_string,
+        b'A': _read_array,
+        b'V': _read_void,
+        b'x': _read_byte_array,
+        b'F': _read_table,
         b'T': _read_timestamp
     }
+    return TABLE_VALUE_PARSERS
 
-    consumed = 0
+
+def _read_table(stream):
+    TABLE_VALUE_PARSERS = qpid_rabbit_mq_table()
     table = {}
 
     table_length, initial_long_size = _read_unsigned_long(stream)
-    consumed += initial_long_size
+    consumed = initial_long_size
 
     while consumed < table_length + initial_long_size:
         key, x = _read_short_string(stream)
@@ -132,14 +142,19 @@ def _read_short_string(stream):
 
 def _read_long_string(stream):
     str_length, x = _read_unsigned_long(stream)
-    bytestring = stream.read(str_length)
-    if len(bytestring) != str_length:
+    buffer = stream.read(str_length)
+    if len(buffer) != str_length:
         raise AMQPError("Long string had incorrect length")
-    return bytestring.decode('utf-8'), x + str_length
+    return buffer.decode('utf-8'), x + str_length
 
 
 def _read_octet(stream):
     x, = struct.unpack('!B', stream.read(1))
+    return x, 1
+
+
+def _read_signed_byte(stream):
+    x, = struct.unpack_from('!b', stream.read(1))
     return x, 1
 
 
@@ -184,67 +199,101 @@ def _read_timestamp(stream):
     return datetime.fromtimestamp(x * 1e-3, timezone.utc), 8
 
 
+def _read_array(stream):
+    TABLE_VALUE_PARSERS = qpid_rabbit_mq_table()
+    field_array = []
+
+    # The standard says only long, but unsigned long seems sensible
+    array_length, initial_long_size = _read_unsigned_long(stream)
+    consumed = initial_long_size
+
+    while consumed < array_length + initial_long_size:
+        value_type_code = stream.read(1)
+        consumed += 1
+        value, x = TABLE_VALUE_PARSERS[value_type_code](stream)
+        consumed += x
+        field_array.append(value)
+
+    return field_array, consumed
+
+
+def _read_void(stream):
+    return None, 0
+
+
+def _read_byte_array(stream):
+    byte_array_length, x = _read_unsigned_long(stream)
+    return stream.read(byte_array_length), byte_array_length + x
+
+
 ###########################################################
 #  Serialisation
 ###########################################################
 
 def pack_short_string(string):
-    bytes = string.encode('utf-8')
-    return pack_octet(len(bytes)) + bytes
+    buffer = string.encode('utf-8')
+    return pack_octet(len(buffer)) + buffer
 
 
 def pack_long_string(string):
-    bytes = string.encode('utf-8')
-    return pack_long(len(bytes)) + bytes
+    buffer = string.encode('utf-8')
+    return pack_unsigned_long(len(buffer)) + buffer
+
+
+def pack_field_value(value):
+    buffer = b''
+    if isinstance(value, bool):
+        buffer += b't'
+        buffer += pack_bool(value)
+    elif isinstance(value, dict):
+        buffer += b'F'
+        buffer += pack_table(value)
+    elif isinstance(value, list):
+        buffer += b'A'
+        buffer += pack_array(value)
+    elif isinstance(value, bytes):
+        buffer += b'x'
+        buffer += pack_byte_array(value)
+    elif isinstance(value, str):
+        buffer += b'S'
+        buffer += pack_long_string(value)
+    elif isinstance(value, datetime):
+        buffer += b'T'
+        buffer += pack_timestamp(value)
+    elif isinstance(value, int):
+        if value.bit_length() < 8:
+            buffer += b'b'
+            buffer += pack_signed_byte(value)
+        elif value.bit_length() < 32:
+            buffer += b'I'
+            buffer += pack_long(value)
+        else:
+            raise NotImplementedError()
+    else:
+        raise NotImplementedError()
+
+    return buffer
 
 
 def pack_table(d):
-    bytes = b''
+    buffer = b''
     for key, value in d.items():
-        bytes += pack_short_string(key)
+        buffer += pack_short_string(key)
         # todo: more values
-        if isinstance(value, dict):
-            bytes += b'F'
-            bytes += pack_table(value)
-        elif isinstance(value, str):
-            bytes += b'S'
-            bytes += pack_long_string(value)
-        elif isinstance(value, datetime):
-            bytes += b'T'
-            bytes += pack_timestamp(value)
-        elif isinstance(value, int):
-            if value < 0:
-                if value.bit_length() < 16:
-                    bytes += b'U'
-                    bytes += pack_short(value)
-                elif value.bit_length() < 32:
-                    bytes += b'I'
-                    bytes += pack_long(value)
-                else:
-                    bytes += b'L'
-                    bytes += pack_long_long(value)
-            else:
-                if value.bit_length() <= 16:
-                    bytes += b'u'
-                    bytes += pack_unsigned_short(value)
-                elif value.bit_length() <= 32:
-                    bytes += b'i'
-                    bytes += pack_unsigned_long(value)
-                else:
-                    bytes += b'l'
-                    bytes += pack_unsigned_long_long(value)
+        buffer += pack_field_value(value)
 
-        elif isinstance(value, bool):
-            bytes += b't'
-            bytes += pack_bool(value)
-        else:
-            raise NotImplementedError()
-
-    val = pack_unsigned_long(len(bytes)) + bytes
-    return val
+    return pack_unsigned_long(len(buffer)) + buffer
 
 
 def pack_octet(number):
+    return struct.pack('!B', number)
+
+
+def pack_signed_byte(number):
+    return struct.pack('!b', number)
+
+
+def pack_unsigned_byte(number):
     return struct.pack('!B', number)
 
 
@@ -279,6 +328,20 @@ def pack_bool(b):
 def pack_timestamp(timeval):
     number = int(timeval.timestamp() * 1e3)
     return struct.pack('!Q', number)
+
+
+def pack_byte_array(value):
+    buffer = pack_unsigned_long(len(value))
+    buffer += value
+    return buffer
+
+
+def pack_array(items):
+    buffer = b''
+    for value in items:
+        buffer += pack_field_value(value)
+
+    return pack_unsigned_long(len(buffer)) + buffer
 
 
 def pack_bools(*bs):

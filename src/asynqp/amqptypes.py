@@ -196,7 +196,7 @@ class Timestamp(datetime.datetime):
         raise TypeError("Could not construct a timestamp from value {}".format(value))
 
     def __eq__(self, other):
-        return abs(self - other) < datetime.timedelta(seconds=1)
+        return abs(self - other) < datetime.timedelta(milliseconds=1)
 
     def write(self, stream):
         stamp = int(self.timestamp())

@@ -7,8 +7,15 @@ from asynqp import serialisation, AMQPError
 class WhenParsingATable:
     @classmethod
     def examples_of_tables(self):
+        yield b"\x00\x00\x00\x00", {}
         yield b"\x00\x00\x00\x0E\x04key1t\x00\x04key2t\x01", {'key1': False, 'key2': True}
-        yield b"\x00\x00\x00\x0B\x03keys\x05hello", {'key': 'hello'}
+        yield b"\x00\x00\x00\x06\x03keyb\xff", {'key': -1}
+        yield b"\x00\x00\x00\x07\x03keys\xff\xff", {'key': -1}
+        yield b"\x00\x00\x00\x09\x03keyI\xff\xff\xff\xff", {'key': -1}
+        yield b"\x00\x00\x00\x0C\x03keyl\xff\xff\xff\xff\xff\xff\xff\xff", {'key': -1}
+        yield b"\x00\x00\x00\x05\x03keyV", {'key': None}
+        yield b"\x00\x00\x00\x05\x03keyA\x00\x00\x00\x00", {'key': []}
+        yield b"\x00\x00\x00\x0C\x03keyx\x00\x00\x00\x04\x00\x01\x02\x03", {'key': b"\x00\x01\x02\x03"}
         yield b"\x00\x00\x00\x0E\x03keyS\x00\x00\x00\x05hello", {'key': 'hello'}
         yield b"\x00\x00\x00\x16\x03keyF\x00\x00\x00\x0D\x0Aanotherkeyt\x00", {'key': {'anotherkey': False}}
 
@@ -22,13 +29,12 @@ class WhenParsingATable:
 class WhenPackingAndUnpackingATable:
     @classmethod
     def examples_of_tables(cls):
-        for encoded, table in WhenParsingATable.examples_of_tables():
-            yield table
         yield {'a': (1 << 16), 'b': (1 << 15)}
         yield {'c': 65535, 'd': -65535}
         yield {'e': -65536}
-        yield {'f': -(1 << 63), 'g': ((1 << 64) - 1)}
-        yield {'f': (1 << 32), 'g': (1 << 63)}
+        yield {'f': -0x7FFFFFFF, 'g': 0x7FFFFFFF}
+        yield {'x': b"\x01\x02"}
+        yield {'x': []}
 
     def because_we_pack_and_unpack_the_table(self, table):
         self.result = serialisation.read_table(BytesIO(serialisation.pack_table(table)))
@@ -62,6 +68,28 @@ class WhenParsingABadTable:
 
     def it_should_throw_an_AMQPError(self):
         assert isinstance(self.exception, AMQPError)
+
+
+class WhenParsingAnArray:
+    @classmethod
+    def examples_of_arrays(self):
+        yield b"\x00\x00\x00\x00", []
+        yield b"\x00\x00\x00\x04t\x00t\x01", [False, True]
+        yield b"\x00\x00\x00\x02b\xff", [-1]
+        yield b"\x00\x00\x00\x03s\xff\xff", [-1]
+        yield b"\x00\x00\x00\x05I\xff\xff\xff\xff", [-1]
+        yield b"\x00\x00\x00\x09l\xff\xff\xff\xff\xff\xff\xff\xff", [-1]
+        yield b"\x00\x00\x00\x01V", [None]
+        yield b"\x00\x00\x00\x05A\x00\x00\x00\x00", [[]]
+        yield b"\x00\x00\x00\x09x\x00\x00\x00\x04\x00\x01\x02\x03", [b"\x00\x01\x02\x03"]
+        yield b"\x00\x00\x00\x0AS\x00\x00\x00\x05hello", ['hello']
+        yield b"\x00\x00\x00\x12F\x00\x00\x00\x0D\x0Aanotherkeyt\x00", [{'anotherkey': False}]
+
+    def because_we_read_the_array(self, buffer, expected):
+        self.result = serialisation.read_array(BytesIO(buffer))
+
+    def it_should_return_the_array(self, buffer, expected):
+        assert self.result == expected
 
 
 class WhenParsingALongString:
