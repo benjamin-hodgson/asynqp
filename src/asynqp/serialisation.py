@@ -1,5 +1,6 @@
 import struct
 from .exceptions import AMQPError
+from datetime import datetime, timezone
 
 
 def rethrow_as(expected_cls, to_throw):
@@ -81,6 +82,11 @@ def read_bools(byte, number_of_bools):
     return (b == "1" for b in reversed(bits))
 
 
+@rethrow_as(struct.error, AMQPError('failed to read a boolean'))
+def read_timestamp(stream):
+    return _read_timestamp(stream)[0]
+
+
 def _read_table(stream):
     # TODO: more value types
     TABLE_VALUE_PARSERS = {
@@ -94,6 +100,7 @@ def _read_table(stream):
         b'I': _read_long,
         b'l': _read_unsigned_long_long,
         b'L': _read_long_long,
+        b'T': _read_timestamp
     }
 
     consumed = 0
@@ -171,6 +178,12 @@ def _read_unsigned_long_long(stream):
     return x, 8
 
 
+def _read_timestamp(stream):
+    x, = struct.unpack('!Q', stream.read(8))
+    # From datetime.fromutctimestamp converts it to a local timestamp without timezone information
+    return datetime.fromtimestamp(x * 1e-3, timezone.utc), 8
+
+
 ###########################################################
 #  Serialisation
 ###########################################################
@@ -196,6 +209,9 @@ def pack_table(d):
         elif isinstance(value, str):
             bytes += b'S'
             bytes += pack_long_string(value)
+        elif isinstance(value, datetime):
+            bytes += b'T'
+            bytes += pack_timestamp(value)
         elif isinstance(value, int):
             if value < 0:
                 if value.bit_length() < 16:
@@ -258,6 +274,11 @@ def pack_unsigned_long_long(number):
 
 def pack_bool(b):
     return struct.pack('!?', b)
+
+
+def pack_timestamp(timeval):
+    number = int(timeval.timestamp() * 1e3)
+    return struct.pack('!Q', number)
 
 
 def pack_bools(*bs):
