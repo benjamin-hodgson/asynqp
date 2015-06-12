@@ -10,17 +10,17 @@ from .util import testing_exception_handler
 
 class WhenDeclaringAQueue(OpenChannelContext):
     def when_I_declare_a_queue(self):
-        self.async_partial(self.channel.declare_queue('my.nice.queue', durable=True, exclusive=True, auto_delete=True))
+        self.async_partial(self.channel.declare_queue('my.nice.queue', durable=True, exclusive=True, auto_delete=True, arguments={'x-expires': 300, 'x-message-ttl': 1000}))
 
     def it_should_send_a_QueueDeclare_method(self):
-        expected_method = spec.QueueDeclare(0, 'my.nice.queue', False, True, True, True, False, {})
+        expected_method = spec.QueueDeclare(0, 'my.nice.queue', False, True, True, True, False, {'x-expires': 300, 'x-message-ttl': 1000})
         self.server.should_have_received_method(self.channel.id, expected_method)
 
 
 class WhenQueueDeclareOKArrives(OpenChannelContext):
     def given_I_declared_a_queue(self):
         self.queue_name = 'my.nice.queue'
-        self.task = asyncio.async(self.channel.declare_queue(self.queue_name, durable=True, exclusive=True, auto_delete=True))
+        self.task = asyncio.async(self.channel.declare_queue(self.queue_name, durable=True, exclusive=True, auto_delete=True, arguments={'x-expires': 300, 'x-message-ttl': 1000}))
         self.tick()
 
     def when_QueueDeclareOK_arrives(self):
@@ -72,10 +72,10 @@ class WhenIUseAnIllegalNameForAQueue(OpenChannelContext):
 
 class WhenBindingAQueueToAnExchange(QueueContext, ExchangeContext):
     def when_I_bind_the_queue(self):
-        self.async_partial(self.queue.bind(self.exchange, 'routing.key'))
+        self.async_partial(self.queue.bind(self.exchange, 'routing.key', arguments={'x-ignore': ''}))
 
     def it_should_send_QueueBind(self):
-        expected_method = spec.QueueBind(0, self.queue.name, self.exchange.name, 'routing.key', False, {})
+        expected_method = spec.QueueBind(0, self.queue.name, self.exchange.name, 'routing.key', False, {'x-ignore': ''})
         self.server.should_have_received_method(self.channel.id, expected_method)
 
 
@@ -97,10 +97,10 @@ class WhenQueueBindOKArrives(QueueContext, ExchangeContext):
 
 class WhenUnbindingAQueue(BoundQueueContext):
     def when_I_unbind_the_queue(self):
-        self.async_partial(self.binding.unbind())
+        self.async_partial(self.binding.unbind(arguments={'x-ignore': ''}))
 
     def it_should_send_QueueUnbind(self):
-        expected_method = spec.QueueUnbind(0, self.queue.name, self.exchange.name, 'routing.key', {})
+        expected_method = spec.QueueUnbind(0, self.queue.name, self.exchange.name, 'routing.key', {'x-ignore': ''})
         self.server.should_have_received_method(self.channel.id, expected_method)
 
 
@@ -179,15 +179,15 @@ class WhenBasicGetOKArrives(QueueContext):
 
 class WhenISubscribeToAQueue(QueueContext):
     def when_I_start_a_consumer(self):
-        self.async_partial(self.queue.consume(lambda msg: None, no_local=False, no_ack=False, exclusive=False))
+        self.async_partial(self.queue.consume(lambda msg: None, no_local=False, no_ack=False, exclusive=False, arguments={'x-priority': 1}))
 
     def it_should_send_BasicConsume(self):
-        self.server.should_have_received_method(self.channel.id, spec.BasicConsume(0, self.queue.name, '', False, False, False, False, {}))
+        self.server.should_have_received_method(self.channel.id, spec.BasicConsume(0, self.queue.name, '', False, False, False, False, {'x-priority': 1}))
 
 
 class WhenConsumeOKArrives(QueueContext):
     def given_I_started_a_consumer(self):
-        self.task = asyncio.async(self.queue.consume(lambda msg: None, no_local=False, no_ack=False, exclusive=False))
+        self.task = asyncio.async(self.queue.consume(lambda msg: None, no_local=False, no_ack=False, exclusive=False, arguments={'x-priority': 1}))
         self.tick()
 
     def when_BasicConsumeOK_arrives(self):

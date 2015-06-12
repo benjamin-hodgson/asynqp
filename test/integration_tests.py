@@ -1,7 +1,10 @@
 import asyncio
 import asynqp
 import socket
+import urllib.request
+import base64
 import contexts
+import json
 from .util import testing_exception_handler
 
 
@@ -84,11 +87,22 @@ class WhenOpeningAChannel(ConnectionContext):
 
 
 class WhenDeclaringAQueue(ChannelContext):
+    ARGUMENTS = {'x-expires': 300, 'x-message-ttl': 1000, 'x-table-test': {'a': [1, 'a', {}, []], 'c': 1}}
+
     def when_I_declare_a_queue(self):
-        self.queue = self.loop.run_until_complete(asyncio.wait_for(self.channel.declare_queue('my.queue', exclusive=True), 0.2))
+        self.queue = self.loop.run_until_complete(asyncio.wait_for(self.channel.declare_queue('my.queue', exclusive=True, arguments=WhenDeclaringAQueue.ARGUMENTS), 0.2))
 
     def it_should_have_the_correct_queue_name(self):
         assert self.queue.name == 'my.queue'
+
+    def it_should_have_the_correct_attributes_in_rabbitmq(self):
+        request = urllib.request.Request("http://localhost:15672/api/queues/%2f/{}".format(self.queue.name))
+        base64string = base64.encodebytes(b'guest:guest').rstrip()
+        request.add_header("Authorization", b"Basic " + base64string)
+        result = urllib.request.urlopen(request)
+        result = json.loads(result.read().decode('utf-8'))
+        arguments = result['arguments']
+        assert arguments == WhenDeclaringAQueue.ARGUMENTS
 
     def cleanup_the_queue(self):
         self.loop.run_until_complete(asyncio.wait_for(self.queue.delete(if_unused=False, if_empty=False), 0.2))
