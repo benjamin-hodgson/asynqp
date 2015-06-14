@@ -44,10 +44,14 @@ class Channel(object):
         This method is a :ref:`coroutine <coroutine>`.
 
         :param str name: the name of the exchange.
-        :param str type: the type of the exchange (usually one of ``'fanout'``, ``'direct'``, ``'topic'``, or ``'headers'``)
+        :param str type: the type of the exchange
+            (usually one of ``'fanout'``, ``'direct'``, ``'topic'``, or ``'headers'``)
         :keyword bool durable: If true, the exchange will be re-created when the server restarts.
-        :keyword bool auto_delete: If true, the exchange will be deleted when the last queue is un-bound from it.
-        :keyword bool internal: If true, the exchange cannot be published to directly; it can only be bound to other exchanges.
+        :keyword bool auto_delete: If true, the exchange will be
+            deleted when the last queue is un-bound from it.
+        :keyword bool internal: If true, the exchange cannot be published to directly;
+            it can only be bound to other exchanges.
+        :keyword dict arguments: Table of optional parameters for extensions to the AMQP protocol. See :ref:`extensions`.
 
         :return: the new :class:`Exchange` object.
         """
@@ -74,14 +78,12 @@ class Channel(object):
 
         :param str name: the name of the queue.
             Supplying a name of '' will create a queue with a unique name of the server's choosing.
-
         :keyword bool durable: If true, the queue will be re-created when the server restarts.
-
         :keyword bool exclusive: If true, the queue can only be accessed by the current connection,
             and will be deleted when the connection is closed.
-
         :keyword bool auto_delete: If true, the queue will be deleted when the last consumer is cancelled.
             If there were never any conusmers, the queue won't be deleted.
+        :keyword dict arguments: Table of optional parameters for extensions to the AMQP protocol. See :ref:`extensions`.
 
         :return: The new :class:`Queue` object.
         """

@@ -1,8 +1,3 @@
-.. asynqp documentation master file, created by
-   sphinx-quickstart on Wed Jun 11 20:44:10 2014.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
 ``asynqp``
 ==========
 An AMQP (aka `RabbitMQ <http://www.rabbitmq.com/>`_) client library for :mod:`asyncio`.
@@ -68,6 +63,7 @@ Table of contents
 
    reference
    conformance
+   extensions
 
 * :ref:`genindex`
 * :ref:`modindex`

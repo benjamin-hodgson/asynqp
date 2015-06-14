@@ -46,7 +46,7 @@ class Queue(object):
         self.deleted = False
 
     @asyncio.coroutine
-    def bind(self, exchange, routing_key, arguments=None):
+    def bind(self, exchange, routing_key, *, arguments=None):
         """
         Bind a queue to an exchange, with the supplied routing key.
 
@@ -57,6 +57,7 @@ class Queue(object):
 
         :param asynqp.Exchange exchange: the :class:`Exchange` to bind to
         :param str routing_key: the routing key under which to bind
+        :keyword dict arguments: Table of optional parameters for extensions to the AMQP protocol. See :ref:`extensions`.
 
         :return: The new :class:`QueueBinding` object
         """
@@ -83,6 +84,7 @@ class Queue(object):
             published by this connection.
         :keyword bool no_ack: If true, messages delivered to the consumer don't require acknowledgement.
         :keyword bool exclusive: If true, only this consumer can access the queue.
+        :keyword dict arguments: Table of optional parameters for extensions to the AMQP protocol. See :ref:`extensions`.
 
         :return: The newly created :class:`Consumer` object.
         """
@@ -254,13 +256,13 @@ class QueueFactory(object):
         self.consumers = consumers
 
     @asyncio.coroutine
-    def declare(self, name, durable, exclusive, auto_delete, arguments=None):
+    def declare(self, name, durable, exclusive, auto_delete, arguments):
         if not VALID_QUEUE_NAME_RE.match(name):
             raise ValueError("Not a valid queue name.\n"
                              "Valid names consist of letters, digits, hyphen, underscore, period, or colon, "
                              "and do not begin with 'amq.'")
 
-        self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete, arguments or {})
+        self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete, arguments)
         name = yield from self.synchroniser.await(spec.QueueDeclareOK)
         q = Queue(self.reader, self.consumers, self.synchroniser, self.sender, name, durable, exclusive, auto_delete)
         self.reader.ready()

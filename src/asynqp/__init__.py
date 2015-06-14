@@ -20,7 +20,7 @@ def connect(host='localhost',
             port=5672,
             username='guest', password='guest',
             virtual_host='/', *,
-            loop=None, **kwargs):
+            loop=None, sock=None, **kwargs):
     """
     Connect to an AMQP server on the given host and port.
 
@@ -32,8 +32,13 @@ def connect(host='localhost',
     :param str username: the username to authenticate with.
     :param str password: the password to authenticate with.
     :param str virtual_host: the AMQP virtual host to connect to.
+    :keyword BaseEventLoop loop: An instance of :class:`~asyncio.BaseEventLoop` to use.
+        (Defaults to :func:`asyncio.get_event_loop()`)
+    :keyword socket sock: A :func:`~socket.socket` instance to use for the connection.
+        This is passed on to :meth:`loop.create_connection() <asyncio.BaseEventLoop.create_connection>`.
+        If ``sock`` is supplied then ``host`` and ``port`` will be ignored.
 
-    Further keyword arguments are passed on to :meth:`create_connection() <asyncio.BaseEventLoop.create_connection>`.
+    Further keyword arguments are passed on to :meth:`loop.create_connection() <asyncio.BaseEventLoop.create_connection>`.
 
     :return: the :class:`Connection` object.
     """
@@ -43,9 +48,11 @@ def connect(host='localhost',
 
     loop = asyncio.get_event_loop() if loop is None else loop
 
-    if 'sock' not in kwargs:
+    if sock is None:
         kwargs['host'] = host
         kwargs['port'] = port
+    else:
+        kwargs['sock'] = sock
 
     dispatcher = Dispatcher()
     transport, protocol = yield from loop.create_connection(lambda: AMQP(dispatcher, loop), **kwargs)
