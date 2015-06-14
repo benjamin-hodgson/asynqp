@@ -2,12 +2,8 @@
 Example async consumer and publisher that will reconnect
 automatically when a connection to rabbitmq is broken and
 restored.
-
-
-.. note::
-
-    No attempt is made to re-send messages that are generated
-    while the connection is down.
+Note that no attempt is made to re-send messages that are
+generated while the connection is down.
 '''
 import asyncio
 import asynqp
@@ -28,12 +24,11 @@ def setup_connection(loop):
                                            5672,
                                            username='guest',
                                            password='guest')
-
     return connection
 
 
 @asyncio.coroutine
-def setup_queue_and_exchange(connection):
+def setup_exchange_and_queue(connection):
     # Open a communications channel
     channel = yield from connection.open_channel()
 
@@ -57,7 +52,7 @@ def setup_consumer(connection):
         print('Received: {}'.format(msg.body))
         msg.ack()
 
-    _, queue = yield from setup_queue_and_exchange(connection)
+    _, queue = yield from setup_exchange_and_queue(connection)
 
     # connect the callback to the queue
     consumer = yield from queue.consume(callback)
@@ -70,7 +65,7 @@ def setup_producer(connection):
     The producer will live as an asyncio.Task
     to stop it call Task.cancel()
     '''
-    exchange, _ = yield from setup_queue_and_exchange(connection)
+    exchange, _ = yield from setup_exchange_and_queue(connection)
 
     count = 0
     while True:
