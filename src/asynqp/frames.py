@@ -66,7 +66,7 @@ class HeartbeatFrame(Frame):
         pass
 
 
-class ConnectionClosedPoisonPillFrame(Frame):
+class PoisonPillFrame(Frame):
     channel_id = 0
     payload = b''
 

@@ -55,7 +55,7 @@ class AMQP(asyncio.Protocol):
             raise ConnectionLostError('The connection was unexpectedly lost') from exc
 
     def _send_connection_closed_poison_pill(self):
-        frame = frames.ConnectionClosedPoisonPillFrame()
+        frame = frames.PoisonPillFrame()
         # send the poison pill to all open queues
         self.dispatcher.dispatch_all(frame)
 

@@ -4,6 +4,7 @@ from . import bases
 from . import frames
 from . import spec
 from . import queue
+from . import exceptions
 from . import exchange
 from . import message
 from . import routing
@@ -163,7 +164,7 @@ class ChannelFactory(object):
         consumers = queue.Consumers(self.loop)
         consumers.add_consumer(basic_return_consumer)
 
-        handler = ChannelFrameHandler(synchroniser, sender)
+        handler = ChannelActor(synchroniser, sender)
         reader, writer = routing.create_reader_and_writer(handler)
         handler.message_receiver = MessageReceiver(synchroniser, sender, consumers, reader)
 
@@ -184,7 +185,7 @@ class ChannelFactory(object):
         return channel
 
 
-class ChannelFrameHandler(bases.FrameHandler):
+class ChannelActor(bases.Actor):
     def handle_ChannelOpenOK(self, frame):
         self.synchroniser.notify(spec.ChannelOpenOK)
 
@@ -232,7 +233,8 @@ class ChannelFrameHandler(bases.FrameHandler):
 
     def handle_ChannelClose(self, frame):
         self.sender.send_CloseOK()
-        self.synchroniser.killall(ConnectionError)
+        exc = exceptions.get_exception_type(frame.payload.reply_code)
+        self.synchroniser.killall(exc)
 
     def handle_ChannelCloseOK(self, frame):
         self.synchroniser.notify(spec.ChannelCloseOK)

@@ -1,3 +1,7 @@
+from ._exceptions import AMQPError
+from .spec import EXCEPTIONS, CONSTANTS_INVERSE
+
+
 __all__ = [
     "AMQPError",
     "ConnectionClosedError",
@@ -5,10 +9,7 @@ __all__ = [
     "UndeliverableMessage",
     "Deleted"
 ]
-
-
-class AMQPError(IOError):
-    pass
+__all__.extend(EXCEPTIONS.keys())
 
 
 class ConnectionClosedError(ConnectionError):
@@ -32,3 +33,12 @@ class UndeliverableMessage(ValueError):
 
 class Deleted(ValueError):
     pass
+
+
+globals().update(EXCEPTIONS)
+
+
+def get_exception_type(reply_code):
+    name = CONSTANTS_INVERSE[reply_code]
+    classname = ''.join([x.capitalize() for x in name.split('_')])
+    return EXCEPTIONS[classname]

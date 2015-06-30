@@ -6,6 +6,7 @@ import pkg_resources
 from . import amqptypes
 from . import serialisation
 from .amqptypes import FIELD_TYPES
+from ._exceptions import AMQPError
 
 
 def read_method(raw):
@@ -164,7 +165,20 @@ def generate_methods(classes):
     return methods
 
 
+def generate_exceptions(constants):
+    ret = {}
+
+    for name, value in constants.items():
+        if 300 <= value < 600:  # it's an error
+            classname = ''.join([x.capitalize() for x in name.split('_')])
+            ret[classname] = type(classname, (AMQPError,), {})
+
+    return ret
+
+
 METHODS, CONSTANTS = load_spec()
+CONSTANTS_INVERSE = {value: name for name, value in CONSTANTS.items()}
+EXCEPTIONS = generate_exceptions(CONSTANTS)
 
 # what the hack? 'response' is always a table but the protocol spec says it's a longstr.
 METHODS['ConnectionStartOK'].field_info['response'] = amqptypes.Table

@@ -49,7 +49,7 @@ class Connection(object):
 
         # this is ugly. when the connection is closing, all methods other than ConnectionCloseOK
         # should be ignored. at the moment this behaviour is part of the dispatcher
-        # but this introduces an extra dependency between Connection and ConnectionFrameHandler which
+        # but this introduces an extra dependency between Connection and ConnectionActor which
         # i don't like
         self.closing = asyncio.Future()
         self.closing.add_done_callback(lambda fut: dispatcher.closing.set_result(fut.result()))
@@ -84,7 +84,7 @@ def open_connection(loop, transport, protocol, dispatcher, connection_info):
 
     sender = ConnectionMethodSender(protocol)
     connection = Connection(loop, transport, protocol, synchroniser, sender, dispatcher, connection_info)
-    handler = ConnectionFrameHandler(synchroniser, sender, protocol, connection)
+    handler = ConnectionActor(synchroniser, sender, protocol, connection)
 
     reader, writer = routing.create_reader_and_writer(handler)
 
@@ -122,7 +122,7 @@ def open_connection(loop, transport, protocol, dispatcher, connection_info):
     return connection
 
 
-class ConnectionFrameHandler(bases.FrameHandler):
+class ConnectionActor(bases.Actor):
     def __init__(self, synchroniser, sender, protocol, connection):
         super().__init__(synchroniser, sender)
         self.protocol = protocol

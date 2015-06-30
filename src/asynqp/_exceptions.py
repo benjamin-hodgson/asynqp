@@ -1,0 +1,2 @@
+class AMQPError(IOError):
+    pass

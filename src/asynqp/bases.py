@@ -7,7 +7,7 @@ class Sender(object):
         self.protocol.send_method(self.channel_id, method)
 
 
-class FrameHandler(object):
+class Actor(object):
     def __init__(self, synchroniser, sender):
         self.synchroniser = synchroniser
         self.sender = sender
@@ -20,5 +20,5 @@ class FrameHandler(object):
 
         meth(frame)
 
-    def handle_ConnectionClosedPoisonPillFrame(self, frame):
+    def handle_PoisonPillFrame(self, frame):
         self.synchroniser.killall(ConnectionError)

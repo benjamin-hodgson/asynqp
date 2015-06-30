@@ -2,7 +2,7 @@ import asyncio
 import contexts
 import asynqp
 from unittest import mock
-from asynqp import spec, frames
+from asynqp import spec, frames, exceptions
 from asynqp import message
 from . import util
 from .base_contexts import OpenConnectionContext, OpenChannelContext
@@ -49,7 +49,7 @@ class WhenTheApplicationClosesAChannel(OpenChannelContext):
 
 class WhenTheServerClosesAChannel(OpenChannelContext):
     def when_the_server_shuts_the_channel_down(self):
-        self.server.send_method(self.channel.id, spec.ChannelClose(123, 'i am tired of you', 40, 50))
+        self.server.send_method(self.channel.id, spec.ChannelClose(404, 'i am tired of you', 40, 50))
 
     def it_should_send_ChannelCloseOK(self):
         self.server.should_have_received_method(self.channel.id, spec.ChannelCloseOK())
@@ -69,7 +69,7 @@ class WhenAnotherMethodArrivesWhileTheChannelIsClosing(OpenChannelContext):
 
 class WhenAnotherMethodArrivesAfterTheServerClosedTheChannel(OpenChannelContext):
     def given_the_server_closed_the_channel(self):
-        self.server.send_method(self.channel.id, spec.ChannelClose(123, 'i am tired of you', 40, 50))
+        self.server.send_method(self.channel.id, spec.ChannelClose(404, 'i am tired of you', 40, 50))
         self.server.reset()
 
     def when_another_method_arrives(self):
@@ -101,14 +101,14 @@ class WhenAnUnexpectedChannelCloseArrives(OpenChannelContext):
         self.tick()
 
     def when_ChannelClose_arrives(self):
-        self.server.send_method(self.channel.id, spec.ChannelClose(403, "i just dont like you", 50, 10))
+        self.server.send_method(self.channel.id, spec.ChannelClose(406, "the precondition, she failed", 50, 10))
         self.tick()
 
     def it_should_send_ChannelCloseOK(self):
         self.server.should_have_received_method(self.channel.id, spec.ChannelCloseOK())
 
     def it_should_throw_an_exception(self):
-        assert self.task.exception() is not None
+        assert isinstance(self.task.exception(), exceptions.PreconditionFailed)
 
 
 class WhenSettingQOS(OpenChannelContext):
