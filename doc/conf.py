@@ -51,16 +51,16 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'asynqp'
-copyright = '2014, Benjamin Hodgson'
+copyright = '2014-2015, Benjamin Hodgson'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
 # built documents.
 #
 # The short X.Y version.
-version = '0.3'
+version = '0.4'
 # The full version, including alpha/beta/rc tags.
-release = '0.3'
+release = '0.4'
 
 
 def hide_class_constructor(app, what, name, obj, options, signature, return_annotation):

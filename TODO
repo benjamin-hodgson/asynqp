@@ -1,7 +1,7 @@
 API design issues
 
     Public implementation-related fields in public classes (even though they're not documented)
-    Threading issues
+    Threading issues?
     Load testing?
 
 
@@ -41,6 +41,5 @@ Unimplemented methods:
 Unimplemented functions
 
     Customise connection-tune response
-    General exception handling
     Passive declares
     No-wait flags
