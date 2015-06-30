@@ -66,3 +66,11 @@ Message objects
 
 .. autoclass:: IncomingMessage
     :members:
+
+
+Exceptions
+----------
+
+.. automodule:: asynqp.exceptions
+    :members:
+    :undoc-members:

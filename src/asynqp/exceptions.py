@@ -38,7 +38,7 @@ class Deleted(ValueError):
 globals().update(EXCEPTIONS)
 
 
-def get_exception_type(reply_code):
+def _get_exception_type(reply_code):
     name = CONSTANTS_INVERSE[reply_code]
     classname = ''.join([x.capitalize() for x in name.split('_')])
     return EXCEPTIONS[classname]

@@ -233,7 +233,7 @@ class ChannelActor(bases.Actor):
 
     def handle_ChannelClose(self, frame):
         self.sender.send_CloseOK()
-        exc = exceptions.get_exception_type(frame.payload.reply_code)
+        exc = exceptions._get_exception_type(frame.payload.reply_code)
         self.synchroniser.killall(exc)
 
     def handle_ChannelCloseOK(self, frame):
