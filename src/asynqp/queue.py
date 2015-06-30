@@ -32,8 +32,12 @@ class Queue(object):
     .. attribute:: auto_delete
 
         if True, the queue will be deleted when its last consumer is removed
+
+    .. attribute:: arguments
+
+        A dictionary of the extra arguments that were used to declare the queue.
     """
-    def __init__(self, reader, consumers, synchroniser, sender, name, durable, exclusive, auto_delete):
+    def __init__(self, reader, consumers, synchroniser, sender, name, durable, exclusive, auto_delete, arguments):
         self.reader = reader
         self.consumers = consumers
         self.synchroniser = synchroniser
@@ -43,6 +47,7 @@ class Queue(object):
         self.durable = durable
         self.exclusive = exclusive
         self.auto_delete = auto_delete
+        self.arguments = arguments
         self.deleted = False
 
     @asyncio.coroutine
@@ -264,7 +269,7 @@ class QueueFactory(object):
 
         self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete, arguments)
         name = yield from self.synchroniser.await(spec.QueueDeclareOK)
-        q = Queue(self.reader, self.consumers, self.synchroniser, self.sender, name, durable, exclusive, auto_delete)
+        q = Queue(self.reader, self.consumers, self.synchroniser, self.sender, name, durable, exclusive, auto_delete, arguments)
         self.reader.ready()
         return q
 

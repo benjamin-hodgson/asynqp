@@ -70,7 +70,7 @@ class Channel(object):
         return ex
 
     @asyncio.coroutine
-    def declare_queue(self, name=None, *, durable=True, exclusive=False, auto_delete=False, arguments=None):
+    def declare_queue(self, name='', *, durable=True, exclusive=False, auto_delete=False, arguments=None):
         """
         Declare a queue on the broker. If the queue does not exist, it will be created.
 
@@ -87,7 +87,7 @@ class Channel(object):
 
         :return: The new :class:`Queue` object.
         """
-        q = yield from self.queue_factory.declare(name or '', durable, exclusive, auto_delete, arguments or {})
+        q = yield from self.queue_factory.declare(name, durable, exclusive, auto_delete, arguments if arguments is not None else {})
         return q
 
     @asyncio.coroutine
