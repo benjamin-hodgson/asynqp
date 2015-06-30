@@ -1,5 +1,5 @@
 import asyncio
-from .exceptions import AMQPError, UndeliverableMessage, Deleted
+from .exceptions import *  # noqa
 from .message import Message, IncomingMessage
 from .connection import Connection
 from .channel import Channel
@@ -8,11 +8,11 @@ from .queue import Queue, QueueBinding, Consumer
 
 
 __all__ = [
-    "AMQPError", "UndeliverableMessage", "Deleted",
     "Message", "IncomingMessage",
     "Connection", "Channel", "Exchange", "Queue", "QueueBinding", "Consumer",
     "connect", "connect_and_open_channel"
 ]
+__all__ += exceptions.__all__
 
 
 @asyncio.coroutine
