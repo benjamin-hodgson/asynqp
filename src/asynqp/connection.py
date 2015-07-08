@@ -1,7 +1,6 @@
 import asyncio
 import sys
 from . import channel
-from . import bases
 from . import spec
 from . import routing
 
@@ -47,13 +46,6 @@ class Connection(object):
         self.channel_factory = channel.ChannelFactory(loop, protocol, dispatcher, connection_info)
         self.connection_info = connection_info
 
-        # this is ugly. when the connection is closing, all methods other than ConnectionCloseOK
-        # should be ignored. at the moment this behaviour is part of the dispatcher
-        # but this introduces an extra dependency between Connection and ConnectionActor which
-        # i don't like
-        self.closing = asyncio.Future()
-        self.closing.add_done_callback(lambda fut: dispatcher.closing.set_result(fut.result()))
-
     @asyncio.coroutine
     def open_channel(self):
         """
@@ -73,7 +65,6 @@ class Connection(object):
 
         This method is a :ref:`coroutine <coroutine>`.
         """
-        self.closing.set_result(True)
         self.sender.send_Close(0, 'Connection closed by application', 0, 0)
         yield from self.synchroniser.await(spec.ConnectionCloseOK)
 
@@ -122,7 +113,7 @@ def open_connection(loop, transport, protocol, dispatcher, connection_info):
     return connection
 
 
-class ConnectionActor(bases.Actor):
+class ConnectionActor(routing.Actor):
     def __init__(self, synchroniser, sender, protocol, connection):
         super().__init__(synchroniser, sender)
         self.protocol = protocol
@@ -138,7 +129,7 @@ class ConnectionActor(bases.Actor):
         self.synchroniser.notify(spec.ConnectionOpenOK)
 
     def handle_ConnectionClose(self, frame):
-        self.connection.closing.set_result(True)
+        self.closing.set_result(True)
         self.sender.send_CloseOK()
         self.protocol.transport.close()
 
@@ -147,7 +138,7 @@ class ConnectionActor(bases.Actor):
         self.synchroniser.notify(spec.ConnectionCloseOK)
 
 
-class ConnectionMethodSender(bases.Sender):
+class ConnectionMethodSender(routing.Sender):
     def __init__(self, protocol):
         super().__init__(0, protocol)
 

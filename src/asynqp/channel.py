@@ -1,6 +1,5 @@
 import asyncio
 import re
-from . import bases
 from . import frames
 from . import spec
 from . import queue
@@ -185,7 +184,7 @@ class ChannelFactory(object):
         return channel
 
 
-class ChannelActor(bases.Actor):
+class ChannelActor(routing.Actor):
     def handle_ChannelOpenOK(self, frame):
         self.synchroniser.notify(spec.ChannelOpenOK)
 
@@ -326,8 +325,7 @@ class MessageReceiver(object):
         self.reader.ready()
 
 
-# basically just a collection of aliases with some arguments hard coded for convenience
-class ChannelMethodSender(bases.Sender):
+class ChannelMethodSender(routing.Sender):
     def __init__(self, channel_id, protocol, connection_info):
         super().__init__(channel_id, protocol)
         self.connection_info = connection_info

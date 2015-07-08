@@ -70,5 +70,5 @@ class PoisonPillFrame(Frame):
     channel_id = 0
     payload = b''
 
-    def __init__(self):
-        pass
+    def __init__(self, exception):
+        self.exception = exception

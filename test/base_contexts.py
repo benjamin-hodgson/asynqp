@@ -114,38 +114,6 @@ class MockLoopContext(LoopContext):
         self.loop = mock.Mock(spec=asyncio.AbstractEventLoop)
 
 
-class LegacyConnectionContext(LoopContext):
-    def given_the_pieces_i_need_for_a_connection(self):
-        self.protocol = mock.Mock(spec=protocol.AMQP)
-        self.protocol.transport = mock.Mock()
-        self.protocol.send_frame._is_coroutine = False  # :(
-
-        self.dispatcher = asynqp.routing.Dispatcher()
-        self.connection_info = ConnectionInfo('guest', 'guest', '/')
-
-
-class LegacyOpenConnectionContext(LegacyConnectionContext):
-    def given_an_open_connection(self):
-        task = asyncio.async(open_connection(self.loop, self.protocol.transport, self.protocol, self.dispatcher, self.connection_info))
-        self.tick()
-
-        start_frame = asynqp.frames.MethodFrame(0, spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US'))
-        self.dispatcher.dispatch(start_frame)
-        self.tick()
-
-        self.frame_max = 131072
-        tune_frame = asynqp.frames.MethodFrame(0, spec.ConnectionTune(0, self.frame_max, 600))
-        self.dispatcher.dispatch(tune_frame)
-        self.tick()
-
-        open_ok_frame = asynqp.frames.MethodFrame(0, spec.ConnectionOpenOK(''))
-        self.dispatcher.dispatch(open_ok_frame)
-        self.tick()
-
-        self.protocol.reset_mock()
-        self.connection = task.result()
-
-
 class ProtocolContext(LoopContext):
     def given_a_connected_protocol(self):
         self.transport = mock.Mock(spec=asyncio.Transport)

@@ -10,7 +10,6 @@ _TEST = False
 class Dispatcher(object):
     def __init__(self):
         self.queue_writers = {}
-        self.closing = asyncio.Future()
 
     def add_writer(self, channel_id, writer):
         self.queue_writers[channel_id] = writer
@@ -21,15 +20,41 @@ class Dispatcher(object):
     def dispatch(self, frame):
         if isinstance(frame, frames.HeartbeatFrame):
             return
-        # i think it makes sense to move this to Actor
-        if self.closing.done() and not isinstance(frame.payload, (spec.ConnectionClose, spec.ConnectionCloseOK)):
-            return
         writer = self.queue_writers[frame.channel_id]
         writer.enqueue(frame)
 
     def dispatch_all(self, frame):
         for writer in self.queue_writers.values():
             writer.enqueue(frame)
+
+
+class Sender(object):
+    def __init__(self, channel_id, protocol):
+        self.channel_id = channel_id
+        self.protocol = protocol
+
+    def send_method(self, method):
+        self.protocol.send_method(self.channel_id, method)
+
+
+class Actor(object):
+    def __init__(self, synchroniser, sender):
+        self.synchroniser = synchroniser
+        self.sender = sender
+        self.closing = asyncio.Future()
+
+    def handle(self, frame):
+        if self.closing.done() and not isinstance(frame.payload, (spec.ConnectionClose, spec.ConnectionCloseOK)):
+            return
+        try:
+            meth = getattr(self, 'handle_' + type(frame).__name__)
+        except AttributeError:
+            meth = getattr(self, 'handle_' + type(frame.payload).__name__)
+
+        meth(frame)
+
+    def handle_PoisonPillFrame(self, frame):
+        self.synchroniser.killall(ConnectionError)
 
 
 class Synchroniser(object):
