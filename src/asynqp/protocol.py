@@ -2,7 +2,7 @@ import asyncio
 import struct
 from . import spec
 from . import frames
-from .exceptions import AMQPError, ConnectionLostError, ConnectionClosedError
+from .exceptions import AMQPError, ConnectionLostError
 
 
 class AMQP(asyncio.Protocol):
@@ -30,8 +30,6 @@ class AMQP(asyncio.Protocol):
             frame, remainder = result
 
             self.dispatcher.dispatch(frame)
-            if not remainder:
-                return
             data = remainder
 
     def send_method(self, channel, method):
@@ -48,16 +46,9 @@ class AMQP(asyncio.Protocol):
         self.heartbeat_monitor.start(heartbeat_interval)
 
     def connection_lost(self, exc):
-        self._send_connection_closed_poison_pill()
-        if exc is None:
-            raise ConnectionClosedError('The connection was closed')
-        else:
+        self.dispatcher.dispatch_all(frames.PoisonPillFrame())
+        if exc is not None:
             raise ConnectionLostError('The connection was unexpectedly lost') from exc
-
-    def _send_connection_closed_poison_pill(self):
-        frame = frames.PoisonPillFrame()
-        # send the poison pill to all open queues
-        self.dispatcher.dispatch_all(frame)
 
 
 class FrameReader(object):

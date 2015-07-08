@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from unittest import mock
 import asynqp.frames
 from asynqp import protocol
-from asynqp.exceptions import ConnectionClosedError
+from asynqp.exceptions import ConnectionLostError
 
 
 def testing_exception_handler(loop, context):
@@ -12,7 +12,7 @@ def testing_exception_handler(loop, context):
     ``ConnectionLostErros`` during tests
     '''
     exception = context.get('exception')
-    if exception and isinstance(exception, ConnectionClosedError):
+    if exception and isinstance(exception, ConnectionLostError):
         pass
     else:
         loop.default_exception_handler(context)

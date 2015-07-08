@@ -4,7 +4,6 @@ from .spec import EXCEPTIONS, CONSTANTS_INVERSE
 
 __all__ = [
     "AMQPError",
-    "ConnectionClosedError",
     "ConnectionLostError",
     "UndeliverableMessage",
     "Deleted"
@@ -12,15 +11,7 @@ __all__ = [
 __all__.extend(EXCEPTIONS.keys())
 
 
-class ConnectionClosedError(ConnectionError):
-    '''
-    Connection was closed normally by either the amqp server
-    or the client.
-    '''
-    pass
-
-
-class ConnectionLostError(ConnectionClosedError):
+class ConnectionLostError(ConnectionError):
     '''
     Connection was closed unexpectedly
     '''

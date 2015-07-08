@@ -21,6 +21,7 @@ class Dispatcher(object):
     def dispatch(self, frame):
         if isinstance(frame, frames.HeartbeatFrame):
             return
+        # i think it makes sense to move this to Actor
         if self.closing.done() and not isinstance(frame.payload, (spec.ConnectionClose, spec.ConnectionCloseOK)):
             return
         writer = self.queue_writers[frame.channel_id]

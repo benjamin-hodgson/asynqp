@@ -3,7 +3,7 @@ import contexts
 import asynqp
 from asynqp import spec
 from asynqp import protocol
-from asynqp.exceptions import ConnectionClosedError, ConnectionLostError
+from asynqp.exceptions import ConnectionLostError
 from .base_contexts import MockDispatcherContext, MockServerContext
 from .util import testing_exception_handler
 
@@ -132,29 +132,6 @@ class WhenTwoFramesArrivePiecemeal(MockDispatcherContext):
 
     def it_should_dispatch_the_method_twice(self):
         self.dispatcher.dispatch.assert_has_calls([mock.call(self.expected_frame), mock.call(self.expected_frame)])
-
-
-class WhenTheConnectionIsClosed(MockServerContext):
-    def given_an_exception_handler(self):
-        self.connection_closed_error_raised = False
-        self.loop.set_exception_handler(self.exception_handler)
-
-    def exception_handler(self, loop, context):
-        exception = context.get('exception')
-        if type(exception) is ConnectionClosedError:
-            self.connection_closed_error_raised = True
-        else:
-            self.loop.default_exception_handler(context)
-
-    def when_the_connection_is_closed(self):
-        self.loop.call_soon(self.protocol.connection_lost, None)
-        self.tick()
-
-    def it_should_raise_a_connection_closed_error(self):
-        assert self.connection_closed_error_raised is True
-
-    def cleanup(self):
-        self.loop.set_exception_handler(testing_exception_handler)
 
 
 class WhenTheConnectionIsLost(MockServerContext):
