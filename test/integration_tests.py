@@ -178,7 +178,7 @@ class WhenIStartAConsumerWithSeveralMessagesWaiting(BoundQueueContext):
 
 class WhenPublishingAndGettingALongMessage(BoundQueueContext):
     def given_a_multi_frame_message_and_a_consumer(self):
-        frame_max = self.connection.connection_info.frame_max
+        frame_max = self.connection.connection_info['frame_max']
         body1 = "a" * (frame_max - 8)
         body2 = "b" * (frame_max - 8)
         body3 = "c" * (frame_max - 8)
@@ -195,7 +195,7 @@ class WhenPublishingAndGettingALongMessage(BoundQueueContext):
 
 class WhenPublishingAndConsumingALongMessage(BoundQueueContext):
     def given_a_multi_frame_message(self):
-        frame_max = self.connection.connection_info.frame_max
+        frame_max = self.connection.connection_info['frame_max']
         body1 = "a" * (frame_max - 8)
         body2 = "b" * (frame_max - 8)
         body3 = "c" * (frame_max - 8)

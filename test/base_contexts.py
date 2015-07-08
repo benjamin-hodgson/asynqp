@@ -4,7 +4,7 @@ import asynqp.routing
 from asyncio import test_utils
 from asynqp import spec
 from asynqp import protocol
-from asynqp.connection import ConnectionInfo, open_connection
+from asynqp.connection import open_connection
 from unittest import mock
 from .util import MockServer, FakeTransport
 
@@ -42,7 +42,7 @@ class MockServerContext(LoopContext):
 
 class OpenConnectionContext(MockServerContext):
     def given_an_open_connection(self):
-        connection_info = ConnectionInfo('guest', 'guest', '/')
+        connection_info = {'username': 'guest', 'password': 'guest', 'virtual_host': '/'}
         task = asyncio.async(open_connection(self.loop, self.transport, self.protocol, self.dispatcher, connection_info))
         self.tick()
 

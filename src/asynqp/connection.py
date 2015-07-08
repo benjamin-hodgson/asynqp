@@ -5,13 +5,6 @@ from . import spec
 from . import routing
 
 
-class ConnectionInfo(object):
-    def __init__(self, username, password, virtual_host):
-        self.username = username
-        self.password = password
-        self.virtual_host = virtual_host
-
-
 class Connection(object):
     """
     Manage connections to AMQP brokers.
@@ -39,12 +32,14 @@ class Connection(object):
         The :class:`~asyncio.Protocol` which is paired with the transport
     """
     def __init__(self, loop, transport, protocol, synchroniser, sender, dispatcher, connection_info):
-        self.transport = transport
-        self.protocol = protocol
         self.synchroniser = synchroniser
         self.sender = sender
         self.channel_factory = channel.ChannelFactory(loop, protocol, dispatcher, connection_info)
         self.connection_info = connection_info
+
+        self.transport = transport
+        self.protocol = protocol
+        self.closed = asyncio.Future()
 
     @asyncio.coroutine
     def open_channel(self):
@@ -67,6 +62,7 @@ class Connection(object):
         """
         self.sender.send_Close(0, 'Connection closed by application', 0, 0)
         yield from self.synchroniser.await(spec.ConnectionCloseOK)
+        self.closed.set_result(True)
 
 
 @asyncio.coroutine
@@ -90,18 +86,18 @@ def open_connection(loop, transport, protocol, dispatcher, connection_info):
              "version": "0.1",  # todo: use pkg_resources to inspect the package
              "platform": sys.version},
             'AMQPLAIN',
-            {'LOGIN': connection_info.username, 'PASSWORD': connection_info.password},
+            {'LOGIN': connection_info['username'], 'PASSWORD': connection_info['password']},
             'en_US'
         )
         reader.ready()
 
         frame = yield from synchroniser.await(spec.ConnectionTune)
         # just agree with whatever the server wants. Make this configurable in future
-        connection_info.frame_max = frame.payload.frame_max
+        connection_info['frame_max'] = frame.payload.frame_max
         heartbeat_interval = frame.payload.heartbeat
         sender.send_TuneOK(frame.payload.channel_max, frame.payload.frame_max, heartbeat_interval)
 
-        sender.send_Open(connection_info.virtual_host)
+        sender.send_Open(connection_info['virtual_host'])
         protocol.start_heartbeat(heartbeat_interval)
         reader.ready()
 
@@ -132,6 +128,7 @@ class ConnectionActor(routing.Actor):
         self.closing.set_result(True)
         self.sender.send_CloseOK()
         self.protocol.transport.close()
+        self.connection.closed.set_result(True)
 
     def handle_ConnectionCloseOK(self, frame):
         self.protocol.transport.close()

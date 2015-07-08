@@ -1,13 +1,13 @@
 import asyncio
 import sys
 from asynqp import spec
-from asynqp.connection import open_connection, ConnectionInfo
+from asynqp.connection import open_connection
 from .base_contexts import MockServerContext, OpenConnectionContext
 
 
 class WhenRespondingToConnectionStart(MockServerContext):
     def given_I_wrote_the_protocol_header(self):
-        connection_info = ConnectionInfo('guest', 'guest', '/')
+        connection_info = {'username': 'guest', 'password': 'guest', 'virtual_host': '/'}
         self.async_partial(open_connection(self.loop, self.transport, self.protocol, self.dispatcher, connection_info))
 
     def when_ConnectionStart_arrives(self):
@@ -25,7 +25,7 @@ class WhenRespondingToConnectionStart(MockServerContext):
 
 class WhenRespondingToConnectionTune(MockServerContext):
     def given_a_started_connection(self):
-        connection_info = ConnectionInfo('guest', 'guest', '/')
+        connection_info = {'username': 'guest', 'password': 'guest', 'virtual_host': '/'}
         self.async_partial(open_connection(self.loop, self.transport, self.protocol, self.dispatcher, connection_info))
         self.server.send_method(0, spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US'))
 
@@ -44,6 +44,9 @@ class WhenRespondingToConnectionClose(OpenConnectionContext):
 
     def it_should_send_close_ok(self):
         self.server.should_have_received_method(0, spec.ConnectionCloseOK())
+
+    def it_should_set_the_future(self):
+        assert self.connection.closed.done()
 
 
 class WhenTheApplicationClosesTheConnection(OpenConnectionContext):
@@ -65,6 +68,9 @@ class WhenRecievingConnectionCloseOK(OpenConnectionContext):
 
     def it_should_close_the_transport(self):
         assert self.transport.closed
+
+    def it_should_set_the_future(self):
+        assert self.connection.closed.done()
 
 
 class WhenAConnectionThatIsClosingReceivesAMethod(OpenConnectionContext):

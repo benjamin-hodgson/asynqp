@@ -387,7 +387,7 @@ class ChannelMethodSender(routing.Sender):
         header_frame = frames.ContentHeaderFrame(self.channel_id, header_payload)
         self.protocol.send_frame(header_frame)
 
-        for payload in message.get_frame_payloads(msg, self.connection_info.frame_max - 8):
+        for payload in message.get_frame_payloads(msg, self.connection_info['frame_max'] - 8):
             frame = frames.ContentBodyFrame(self.channel_id, payload)
             self.protocol.send_frame(frame)
 
