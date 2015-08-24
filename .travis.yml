@@ -13,7 +13,7 @@ install:
 script:
   - flake8 src test --ignore=E501
   - run-contexts -v
-  - cd doc && make html
+  - pushd doc && make html && popd
 
 deploy:
   provider: pypi
