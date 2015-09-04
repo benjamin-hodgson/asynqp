@@ -8,11 +8,11 @@ services: rabbitmq
 
 install:
   - pip install -r requirements.txt
-  - python setup.py install
+  - python setup.py develop
 
 script:
   - flake8 src test --ignore=E501
-  - coverage run --source=asynqp -m contexts -v
+  - coverage run --source=src -m contexts -v
   - pushd doc && make html && popd
 
 after_success:
