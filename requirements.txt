@@ -2,3 +2,5 @@ contexts
 colorama
 sphinx
 flake8
+coverage
+coveralls

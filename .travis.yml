@@ -12,8 +12,11 @@ install:
 
 script:
   - flake8 src test --ignore=E501
-  - run-contexts -v
+  - coverage run --source=asynqp -m contexts
   - pushd doc && make html && popd
+
+after_success:
+  coveralls
 
 deploy:
   provider: pypi
@@ -24,6 +27,3 @@ deploy:
     tags: true
     all_branches: true
   distributions: "sdist bdist_wheel bdist_egg"
-
-after_deploy:
-  - curl -X POST http://readthedocs.org/build/asynqp

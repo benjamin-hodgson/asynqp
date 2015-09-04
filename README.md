@@ -3,6 +3,7 @@ asynqp
 
 [![Build Status](https://travis-ci.org/benjamin-hodgson/asynqp.svg?branch=master)](https://travis-ci.org/benjamin-hodgson/asynqp)
 [![Documentation Status](https://readthedocs.org/projects/asynqp/badge/?version=v0.4)](https://readthedocs.org/projects/asynqp/?badge=v0.4)
+[![Coverage Status](https://coveralls.io/repos/benjamin-hodgson/asynqp/badge.svg?branch=master&service=github)](https://coveralls.io/github/benjamin-hodgson/asynqp?branch=master)
 [![Requirements Status](https://requires.io/github/benjamin-hodgson/asynqp/requirements.svg?branch=master)](https://requires.io/github/benjamin-hodgson/asynqp/requirements/?branch=master)
 
 `asynqp` is an AMQP (aka [RabbitMQ](rabbitmq.com)) client library for
