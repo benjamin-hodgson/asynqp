@@ -12,7 +12,7 @@ install:
 
 script:
   - flake8 src test --ignore=E501
-  - coverage run --source=asynqp -m contexts
+  - coverage run --source=asynqp -m contexts -v
   - pushd doc && make html && popd
 
 after_success:
