@@ -7,7 +7,7 @@ python: 3.4
 services: rabbitmq
 
 install:
-  - pip install contexts colorama sphinx flake8
+  - pip install -r requirements.txt
   - python setup.py install
 
 script:
