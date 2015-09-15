@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime
+import contexts
 import asynqp
 from asynqp import message
 from asynqp import frames
@@ -265,6 +266,60 @@ class WhenCancelOKArrives(ConsumerContext):
 
     def it_should_be_cancelled(self):
         assert self.consumer.cancelled
+
+
+class WhenCancelOKArrivesForAConsumerWithAnOnCancelMethod(QueueContext):
+    def given_I_started_and_cancelled_a_consumer(self):
+        self.consumer = self.ConsumerWithOnCancel()
+        task = asyncio.async(self.queue.consume(self.consumer, no_local=False, no_ack=False, exclusive=False, arguments={'x-priority': 1}))
+        self.tick()
+        self.server.send_method(self.channel.id, spec.BasicConsumeOK('made.up.tag'))
+        self.tick()
+        asyncio.async(task.result().cancel())
+        self.tick()
+
+    def when_BasicCancelOK_arrives(self):
+        self.server.send_method(self.channel.id, spec.BasicCancelOK('made.up.tag'))
+
+    def it_should_call_on_cancel(self):
+        assert self.consumer.on_cancel_called
+
+    class ConsumerWithOnCancel:
+        def __init__(self):
+            self.on_cancel_called = False
+
+        def __call__(self):
+            pass
+
+        def on_cancel(self):
+            self.on_cancel_called = True
+
+
+class WhenAConsumerWithAnOnCancelMethodIsKilledDueToAnError(QueueContext):
+    def given_I_started_a_consumer(self):
+        self.consumer = self.ConsumerWithOnError()
+        asyncio.async(self.queue.consume(self.consumer, no_local=False, no_ack=False, exclusive=False, arguments={'x-priority': 1}))
+        self.tick()
+        self.server.send_method(self.channel.id, spec.BasicConsumeOK('made.up.tag'))
+        self.tick()
+        self.exception = Exception()
+
+    def when_the_connection_dies(self):
+        contexts.catch(self.protocol.connection_lost, self.exception)
+        self.tick()
+
+    def it_should_call_on_error(self):
+        assert self.consumer.exc is self.exception
+
+    class ConsumerWithOnError:
+        def __init__(self):
+            self.exc = None
+
+        def __call__(self):
+            pass
+
+        def on_error(self, exc):
+            self.exc = exc
 
 
 class WhenIPurgeAQueue(QueueContext):

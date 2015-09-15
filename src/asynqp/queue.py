@@ -81,6 +81,14 @@ class Queue(object):
         Start a consumer on the queue. Messages will be delivered asynchronously to the consumer.
         The callback function will be called whenever a new message arrives on the queue.
 
+        Advanced usage: the callback object must be callable
+        (it must be a function or define a ``__call__`` method),
+        but may also define some further methods:
+
+        * ``callback.on_cancel()``: called with no parameters when the consumer is successfully cancelled.
+        * ``callback.on_error(exc)``: called when the channel is closed due to an error.
+          The argument passed is the exception which caused the error.
+
         This method is a :ref:`coroutine <coroutine>`.
 
         :param callable callback: a callback to be called when a message is delivered.
@@ -250,6 +258,8 @@ class Consumer(object):
         yield from self.synchroniser.await(spec.BasicCancelOK)
         self.cancelled = True
         self.cancelled_future.set_result(self)
+        if hasattr(self.callback, 'on_cancel'):
+            self.callback.on_cancel()
         self.reader.ready()
 
 
@@ -288,3 +298,8 @@ class Consumers(object):
         assert tag in self.consumers, "Message got delivered to a non existent consumer"
         consumer = self.consumers[tag]
         self.loop.call_soon(consumer.callback, msg)
+
+    def error(self, exc):
+        for consumer in self.consumers.values():
+            if hasattr(consumer.callback, 'on_error'):
+                consumer.callback.on_error(exc)

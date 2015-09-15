@@ -165,7 +165,7 @@ class ChannelFactory(object):
         consumers = queue.Consumers(self.loop)
         consumers.add_consumer(basic_return_consumer)
 
-        handler = ChannelActor(synchroniser, sender)
+        handler = ChannelActor(consumers, synchroniser, sender)
         reader, writer = routing.create_reader_and_writer(handler)
         handler.message_receiver = MessageReceiver(synchroniser, sender, consumers, reader)
 
@@ -193,6 +193,14 @@ class ChannelFactory(object):
 
 
 class ChannelActor(routing.Actor):
+    def __init__(self, consumers, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.consumers = consumers
+
+    def handle_PoisonPillFrame(self, frame):
+        super().handle_PoisonPillFrame(frame)
+        self.consumers.error(frame.exception)
+
     def handle_ChannelOpenOK(self, frame):
         self.synchroniser.notify(spec.ChannelOpenOK)
 
