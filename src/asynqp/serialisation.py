@@ -102,6 +102,7 @@ def qpid_rabbit_mq_table():
         b's': _read_short,
         b'I': _read_long,
         b'l': _read_long_long,
+        b'f': _read_float,
         b'S': _read_long_string,
         b'A': _read_array,
         b'V': _read_void,
@@ -193,6 +194,11 @@ def _read_unsigned_long_long(stream):
     return x, 8
 
 
+def _read_float(stream):
+    x, = struct.unpack('!f', stream.read(4))
+    return x, 4
+
+
 def _read_timestamp(stream):
     x, = struct.unpack('!Q', stream.read(8))
     # From datetime.fromutctimestamp converts it to a local timestamp without timezone information
@@ -241,38 +247,28 @@ def pack_long_string(string):
 
 
 def pack_field_value(value):
-    buffer = b''
+    if value is None:
+        return b'V'
     if isinstance(value, bool):
-        buffer += b't'
-        buffer += pack_bool(value)
-    elif isinstance(value, dict):
-        buffer += b'F'
-        buffer += pack_table(value)
-    elif isinstance(value, list):
-        buffer += b'A'
-        buffer += pack_array(value)
-    elif isinstance(value, bytes):
-        buffer += b'x'
-        buffer += pack_byte_array(value)
-    elif isinstance(value, str):
-        buffer += b'S'
-        buffer += pack_long_string(value)
-    elif isinstance(value, datetime):
-        buffer += b'T'
-        buffer += pack_timestamp(value)
-    elif isinstance(value, int):
+        return b't' + pack_bool(value)
+    if isinstance(value, dict):
+        return b'F' + pack_table(value)
+    if isinstance(value, list):
+        return b'A' + pack_array(value)
+    if isinstance(value, bytes):
+        return b'x' + pack_byte_array(value)
+    if isinstance(value, str):
+        return b'S' + pack_long_string(value)
+    if isinstance(value, datetime):
+        return b'T' + pack_timestamp(value)
+    if isinstance(value, int):
         if value.bit_length() < 8:
-            buffer += b'b'
-            buffer += pack_signed_byte(value)
-        elif value.bit_length() < 32:
-            buffer += b'I'
-            buffer += pack_long(value)
-        else:
-            raise NotImplementedError()
-    else:
-        raise NotImplementedError()
-
-    return buffer
+            return b'b' + pack_signed_byte(value)
+        if value.bit_length() < 32:
+            return b'I' + pack_long(value)
+    if isinstance(value, float):
+        return b'f' + pack_float(value)
+    raise NotImplementedError()
 
 
 def pack_table(d):
@@ -319,6 +315,10 @@ def pack_long_long(number):
 
 def pack_unsigned_long_long(number):
     return struct.pack('!Q', number)
+
+
+def pack_float(number):
+    return struct.pack('!f', number)
 
 
 def pack_bool(b):

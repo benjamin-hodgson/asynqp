@@ -35,6 +35,8 @@ class WhenPackingAndUnpackingATable:
         yield {'f': -0x7FFFFFFF, 'g': 0x7FFFFFFF}
         yield {'x': b"\x01\x02"}
         yield {'x': []}
+        yield {'l': None}
+        yield {'l': 1.0}
 
     def because_we_pack_and_unpack_the_table(self, table):
         self.result = serialisation.read_table(BytesIO(serialisation.pack_table(table)))
