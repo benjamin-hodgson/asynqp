@@ -16,6 +16,17 @@ class WhenOpeningAChannel(OpenConnectionContext):
         self.server.should_have_received_method(1, spec.ChannelOpen(''))
 
 
+class WhenOpeningMultipleChannelsConcurrently(OpenConnectionContext):
+    def when_the_user_wants_to_open_several_channels(self):
+        self.async_partial(asyncio.wait([self.connection.open_channel(), self.connection.open_channel()]))
+
+    def it_should_send_a_channel_open_frame_for_channel_1(self):
+        self.server.should_have_received_method(1, spec.ChannelOpen(''))
+
+    def it_should_send_a_channel_open_frame_for_channel_2(self):
+        self.server.should_have_received_method(2, spec.ChannelOpen(''))
+
+
 class WhenChannelOpenOKArrives(OpenConnectionContext):
     def given_the_user_has_called_open_channel(self):
         self.task = asyncio.async(self.connection.open_channel())

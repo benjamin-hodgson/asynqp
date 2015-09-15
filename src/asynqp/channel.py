@@ -152,13 +152,15 @@ class ChannelFactory(object):
         self.protocol = protocol
         self.dispatcher = dispatcher
         self.connection_info = connection_info
-        self.next_channel_id = 1
+        self.next_channel_id = 0
 
     @asyncio.coroutine
     def open(self):
+        self.next_channel_id += 1
+        channel_id = self.next_channel_id
         synchroniser = routing.Synchroniser()
 
-        sender = ChannelMethodSender(self.next_channel_id, self.protocol, self.connection_info)
+        sender = ChannelMethodSender(channel_id, self.protocol, self.connection_info)
         basic_return_consumer = BasicReturnConsumer()
         consumers = queue.Consumers(self.loop)
         consumers.add_consumer(basic_return_consumer)
@@ -168,18 +170,24 @@ class ChannelFactory(object):
         handler.message_receiver = MessageReceiver(synchroniser, sender, consumers, reader)
 
         queue_factory = queue.QueueFactory(sender, synchroniser, reader, consumers)
-        channel = Channel(self.next_channel_id, synchroniser, sender, basic_return_consumer, queue_factory, reader)
+        channel = Channel(channel_id, synchroniser, sender, basic_return_consumer, queue_factory, reader)
 
-        self.dispatcher.add_writer(self.next_channel_id, writer)
+        self.dispatcher.add_writer(channel_id, writer)
         try:
             sender.send_ChannelOpen()
             reader.ready()
             yield from synchroniser.await(spec.ChannelOpenOK)
         except:
-            self.dispatcher.remove_writer(self.next_channel_id)
+            # don't rollback self.next_channel_id;
+            # another call may have entered this method
+            # concurrently while we were yielding
+            # and we don't want to end up with duplicate channels.
+            # If we leave self.next_channel_id incremented, the worst
+            # that happens is we end up with non-sequential channel numbers.
+            # Small price to pay to keep this method re-entrant.
+            self.dispatcher.remove_writer(channel_id)
             raise
 
-        self.next_channel_id += 1
         reader.ready()
         return channel
 
