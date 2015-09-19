@@ -38,10 +38,13 @@ class Sender(object):
 
 
 class Actor(object):
-    def __init__(self, synchroniser, sender):
+    def __init__(self, synchroniser, sender, *, loop=None):
+        if loop is None:
+            loop = asyncio.get_event_loop()
+        self._loop = loop
         self.synchroniser = synchroniser
         self.sender = sender
-        self.closing = asyncio.Future()
+        self.closing = asyncio.Future(loop=self._loop)
 
     def handle(self, frame):
         if self.closing.done() and not isinstance(frame.payload, (spec.ConnectionClose, spec.ConnectionCloseOK)):
@@ -62,12 +65,15 @@ class Synchroniser(object):
                              spec.ChannelCloseOK,  # Channel.close
                              spec.ConnectionCloseOK))  # Connection.close
 
-    def __init__(self):
+    def __init__(self, *, loop=None):
+        if loop is None:
+            loop = asyncio.get_event_loop()
+        self._loop = loop
         self._futures = OrderedManyToManyMap()
         self.connection_closed = False
 
     def await(self, *expected_methods):
-        fut = asyncio.Future()
+        fut = asyncio.Future(loop=self._loop)
 
         if self.connection_closed:
             for method in expected_methods:
@@ -103,9 +109,11 @@ class Synchroniser(object):
                     self._futures.remove_item(fut)
 
 
-def create_reader_and_writer(handler):
-    q = asyncio.Queue()
-    reader = QueueReader(handler, q)
+def create_reader_and_writer(handler, *, loop=None):
+    if loop is None:
+        loop = asyncio.get_event_loop()
+    q = asyncio.Queue(loop=loop)
+    reader = QueueReader(handler, q, loop=loop)
     writer = QueueWriter(q)
     return reader, writer
 
@@ -114,7 +122,10 @@ def create_reader_and_writer(handler):
 # When the frame does arrive, dispatch it to the handler and do nothing
 # until someone calls ready() again.
 class QueueReader(object):
-    def __init__(self, handler, q):
+    def __init__(self, handler, q, *, loop=None):
+        if loop is None:
+            loop = asyncio.get_event_loop()
+        self._loop = loop
         self.handler = handler
         self.q = q
         self.is_waiting = False
@@ -122,7 +133,12 @@ class QueueReader(object):
     def ready(self):
         assert not self.is_waiting, "ready() got called while waiting for a frame to be read"
         self.is_waiting = True
-        t = asyncio.async(self._read_next())
+
+        # XXX: Refactor this. There should be only 1 async task per QueueReader
+        #      It will read frames in a `while True:` loop and will be canceled
+        #      when connection is closed.
+
+        t = asyncio.async(self._read_next(), loop=self._loop)
         if _TEST:  # this feels hacky to me
             t._log_destroy_pending = False
 
