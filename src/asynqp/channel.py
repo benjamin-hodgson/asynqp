@@ -28,9 +28,7 @@ class Channel(object):
 
         the numerical ID of the channel
     """
-    def __init__(self, id, synchroniser, sender, basic_return_consumer, queue_factory, reader, *, loop=None):
-        if loop is None:
-            loop = asyncio.get_event_loop()
+    def __init__(self, id, synchroniser, sender, basic_return_consumer, queue_factory, reader, *, loop):
         self._loop = loop
         self.id = id
         self.synchroniser = synchroniser

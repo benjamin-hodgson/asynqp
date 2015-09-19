@@ -37,9 +37,7 @@ class Queue(object):
 
         A dictionary of the extra arguments that were used to declare the queue.
     """
-    def __init__(self, reader, consumers, synchroniser, sender, name, durable, exclusive, auto_delete, arguments, *, loop=None):
-        if loop is None:
-            loop = asyncio.get_event_loop()
+    def __init__(self, reader, consumers, synchroniser, sender, name, durable, exclusive, auto_delete, arguments, *, loop):
         self._loop = loop
         self.reader = reader
         self.consumers = consumers
@@ -243,9 +241,7 @@ class Consumer(object):
 
         Boolean. True if the consumer has been successfully cancelled.
     """
-    def __init__(self, tag, callback, sender, synchroniser, reader, *, loop=None):
-        if loop is None:
-            loop = asyncio.get_event_loop()
+    def __init__(self, tag, callback, sender, synchroniser, reader, *, loop):
         self._loop = loop
         self.tag = tag
         self.callback = callback
@@ -272,9 +268,7 @@ class Consumer(object):
 
 
 class QueueFactory(object):
-    def __init__(self, sender, synchroniser, reader, consumers, *, loop=None):
-        if loop is None:
-            loop = asyncio.get_event_loop()
+    def __init__(self, sender, synchroniser, reader, consumers, *, loop):
         self._loop = loop
         self.sender = sender
         self.synchroniser = synchroniser

@@ -38,9 +38,7 @@ class Sender(object):
 
 
 class Actor(object):
-    def __init__(self, synchroniser, sender, *, loop=None):
-        if loop is None:
-            loop = asyncio.get_event_loop()
+    def __init__(self, synchroniser, sender, *, loop):
         self._loop = loop
         self.synchroniser = synchroniser
         self.sender = sender
@@ -65,9 +63,7 @@ class Synchroniser(object):
                              spec.ChannelCloseOK,  # Channel.close
                              spec.ConnectionCloseOK))  # Connection.close
 
-    def __init__(self, *, loop=None):
-        if loop is None:
-            loop = asyncio.get_event_loop()
+    def __init__(self, *, loop):
         self._loop = loop
         self._futures = OrderedManyToManyMap()
         self.connection_closed = False
@@ -109,9 +105,7 @@ class Synchroniser(object):
                     self._futures.remove_item(fut)
 
 
-def create_reader_and_writer(handler, *, loop=None):
-    if loop is None:
-        loop = asyncio.get_event_loop()
+def create_reader_and_writer(handler, *, loop):
     q = asyncio.Queue(loop=loop)
     reader = QueueReader(handler, q, loop=loop)
     writer = QueueWriter(q)
