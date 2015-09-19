@@ -116,9 +116,7 @@ def create_reader_and_writer(handler, *, loop):
 # When the frame does arrive, dispatch it to the handler and do nothing
 # until someone calls ready() again.
 class QueueReader(object):
-    def __init__(self, handler, q, *, loop=None):
-        if loop is None:
-            loop = asyncio.get_event_loop()
+    def __init__(self, handler, q, *, loop):
         self._loop = loop
         self.handler = handler
         self.q = q
