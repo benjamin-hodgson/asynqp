@@ -32,7 +32,6 @@ class Connection(object):
         The :class:`~asyncio.Protocol` which is paired with the transport
     """
     def __init__(self, loop, transport, protocol, synchroniser, sender, dispatcher, connection_info):
-        self._loop = loop
         self.synchroniser = synchroniser
         self.sender = sender
         self.channel_factory = channel.ChannelFactory(loop, protocol, dispatcher, connection_info)
