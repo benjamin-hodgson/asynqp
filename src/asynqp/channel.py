@@ -98,6 +98,7 @@ class Channel(object):
 
         This method is a :ref:`coroutine <coroutine>`.
         """
+        self._closing.set_result(True)
         self.sender.send_Close(0, 'Channel closed by application', 0, 0)
         yield from self.synchroniser.await(spec.ChannelCloseOK)
         # don't call self.reader.ready - stop reading frames from the q
@@ -166,15 +167,16 @@ class ChannelFactory(object):
         consumers = queue.Consumers(self.loop)
         consumers.add_consumer(basic_return_consumer)
 
-        handler = ChannelActor(consumers, synchroniser, sender, loop=self.loop)
-        reader, writer = routing.create_reader_and_writer(handler, loop=self.loop)
-        handler.message_receiver = MessageReceiver(synchroniser, sender, consumers, reader)
+        actor = ChannelActor(consumers, synchroniser, sender, loop=self.loop)
+        reader, writer = routing.create_reader_and_writer(actor, loop=self.loop)
+        actor.message_receiver = MessageReceiver(synchroniser, sender, consumers, reader)
 
         queue_factory = queue.QueueFactory(
             sender, synchroniser, reader, consumers, loop=self.loop)
         channel = Channel(
             channel_id, synchroniser, sender, basic_return_consumer,
             queue_factory, reader, loop=self.loop)
+        channel._closing = actor.closing
 
         self.dispatcher.add_writer(channel_id, writer)
         try:

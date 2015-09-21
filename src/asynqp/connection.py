@@ -60,6 +60,7 @@ class Connection(object):
 
         This method is a :ref:`coroutine <coroutine>`.
         """
+        self._closing.set_result(True)
         self.sender.send_Close(0, 'Connection closed by application', 0, 0)
         yield from self.synchroniser.await(spec.ConnectionCloseOK)
         self.closed.set_result(True)
@@ -71,9 +72,10 @@ def open_connection(loop, transport, protocol, dispatcher, connection_info):
 
     sender = ConnectionMethodSender(protocol)
     connection = Connection(loop, transport, protocol, synchroniser, sender, dispatcher, connection_info)
-    handler = ConnectionActor(synchroniser, sender, protocol, connection, loop=loop)
+    actor = ConnectionActor(synchroniser, sender, protocol, connection, loop=loop)
+    connection._closing = actor.closing  # bit ugly
 
-    reader, writer = routing.create_reader_and_writer(handler, loop=loop)
+    reader, writer = routing.create_reader_and_writer(actor, loop=loop)
 
     try:
         dispatcher.add_writer(0, writer)

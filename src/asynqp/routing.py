@@ -45,7 +45,8 @@ class Actor(object):
         self.closing = asyncio.Future(loop=self._loop)
 
     def handle(self, frame):
-        if self.closing.done() and not isinstance(frame.payload, (spec.ConnectionClose, spec.ConnectionCloseOK)):
+        close_methods = (spec.ConnectionClose, spec.ConnectionCloseOK, spec.ChannelClose, spec.ChannelCloseOK)
+        if self.closing.done() and not isinstance(frame.payload, close_methods):
             return
         try:
             meth = getattr(self, 'handle_' + type(frame).__name__)

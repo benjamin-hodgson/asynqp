@@ -11,14 +11,24 @@ from .util import MockServer, FakeTransport
 
 class LoopContext:
     def given_an_event_loop(self):
+        self.exceptions = []
         self.loop = asyncio.get_event_loop()
+        self.loop.set_debug(True)
+        self.loop.set_exception_handler(self.exception_handler)
         asynqp.routing._TEST = True
+
+    def cleanup_test_hack(self):
+        self.loop.set_debug(False)
+        self.loop.set_exception_handler(None)
+        asynqp.routing._TEST = False
+        if self.exceptions:
+            raise self.exceptions[0]
+
+    def exception_handler(self, loop, context):
+        self.exceptions.append(context['exception'])
 
     def tick(self):
         test_utils.run_briefly(self.loop)
-
-    def cleanup_test_hack(self):
-        asynqp.routing._TEST = False
 
     def async_partial(self, coro):
         """
