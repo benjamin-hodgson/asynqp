@@ -10,7 +10,7 @@ class AMQP(asyncio.Protocol):
         self.dispatcher = dispatcher
         self.partial_frame = b''
         self.frame_reader = FrameReader()
-        self.heartbeat_monitor = HeartbeatMonitor(self, loop, 0)
+        self.heartbeat_monitor = HeartbeatMonitor(self, loop)
 
     def connection_made(self, transport):
         self.transport = transport
@@ -83,32 +83,38 @@ class FrameReader(object):
 
 
 class HeartbeatMonitor(object):
-    def __init__(self, protocol, loop, heartbeat_interval):
+    def __init__(self, protocol, loop):
         self.protocol = protocol
         self.loop = loop
-        self.heartbeat_interval = heartbeat_interval
-        self.heartbeat_timeout_callback = None
+        self.send_hb_task = None
+        self.monitor_task = None
 
     def start(self, interval):
-        if interval > 0:
-            self.heartbeat_interval = interval
-            self.send_heartbeat()
-            self.monitor_heartbeat()
+        if interval <= 0:
+            return
+        self.send_hb_task = asyncio.async(self.send_heartbeat(interval), loop=self.loop)
+        self.monitor_task = asyncio.async(self.monitor_heartbeat(interval), loop=self.loop)
 
-    def send_heartbeat(self):
-        if self.heartbeat_interval > 0:
+    def stop(self):
+        if self.send_hb_task is not None:
+            self.send_hb_task.cancel()
+        if self.monitor_task is not None:
+            self.monitor_task.cancel()
+
+    @asyncio.coroutine
+    def send_heartbeat(self, interval):
+        while True:
             self.protocol.send_frame(frames.HeartbeatFrame())
-            self.loop.call_later(self.heartbeat_interval, self.send_heartbeat)
+            yield from asyncio.sleep(interval)
 
-    def monitor_heartbeat(self):
-        if self.heartbeat_interval > 0:
-            self.heartbeat_timeout_callback = self.loop.call_later(self.heartbeat_interval * 2, self.heartbeat_timed_out)
+    @asyncio.coroutine
+    def monitor_heartbeat(self, interval):
+        while True:
+            self.is_alive = False
+            yield from asyncio.sleep(interval * 2)
+            if not self.is_alive:
+                self.protocol.send_method(0, spec.ConnectionClose(501, 'Heartbeat timed out', 0, 0))
+                self.protocol.connection_lost(ConnectionLostError('Heartbeat timed out'))
 
     def heartbeat_received(self):
-        if self.heartbeat_timeout_callback is not None:
-            self.heartbeat_timeout_callback.cancel()
-            self.monitor_heartbeat()
-
-    def heartbeat_timed_out(self):
-        self.protocol.send_method(0, spec.ConnectionClose(501, 'Heartbeat timed out', 0, 0))
-        self.protocol.connection_lost(ConnectionLostError)
+        self.is_alive = True

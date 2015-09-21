@@ -119,11 +119,6 @@ class ConsumerContext(QueueContext):
         self.consumer = task.result()
 
 
-class MockLoopContext(LoopContext):
-    def given_an_event_loop(self):
-        self.loop = mock.Mock(spec=asyncio.AbstractEventLoop)
-
-
 class ProtocolContext(LoopContext):
     def given_a_connected_protocol(self):
         self.transport = mock.Mock(spec=asyncio.Transport)
