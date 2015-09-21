@@ -2,6 +2,7 @@ import asyncio
 import asynqp
 import socket
 import contexts
+from asyncio import test_utils
 from .util import testing_exception_handler
 
 
@@ -332,3 +333,83 @@ class WhenAConnectionIsClosedCancelConsuming:
 
     def cleanup(self):
         asynqp.routing._TEST = False
+
+
+class WhenPublishingWithUnsetLoop:
+
+    def given_I_have_a_queue(self):
+        @asyncio.coroutine
+        def set_up():
+            self.connection = yield from asynqp.connect(loop=self.loop)
+            self.channel = yield from self.connection.open_channel()
+            self.exchange = yield from self.channel.declare_exchange(
+                '', 'direct')
+            self.queue = yield from self.channel.declare_queue(
+                durable=False,
+                exclusive=True,
+                auto_delete=True)
+        self.loop = asyncio.get_event_loop()
+        asyncio.set_event_loop(None)
+        self.loop.run_until_complete(set_up())
+
+    def when_I_publish_the_message(self):
+        message = asynqp.Message(b"Test message")
+        self.exchange.publish(message, self.queue.name)
+
+    def it_should_return_my_message(self):
+        for retry in range(10):
+            msg = self.loop.run_until_complete(self.queue.get(no_ack=True))
+            if msg is not None:
+                break
+        assert msg.body == b"Test message"
+
+    def cleanup_loop(self):
+        @asyncio.coroutine
+        def tear_down():
+            yield from self.channel.close()
+            yield from self.connection.close()
+        self.loop.run_until_complete(tear_down())
+        asyncio.set_event_loop(self.loop)
+
+
+class WhenConsumingWithUnsetLoop:
+
+    def given_I_published_a_message(self):
+        @asyncio.coroutine
+        def set_up():
+            self.connection = yield from asynqp.connect(loop=self.loop)
+            self.channel = yield from self.connection.open_channel()
+            self.exchange = yield from self.channel.declare_exchange(
+                '', 'direct')
+            self.queue = yield from self.channel.declare_queue(
+                durable=False,
+                exclusive=True,
+                auto_delete=True)
+        self.loop = asyncio.get_event_loop()
+        asyncio.set_event_loop(None)
+        self.loop.run_until_complete(set_up())
+
+        message = asynqp.Message(b"Test message")
+        self.exchange.publish(message, self.queue.name)
+
+    def when_I_consume_a_message(self):
+        self.result = []
+        consumer = self.loop.run_until_complete(
+            self.queue.consume(self.result.append, exclusive=True))
+        for retry in range(10):
+            test_utils.run_briefly(self.loop)
+            if self.result:
+                break
+        consumer.cancel()
+
+    def it_should_return_my_message(self):
+        assert self.result, "Message not consumed"
+        assert self.result[0].body == b"Test message"
+
+    def cleanup_loop(self):
+        @asyncio.coroutine
+        def tear_down():
+            yield from self.channel.close()
+            yield from self.connection.close()
+        self.loop.run_until_complete(tear_down())
+        asyncio.set_event_loop(self.loop)
