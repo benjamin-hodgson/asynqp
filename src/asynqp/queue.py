@@ -37,7 +37,8 @@ class Queue(object):
 
         A dictionary of the extra arguments that were used to declare the queue.
     """
-    def __init__(self, reader, consumers, synchroniser, sender, name, durable, exclusive, auto_delete, arguments):
+    def __init__(self, reader, consumers, synchroniser, sender, name, durable, exclusive, auto_delete, arguments, *, loop):
+        self._loop = loop
         self.reader = reader
         self.consumers = consumers
         self.synchroniser = synchroniser
@@ -106,7 +107,9 @@ class Queue(object):
 
         self.sender.send_BasicConsume(self.name, no_local, no_ack, exclusive, arguments or {})
         tag = yield from self.synchroniser.await(spec.BasicConsumeOK)
-        consumer = Consumer(tag, callback, self.sender, self.synchroniser, self.reader)
+        consumer = Consumer(
+            tag, callback, self.sender, self.synchroniser, self.reader,
+            loop=self._loop)
         self.consumers.add_consumer(consumer)
         self.reader.ready()
         return consumer
@@ -238,14 +241,15 @@ class Consumer(object):
 
         Boolean. True if the consumer has been successfully cancelled.
     """
-    def __init__(self, tag, callback, sender, synchroniser, reader):
+    def __init__(self, tag, callback, sender, synchroniser, reader, *, loop):
+        self._loop = loop
         self.tag = tag
         self.callback = callback
         self.sender = sender
         self.cancelled = False
         self.synchroniser = synchroniser
         self.reader = reader
-        self.cancelled_future = asyncio.Future()
+        self.cancelled_future = asyncio.Future(loop=self._loop)
 
     @asyncio.coroutine
     def cancel(self):
@@ -264,7 +268,8 @@ class Consumer(object):
 
 
 class QueueFactory(object):
-    def __init__(self, sender, synchroniser, reader, consumers):
+    def __init__(self, sender, synchroniser, reader, consumers, *, loop):
+        self._loop = loop
         self.sender = sender
         self.synchroniser = synchroniser
         self.reader = reader
@@ -279,7 +284,9 @@ class QueueFactory(object):
 
         self.sender.send_QueueDeclare(name, durable, exclusive, auto_delete, arguments)
         name = yield from self.synchroniser.await(spec.QueueDeclareOK)
-        q = Queue(self.reader, self.consumers, self.synchroniser, self.sender, name, durable, exclusive, auto_delete, arguments)
+        q = Queue(self.reader, self.consumers, self.synchroniser, self.sender,
+                  name, durable, exclusive, auto_delete, arguments,
+                  loop=self._loop)
         self.reader.ready()
         return q
 

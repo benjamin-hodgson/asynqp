@@ -28,7 +28,8 @@ class Channel(object):
 
         the numerical ID of the channel
     """
-    def __init__(self, id, synchroniser, sender, basic_return_consumer, queue_factory, reader):
+    def __init__(self, id, synchroniser, sender, basic_return_consumer, queue_factory, reader, *, loop):
+        self._loop = loop
         self.id = id
         self.synchroniser = synchroniser
         self.sender = sender
@@ -158,19 +159,22 @@ class ChannelFactory(object):
     def open(self):
         self.next_channel_id += 1
         channel_id = self.next_channel_id
-        synchroniser = routing.Synchroniser()
+        synchroniser = routing.Synchroniser(loop=self.loop)
 
         sender = ChannelMethodSender(channel_id, self.protocol, self.connection_info)
-        basic_return_consumer = BasicReturnConsumer()
+        basic_return_consumer = BasicReturnConsumer(loop=self.loop)
         consumers = queue.Consumers(self.loop)
         consumers.add_consumer(basic_return_consumer)
 
-        handler = ChannelActor(consumers, synchroniser, sender)
-        reader, writer = routing.create_reader_and_writer(handler)
+        handler = ChannelActor(consumers, synchroniser, sender, loop=self.loop)
+        reader, writer = routing.create_reader_and_writer(handler, loop=self.loop)
         handler.message_receiver = MessageReceiver(synchroniser, sender, consumers, reader)
 
-        queue_factory = queue.QueueFactory(sender, synchroniser, reader, consumers)
-        channel = Channel(channel_id, synchroniser, sender, basic_return_consumer, queue_factory, reader)
+        queue_factory = queue.QueueFactory(
+            sender, synchroniser, reader, consumers, loop=self.loop)
+        channel = Channel(
+            channel_id, synchroniser, sender, basic_return_consumer,
+            queue_factory, reader, loop=self.loop)
 
         self.dispatcher.add_writer(channel_id, writer)
         try:
@@ -229,7 +233,8 @@ class ChannelActor(routing.Actor):
         self.synchroniser.notify(spec.BasicGetEmpty, False)
 
     def handle_BasicGetOK(self, frame):
-        asyncio.async(self.message_receiver.receive_getOK(frame))
+        assert self.message_receiver is not None, "message_receiver not set"
+        asyncio.async(self.message_receiver.receive_getOK(frame), loop=self._loop)
 
     def handle_BasicConsumeOK(self, frame):
         self.synchroniser.notify(spec.BasicConsumeOK, frame.payload.consumer_tag)
@@ -238,13 +243,16 @@ class ChannelActor(routing.Actor):
         self.synchroniser.notify(spec.BasicCancelOK)
 
     def handle_BasicDeliver(self, frame):
-        asyncio.async(self.message_receiver.receive_deliver(frame))
+        assert self.message_receiver is not None, "message_receiver not set"
+        asyncio.async(self.message_receiver.receive_deliver(frame), loop=self._loop)
 
     def handle_ContentHeaderFrame(self, frame):
-        asyncio.async(self.message_receiver.receive_header(frame))
+        assert self.message_receiver is not None, "message_receiver not set"
+        asyncio.async(self.message_receiver.receive_header(frame), loop=self._loop)
 
     def handle_ContentBodyFrame(self, frame):
-        asyncio.async(self.message_receiver.receive_body(frame))
+        assert self.message_receiver is not None, "message_receiver not set"
+        asyncio.async(self.message_receiver.receive_body(frame), loop=self._loop)
 
     def handle_ChannelClose(self, frame):
         self.sender.send_CloseOK()
@@ -258,7 +266,8 @@ class ChannelActor(routing.Actor):
         self.synchroniser.notify(spec.BasicQosOK)
 
     def handle_BasicReturn(self, frame):
-        asyncio.async(self.message_receiver.receive_return(frame))
+        assert self.message_receiver is not None, "message_receiver not set"
+        asyncio.async(self.message_receiver.receive_return(frame), loop=self._loop)
 
 
 class MessageReceiver(object):
@@ -411,9 +420,9 @@ class ChannelMethodSender(routing.Sender):
 class BasicReturnConsumer(object):
     tag = -1  # a 'real' tag is a string so there will never be a clash
 
-    def __init__(self):
+    def __init__(self, *, loop):
         self.callback = self.default_behaviour
-        self.cancelled_future = asyncio.Future()
+        self.cancelled_future = asyncio.Future(loop=loop)
 
     def set_callback(self, callback):
         if callback is None:

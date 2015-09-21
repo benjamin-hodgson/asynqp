@@ -39,7 +39,7 @@ class Connection(object):
 
         self.transport = transport
         self.protocol = protocol
-        self.closed = asyncio.Future()
+        self.closed = asyncio.Future(loop=loop)
 
     @asyncio.coroutine
     def open_channel(self):
@@ -67,13 +67,13 @@ class Connection(object):
 
 @asyncio.coroutine
 def open_connection(loop, transport, protocol, dispatcher, connection_info):
-    synchroniser = routing.Synchroniser()
+    synchroniser = routing.Synchroniser(loop=loop)
 
     sender = ConnectionMethodSender(protocol)
     connection = Connection(loop, transport, protocol, synchroniser, sender, dispatcher, connection_info)
-    handler = ConnectionActor(synchroniser, sender, protocol, connection)
+    handler = ConnectionActor(synchroniser, sender, protocol, connection, loop=loop)
 
-    reader, writer = routing.create_reader_and_writer(handler)
+    reader, writer = routing.create_reader_and_writer(handler, loop=loop)
 
     try:
         dispatcher.add_writer(0, writer)
@@ -110,8 +110,8 @@ def open_connection(loop, transport, protocol, dispatcher, connection_info):
 
 
 class ConnectionActor(routing.Actor):
-    def __init__(self, synchroniser, sender, protocol, connection):
-        super().__init__(synchroniser, sender)
+    def __init__(self, synchroniser, sender, protocol, connection, *, loop=None):
+        super().__init__(synchroniser, sender, loop=loop)
         self.protocol = protocol
         self.connection = connection
 
