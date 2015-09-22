@@ -1,6 +1,5 @@
 import asyncio
 from asynqp import spec
-from asynqp.exceptions import ConnectionLostError
 from asynqp.frames import HeartbeatFrame
 from .base_contexts import MockServerContext
 
@@ -46,9 +45,6 @@ class WhenServerDoesNotRespondToHeartbeat(MockServerContext):
 
     def it_should_close_the_connection(self):
         self.server.should_have_received_method(0, spec.ConnectionClose(501, 'Heartbeat timed out', 0, 0))
-
-    # def it_should_throw(self):
-    #     assert isinstance(self.protocol.heartbeat_monitor.monitor_task.exception(), ConnectionLostError)
 
     def cleanup_tasks(self):
         self.protocol.heartbeat_monitor.stop()
