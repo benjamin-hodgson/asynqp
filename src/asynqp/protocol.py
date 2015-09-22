@@ -88,6 +88,7 @@ class HeartbeatMonitor(object):
         self.loop = loop
         self.send_hb_task = None
         self.monitor_task = None
+        self._last_received = 0
 
     def start(self, interval):
         if interval <= 0:
@@ -102,19 +103,44 @@ class HeartbeatMonitor(object):
             self.monitor_task.cancel()
 
     @asyncio.coroutine
+    def wait_closed(self):
+        if self.send_hb_task is not None:
+            try:
+                yield from self.send_hb_task
+            except asyncio.CancelledError:
+                pass
+        if self.monitor_task is not None:
+            try:
+                yield from self.monitor_task
+            except asyncio.CancelledError:
+                pass
+
+    @asyncio.coroutine
     def send_heartbeat(self, interval):
         while True:
             self.protocol.send_frame(frames.HeartbeatFrame())
-            yield from asyncio.sleep(interval)
+            yield from asyncio.sleep(interval, loop=self.loop)
 
     @asyncio.coroutine
     def monitor_heartbeat(self, interval):
+        self._last_received = self.loop.time()
+        no_beat_for = 0
         while True:
-            self.is_alive = False
-            yield from asyncio.sleep(interval * 2)
-            if not self.is_alive:
-                self.protocol.send_method(0, spec.ConnectionClose(501, 'Heartbeat timed out', 0, 0))
-                self.protocol.connection_lost(ConnectionLostError('Heartbeat timed out'))
+            # We use interval roundtrip so 2x
+            yield from asyncio.sleep(
+                interval * 2 - no_beat_for, loop=self.loop)
+
+            no_beat_for = self.loop.time() - self._last_received
+            if no_beat_for > interval * 2:
+                self.protocol.send_method(
+                    0, spec.ConnectionClose(501, 'Heartbeat timed out', 0, 0))
+                # It's raised for backward compatibility
+                try:
+                    self.protocol.connection_lost(
+                        ConnectionLostError('Heartbeat timed out'))
+                except ConnectionLostError:
+                    pass
+                break
 
     def heartbeat_received(self):
-        self.is_alive = True
+        self._last_received = self.loop.time()
