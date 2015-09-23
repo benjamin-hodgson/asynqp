@@ -65,6 +65,7 @@ class WhenRecievingConnectionCloseOK(OpenConnectionContext):
 
     def when_connection_close_ok_arrives(self):
         self.server.send_method(0, spec.ConnectionCloseOK())
+        self.tick()
 
     def it_should_close_the_transport(self):
         assert self.transport.closed
