@@ -67,6 +67,11 @@ class OpenConnectionContext(MockServerContext):
 
         self.connection = task.result()
 
+    def cleanup_connection(self):
+        self.connection.protocol.heartbeat_monitor.stop()
+        self.loop.run_until_complete(
+            self.connection.protocol.heartbeat_monitor.wait_closed())
+
 
 class OpenChannelContext(OpenConnectionContext):
     def given_an_open_channel(self):

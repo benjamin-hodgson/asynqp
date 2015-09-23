@@ -63,6 +63,11 @@ class Connection(object):
         self._closing.set_result(True)
         self.sender.send_Close(0, 'Connection closed by application', 0, 0)
         yield from self.synchroniser.await(spec.ConnectionCloseOK)
+        # Close heartbeat
+        # TODO: We really need a better solution for finalization of parts
+        #       in the library.
+        self.protocol.heartbeat_monitor.stop()
+        yield from self.protocol.heartbeat_monitor.wait_closed()
         self.closed.set_result(True)
 
 
