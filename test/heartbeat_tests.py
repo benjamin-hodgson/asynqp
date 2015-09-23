@@ -15,7 +15,8 @@ class WhenServerWaitsForHeartbeat(MockServerContext):
     def cleanup_tasks(self):
         self.protocol.heartbeat_monitor.stop()
         self.loop.run_until_complete(
-            self.protocol.heartbeat_monitor.wait_closed())
+            asyncio.wait_for(self.protocol.heartbeat_monitor.wait_closed(),
+                             timeout=0.2))
 
 
 class WhenServerRespondsToHeartbeat(MockServerContext):
@@ -33,7 +34,8 @@ class WhenServerRespondsToHeartbeat(MockServerContext):
     def cleanup_tasks(self):
         self.protocol.heartbeat_monitor.stop()
         self.loop.run_until_complete(
-            self.protocol.heartbeat_monitor.wait_closed())
+            asyncio.wait_for(self.protocol.heartbeat_monitor.wait_closed(),
+                             timeout=0.2))
 
 
 class WhenServerDoesNotRespondToHeartbeat(MockServerContext):
@@ -49,4 +51,5 @@ class WhenServerDoesNotRespondToHeartbeat(MockServerContext):
     def cleanup_tasks(self):
         self.protocol.heartbeat_monitor.stop()
         self.loop.run_until_complete(
-            self.protocol.heartbeat_monitor.wait_closed())
+            asyncio.wait_for(self.protocol.heartbeat_monitor.wait_closed(),
+                             timeout=0.2))
