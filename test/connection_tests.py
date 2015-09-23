@@ -48,6 +48,10 @@ class WhenRespondingToConnectionClose(OpenConnectionContext):
     def it_should_set_the_future(self):
         assert self.connection.closed.done()
 
+    def it_should_not_block_clonnection_close(self):
+        self.loop.run_until_complete(
+            asyncio.wait_for(self.connection.close(), 0.2))
+
 
 class WhenTheApplicationClosesTheConnection(OpenConnectionContext):
     def when_I_close_the_connection(self):

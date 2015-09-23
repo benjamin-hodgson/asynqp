@@ -1,8 +1,11 @@
 import asyncio
+import logging
 import sys
 from . import channel
 from . import spec
 from . import routing
+
+log = logging.getLogger(__name__)
 
 
 class Connection(object):
@@ -60,15 +63,18 @@ class Connection(object):
 
         This method is a :ref:`coroutine <coroutine>`.
         """
-        self._closing.set_result(True)
-        self.sender.send_Close(0, 'Connection closed by application', 0, 0)
-        yield from self.synchroniser.await(spec.ConnectionCloseOK)
-        # Close heartbeat
-        # TODO: We really need a better solution for finalization of parts
-        #       in the library.
-        self.protocol.heartbeat_monitor.stop()
-        yield from self.protocol.heartbeat_monitor.wait_closed()
-        self.closed.set_result(True)
+        if not self.closed.done():
+            self._closing.set_result(True)
+            self.sender.send_Close(0, 'Connection closed by application', 0, 0)
+            yield from self.synchroniser.await(spec.ConnectionCloseOK)
+            # Close heartbeat
+            # TODO: We really need a better solution for finalization of parts
+            #       in the library.
+            self.protocol.heartbeat_monitor.stop()
+            yield from self.protocol.heartbeat_monitor.wait_closed()
+            self.closed.set_result(True)
+        else:
+            log.warn("Called `close` on already closed connection...")
 
 
 @asyncio.coroutine
