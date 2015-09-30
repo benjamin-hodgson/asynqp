@@ -1,29 +1,43 @@
-from ._exceptions import AMQPError
+from ._exceptions import AMQPError, AMQPChannelError
 from .spec import EXCEPTIONS, CONSTANTS_INVERSE
 
 
 __all__ = [
     "AMQPError",
     "ConnectionLostError",
+    "ServerConnectionClosed",
+    "ClientChannelClosed",
+    "ClientConnectionClosed",
+    "AMQPChannelError",
+    "AMQPConnectionError",
     "UndeliverableMessage",
     "Deleted"
 ]
 __all__.extend(EXCEPTIONS.keys())
 
 
-class AlreadyClosed(Exception):
-    """ Raised when issuing commands on closed Channel/Connection.
-    """
+class AMQPConnectionError(AMQPError):
+    pass
 
 
-class ConnectionLostError(AlreadyClosed, ConnectionError):
-    '''
-    Connection was closed unexpectedly
-    '''
+class ConnectionLostError(AMQPConnectionError, ConnectionError):
+    """ Connection was closed unexpectedly """
 
     def __init__(self, message, exc=None):
         super().__init__(message)
         self.original_exc = exc
+
+
+class ClientConnectionClosed(AMQPConnectionError):
+    """ Connection was closed by client """
+
+
+class ClientChannelClosed(AMQPChannelError):
+    """ Channel was closed by client """
+
+
+class ServerConnectionClosed(AMQPConnectionError):
+    """ Connection was closed by server """
 
 
 class UndeliverableMessage(ValueError):

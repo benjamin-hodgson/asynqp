@@ -46,9 +46,6 @@ class WhenRespondingToConnectionClose(OpenConnectionContext):
     def it_should_send_close_ok(self):
         self.server.should_have_received_method(0, spec.ConnectionCloseOK())
 
-    def it_should_set_the_future(self):
-        assert self.connection.closed.done()
-
     def it_should_not_block_clonnection_close(self):
         self.loop.run_until_complete(
             asyncio.wait_for(self.connection.close(), 0.2))
@@ -74,9 +71,6 @@ class WhenRecievingConnectionCloseOK(OpenConnectionContext):
 
     def it_should_close_the_transport(self):
         assert self.transport.closed
-
-    def it_should_set_the_future(self):
-        assert self.connection.closed.done()
 
 
 class WhenAConnectionThatIsClosingReceivesAMethod(OpenConnectionContext):
@@ -148,8 +142,30 @@ class WhenOpeningAChannelOnAClosedConnection(OpenConnectionContext):
         self.tick()
         self.server.send_method(0, spec.ConnectionCloseOK())
         self.tick()
+        self.tick()
         task.result()
 
     def it_should_raise_error_in_connection_methods(self):
         exc = contexts.catch(self.wait_for, self.connection.open_channel())
-        assert isinstance(exc, exceptions.AlreadyClosed)
+        assert isinstance(exc, exceptions.ClientConnectionClosed)
+
+
+class WhenServerAndClientCloseConnectionAtATime(OpenConnectionContext):
+    def when_both_sides_close_channel(self):
+        # Client tries to close connection
+        self.task = asyncio.async(self.connection.close(), loop=self.loop)
+        self.tick()
+        # Before OK arrives server closes connection
+        self.server.send_method(
+            0, spec.ConnectionClose(123, 'you muffed up', 10, 20))
+        self.tick()
+        self.tick()
+        self.task.result()
+
+    def if_should_have_closed_connection(self):
+        assert self.connection._closing
+
+    def it_should_have_killed_synchroniser_with_server_error(self):
+        assert isinstance(
+            self.connection.synchroniser.connection_exc,
+            exceptions.ServerConnectionClosed)

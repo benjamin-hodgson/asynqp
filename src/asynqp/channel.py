@@ -8,7 +8,10 @@ from . import exceptions
 from . import exchange
 from . import message
 from . import routing
-from .exceptions import UndeliverableMessage, AlreadyClosed
+from .exceptions import (
+    UndeliverableMessage, ClientChannelClosed,
+    ServerConnectionClosed, ClientConnectionClosed, AMQPError)
+from .log import log
 
 
 VALID_QUEUE_NAME_RE = re.compile(r'^(?!amq\.)(\w|[-.:])*$', flags=re.A)
@@ -29,7 +32,8 @@ class Channel(object):
 
         the numerical ID of the channel
     """
-    def __init__(self, id, synchroniser, sender, basic_return_consumer, queue_factory, reader, *, loop):
+    def __init__(self, id, synchroniser, sender, basic_return_consumer,
+                 queue_factory, reader, *, loop):
         self._loop = loop
         self.id = id
         self.synchroniser = synchroniser
@@ -37,6 +41,8 @@ class Channel(object):
         self.basic_return_consumer = basic_return_consumer
         self.queue_factory = queue_factory
         self.reader = reader
+        # Indicates, that channel is closed or started closing
+        self._closing = False
 
     @asyncio.coroutine
     def declare_exchange(self, name, type, *, durable=True, auto_delete=False, internal=False, arguments=None):
@@ -93,21 +99,6 @@ class Channel(object):
         return q
 
     @asyncio.coroutine
-    def close(self):
-        """
-        Close the channel by handshaking with the server.
-
-        This method is a :ref:`coroutine <coroutine>`.
-        """
-        self._closing.set_result(True)
-        self.sender.send_Close(0, 'Channel closed by application', 0, 0)
-        try:
-            yield from self.synchroniser.await(spec.ChannelCloseOK)
-        except AlreadyClosed:
-            pass
-        # don't call self.reader.ready - stop reading frames from the q
-
-    @asyncio.coroutine
     def set_qos(self, prefetch_size=0, prefetch_count=0, apply_globally=False):
         """
         Specify quality of service by requesting that messages be pre-fetched
@@ -151,6 +142,30 @@ class Channel(object):
         """
         self.basic_return_consumer.set_callback(handler)
 
+    @asyncio.coroutine
+    def close(self):
+        """
+        Close the channel by handshaking with the server.
+
+        This method is a :ref:`coroutine <coroutine>`.
+        """
+        # If we aren't already closed ask for server to close
+        if not self._closing:
+            self._closing = True
+            # Let the ChannelActor do the actual close operations.
+            # It will do the work on CloseOK
+            try:
+                self.sender.send_Close(
+                    0, 'Channel closed by application', 0, 0)
+                yield from self.synchroniser.await(spec.ChannelCloseOK)
+            except AMQPError:
+                # For example if both sides want to close or the connection
+                # is closed.
+                pass
+        else:
+            # Why are we closing a closed channel?
+            log.warn("Called `close` on already closed channel...")
+
 
 class ChannelFactory(object):
     def __init__(self, loop, protocol, dispatcher, connection_info):
@@ -171,16 +186,19 @@ class ChannelFactory(object):
         consumers = queue.Consumers(self.loop)
         consumers.add_consumer(basic_return_consumer)
 
-        actor = ChannelActor(consumers, synchroniser, sender, loop=self.loop)
+        actor = ChannelActor(synchroniser, sender, loop=self.loop)
         reader = routing.QueuedReader(actor, loop=self.loop)
-        actor.message_receiver = MessageReceiver(synchroniser, sender, consumers, reader)
 
         queue_factory = queue.QueueFactory(
             sender, synchroniser, reader, consumers, loop=self.loop)
         channel = Channel(
             channel_id, synchroniser, sender, basic_return_consumer,
             queue_factory, reader, loop=self.loop)
-        channel._closing = actor.closing
+
+        # Set actor dependencies
+        actor.message_receiver = MessageReceiver(synchroniser, sender, consumers, reader)
+        actor.consumers = consumers
+        actor.channel = channel
 
         self.dispatcher.add_handler(channel_id, reader.feed)
         try:
@@ -203,13 +221,12 @@ class ChannelFactory(object):
 
 
 class ChannelActor(routing.Actor):
-    def __init__(self, consumers, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.consumers = consumers
-
-    def handle_PoisonPillFrame(self, frame):
-        super().handle_PoisonPillFrame(frame)
-        self.consumers.error(frame.exception)
+        # Will set those in Channel factory
+        self.channel = None
+        self.consumers = None
+        self.message_receiver = None
 
     def handle_ChannelOpenOK(self, frame):
         self.synchroniser.notify(spec.ChannelOpenOK)
@@ -245,14 +262,6 @@ class ChannelActor(routing.Actor):
     def handle_BasicCancelOK(self, frame):
         self.synchroniser.notify(spec.BasicCancelOK)
 
-    def handle_ChannelClose(self, frame):
-        self.sender.send_CloseOK()
-        exc = exceptions._get_exception_type(frame.payload.reply_code)
-        self.synchroniser.killall(exc)
-
-    def handle_ChannelCloseOK(self, frame):
-        self.synchroniser.notify(spec.ChannelCloseOK)
-
     def handle_BasicQosOK(self, frame):
         self.synchroniser.notify(spec.BasicQosOK)
 
@@ -278,6 +287,57 @@ class ChannelActor(routing.Actor):
     def handle_BasicReturn(self, frame):
         assert self.message_receiver is not None, "message_receiver not set"
         self.message_receiver.receive_return(frame)
+
+    # Close handlers
+
+    def handle_PoisonPillFrame(self, frame):
+        """ Is sent in case protocol lost connection to server."""
+        # Make sure all `close` calls don't deadlock
+        self.channel._closing = True
+
+        exc = frame.exception
+        self._close_all(exc)
+
+    def handle_ChannelClose(self, frame):
+        """ AMQP server closed the channel with an error """
+        # Tell server we understood and close
+        self.sender.send_CloseOK()
+        # Make sure all `close` calls don't deadlock
+        self.channel._closing = True
+        exc = exceptions._get_exception_type(frame.payload.reply_code)
+        self._close_all(exc)
+
+    def handle_ChannelCloseOK(self, frame):
+        """ AMQP server closed channel as per our request """
+        # Let the close method continue working
+        self.synchroniser.notify(spec.ChannelCloseOK)
+        exc = ClientChannelClosed()
+        self._close_all(exc)
+
+    def handle_ConnectionClose(self, frame):
+        """ AMQP server closed the connection with an error """
+        # Make sure all `close` calls don't deadlock
+        self.channel._closing = True
+        exc = ServerConnectionClosed()
+        self._close_all(exc)
+
+    def handle_ConnectionCloseOK(self, frame):
+        """ AMQP server closed connection as per our request """
+        # Make sure all `close` calls don't deadlock
+        self.channel._closing = True
+        exc = ClientConnectionClosed()
+        self._close_all(exc)
+
+    def _close_all(self, exc):
+        # If there were anyone who expected an `*-OK` kill them, as no data
+        # will follow after close. Any new calls should also raise an error.
+        self.synchroniser.killall(exc)
+        self.sender.killall(exc)
+        # Cancel all consumers with same error
+        self.consumers.error(exc)
+
+    # TODO: Add `handle_BasicCancel` for
+    #       https://www.rabbitmq.com/consumer-cancel.html support
 
 
 class MessageReceiver(object):
@@ -312,7 +372,6 @@ class MessageReceiver(object):
             payload.routing_key,
             payload.consumer_tag
         )
-
         # Delivers message to consumers when done
         self.is_getok_message = False
         self.reader.ready()

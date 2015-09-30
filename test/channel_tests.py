@@ -239,6 +239,59 @@ class WhenAConnectionIsLostCloseChannel(OpenChannelContext):
             self.connection.protocol.connection_lost(Exception())
         except Exception:
             pass
+        self.tick()
+        self.was_closed = self.channel._closing
 
     def it_should_not_hang(self):
         self.loop.run_until_complete(asyncio.wait_for(self.channel.close(), 0.2))
+
+    def if_should_have_closed_channel(self):
+        assert self.was_closed
+
+
+class WhenWeCloseConnectionChannelShouldAlsoClose(OpenChannelContext):
+    def when_connection_is_closed(self):
+        self.task = asyncio.async(self.connection.close(), loop=self.loop)
+        self.server.send_method(0, spec.ConnectionCloseOK())
+        self.tick()
+        self.was_closed = self.channel._closing
+        self.loop.run_until_complete(asyncio.wait_for(self.task, 0.2))
+
+    def it_should_not_hang_channel_close(self):
+        self.loop.run_until_complete(asyncio.wait_for(self.channel.close(), 0.2))
+
+    def if_should_have_closed_channel(self):
+        assert self.was_closed
+
+
+class WhenServerClosesConnectionChannelShouldAlsoClose(OpenChannelContext):
+    def when_connection_is_closed(self):
+        self.server.send_method(
+            0, spec.ConnectionClose(123, 'you muffed up', 10, 20))
+        self.tick()
+        self.was_closed = self.channel._closing
+
+    def it_should_not_hang_channel_close(self):
+        self.loop.run_until_complete(asyncio.wait_for(self.channel.close(), 0.2))
+
+    def if_should_have_closed_channel(self):
+        assert self.was_closed
+
+
+class WhenServerAndClientCloseChannelAtATime(OpenChannelContext):
+    def when_both_sides_close_channel(self):
+        # Client tries to close connection
+        self.task = asyncio.async(self.channel.close(), loop=self.loop)
+        self.tick()
+        # Before OK arrives server closes connection
+        self.server.send_method(
+            self.channel.id,
+            spec.ChannelClose(404, 'i am tired of you', 40, 50))
+        self.tick()
+        self.task.result()
+
+    def if_should_have_closed_channel(self):
+        assert self.channel._closing
+
+    def it_should_have_killed_synchroniser_with_404(self):
+        assert self.channel.synchroniser.connection_exc == exceptions.NotFound

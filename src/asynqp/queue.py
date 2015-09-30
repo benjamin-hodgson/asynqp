@@ -2,7 +2,7 @@ import asyncio
 import re
 from operator import delitem
 from . import spec
-from .exceptions import Deleted, AlreadyClosed
+from .exceptions import Deleted, AMQPError
 
 
 VALID_QUEUE_NAME_RE = re.compile(r'^(?!amq\.)(\w|[-.:])*$', flags=re.A)
@@ -257,10 +257,10 @@ class Consumer(object):
 
         This method is a :ref:`coroutine <coroutine>`.
         """
-        self.sender.send_BasicCancel(self.tag)
         try:
+            self.sender.send_BasicCancel(self.tag)
             yield from self.synchroniser.await(spec.BasicCancelOK)
-        except AlreadyClosed:
+        except AMQPError:
             pass
         else:
             # No need to call ready if connection closed.

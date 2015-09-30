@@ -54,3 +54,4 @@ doc/_build/
 
 *.sublime-workspace
 .ipynb_checkpoints
+.DS_Store

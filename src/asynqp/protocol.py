@@ -8,6 +8,7 @@ from .log import log
 
 class AMQP(asyncio.Protocol):
     def __init__(self, dispatcher, loop):
+        self._loop = loop
         self.dispatcher = dispatcher
         self.partial_frame = b''
         self.frame_reader = FrameReader()
@@ -139,6 +140,8 @@ class HeartbeatMonitor(object):
 
     @asyncio.coroutine
     def send_heartbeat(self, interval):
+        # XXX: Add `last_sent` frame monitoring to not send heartbeats
+        #      if traffic was going through socket
         while True:
             self.protocol.send_frame(frames.HeartbeatFrame())
             yield from asyncio.sleep(interval, loop=self.loop)

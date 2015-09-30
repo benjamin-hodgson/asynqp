@@ -5,9 +5,6 @@ from . import spec
 from .log import log
 
 
-_TEST = False
-
-
 class Dispatcher(object):
     def __init__(self):
         self.handlers = {}
@@ -21,8 +18,15 @@ class Dispatcher(object):
     def dispatch(self, frame):
         if isinstance(frame, frames.HeartbeatFrame):
             return
-        handler = self.handlers[frame.channel_id]
-        handler(frame)
+        # XXX: Could not find a better way to close channels...
+        elif isinstance(frame.payload, (spec.ConnectionCloseOK,
+                                        spec.ConnectionClose)):
+            # Notify all connection channels about it
+            for handler in self.handlers.values():
+                handler(frame)
+        else:
+            handler = self.handlers[frame.channel_id]
+            handler(frame)
 
     def dispatch_all(self, frame):
         for handler in self.handlers.values():
@@ -33,9 +37,18 @@ class Sender(object):
     def __init__(self, channel_id, protocol):
         self.channel_id = channel_id
         self.protocol = protocol
+        self.connection_exc = None
 
     def send_method(self, method):
+        if self.connection_exc is not None:
+            raise self.connection_exc
         self.protocol.send_method(self.channel_id, method)
+
+    def killall(self, exc):
+        """ Connection/Channel was closed. All subsequent requests should
+            raise an error
+        """
+        self._connection_exc = exc
 
 
 class Actor(object):
@@ -43,21 +56,14 @@ class Actor(object):
         self._loop = loop
         self.synchroniser = synchroniser
         self.sender = sender
-        self.closing = asyncio.Future(loop=self._loop)
 
     def handle(self, frame):
-        close_methods = (spec.ConnectionClose, spec.ConnectionCloseOK, spec.ChannelClose, spec.ChannelCloseOK)
-        if self.closing.done() and not isinstance(frame.payload, close_methods):
-            return
         try:
             meth = getattr(self, 'handle_' + type(frame).__name__)
         except AttributeError:
             meth = getattr(self, 'handle_' + type(frame.payload).__name__)
 
         meth(frame)
-
-    def handle_PoisonPillFrame(self, frame):
-        self.synchroniser.killall(frame.exception)
 
 
 class Synchroniser(object):
@@ -94,6 +100,9 @@ class Synchroniser(object):
         fut.set_result(result)
 
     def killall(self, exc):
+        """ Connection/Channel was closed. All subsequent and ongoing requests
+            should raise an error
+        """
         self.connection_exc = exc
         # Set an exception for all others
         for method, futs in self._futures.items():
