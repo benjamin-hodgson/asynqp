@@ -107,9 +107,8 @@ class Synchroniser(object):
 
 
 def create_reader_and_writer(handler, *, loop):
-    q = asyncio.Queue(loop=loop)
-    reader = QueueReader(handler, q, loop=loop)
-    writer = QueueWriter(q)
+    reader = QueueReader(handler, loop=loop)
+    writer = QueueWriter(reader)
     return reader, writer
 
 
@@ -117,38 +116,38 @@ def create_reader_and_writer(handler, *, loop):
 # When the frame does arrive, dispatch it to the handler and do nothing
 # until someone calls ready() again.
 class QueueReader(object):
-    def __init__(self, handler, q, *, loop):
-        self._loop = loop
+    def __init__(self, handler, *, loop):
         self.handler = handler
-        self.q = q
         self.is_waiting = False
+        self.pending_frames = collections.deque()
+        self._loop = loop
 
     def ready(self):
         assert not self.is_waiting, "ready() got called while waiting for a frame to be read"
-        self.is_waiting = True
+        if self.pending_frames:
+            frame = self.pending_frames.popleft()
+            # We will call it in another tick just to be more strict about the
+            # sequence of frames
+            self._loop.call_soon(self.handler.handle, frame)
+        else:
+            self.is_waiting = True
 
-        # XXX: Refactor this. There should be only 1 async task per QueueReader
-        #      It will read frames in a `while True:` loop and will be canceled
-        #      when connection is closed.
-
-        t = asyncio.async(self._read_next(), loop=self._loop)
-        if _TEST:  # this feels hacky to me
-            t._log_destroy_pending = False
-
-    @asyncio.coroutine
-    def _read_next(self):
-        assert self.is_waiting, "a frame got read without ready() having been called"
-        frame = yield from self.q.get()
-        self.is_waiting = False
-        self.handler.handle(frame)
+    def feed(self, frame):
+        if self.is_waiting:
+            self.is_waiting = False
+            # We will call it in another tick just to be more strict about the
+            # sequence of frames
+            self._loop.call_soon(self.handler.handle, frame)
+        else:
+            self.pending_frames.append(frame)
 
 
 class QueueWriter(object):
-    def __init__(self, q):
-        self.q = q
+    def __init__(self, reader):
+        self.reader = reader
 
     def enqueue(self, frame):
-        self.q.put_nowait(frame)
+        self.reader.feed(frame)
 
 
 class OrderedManyToManyMap(object):
