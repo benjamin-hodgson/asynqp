@@ -1,7 +1,7 @@
 import asyncio
 import re
 from operator import delitem
-from . import spec, frames
+from . import spec
 from .exceptions import Deleted
 
 
@@ -130,11 +130,10 @@ class Queue(object):
             raise Deleted("Queue {} was deleted".format(self.name))
 
         self.sender.send_BasicGet(self.name, no_ack)
-        has_message = yield from self.synchroniser.await(spec.BasicGetOK, spec.BasicGetEmpty)
+        tag_msg = yield from self.synchroniser.await(spec.BasicGetOK, spec.BasicGetEmpty)
 
-        if has_message:
-            yield from self.synchroniser.await(frames.ContentHeaderFrame)
-            consumer_tag, msg = yield from self.synchroniser.await(frames.ContentBodyFrame)
+        if tag_msg is not None:
+            consumer_tag, msg = tag_msg
             assert consumer_tag is None
         else:
             msg = None
