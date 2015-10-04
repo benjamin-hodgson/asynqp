@@ -2,7 +2,7 @@ import asyncio
 import re
 from operator import delitem
 from . import spec
-from .exceptions import Deleted
+from .exceptions import Deleted, AlreadyClosed
 
 
 VALID_QUEUE_NAME_RE = re.compile(r'^(?!amq\.)(\w|[-.:])*$', flags=re.A)
@@ -258,12 +258,17 @@ class Consumer(object):
         This method is a :ref:`coroutine <coroutine>`.
         """
         self.sender.send_BasicCancel(self.tag)
-        yield from self.synchroniser.await(spec.BasicCancelOK)
+        try:
+            yield from self.synchroniser.await(spec.BasicCancelOK)
+        except AlreadyClosed:
+            pass
+        else:
+            # No need to call ready if connection closed.
+            self.reader.ready()
         self.cancelled = True
         self.cancelled_future.set_result(self)
         if hasattr(self.callback, 'on_cancel'):
             self.callback.on_cancel()
-        self.reader.ready()
 
 
 class QueueFactory(object):
