@@ -1,6 +1,5 @@
 import asyncio
 import re
-from functools import partial
 
 from . import frames
 from . import spec
@@ -331,12 +330,12 @@ class MessageReceiver(object):
         self.reader.ready()
 
     def receive_header(self, frame):
-        assert self.message_builder is not None, "Reveived unexpected header"
+        assert self.message_builder is not None, "Received unexpected header"
         self.message_builder.set_header(frame.payload)
         self.reader.ready()
 
     def receive_body(self, frame):
-        assert self.message_builder is not None, "Reveived unexpected body"
+        assert self.message_builder is not None, "Received unexpected body"
         self.message_builder.add_body_chunk(frame.payload)
         if self.message_builder.done():
             msg = self.message_builder.build()
