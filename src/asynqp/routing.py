@@ -75,28 +75,31 @@ class Synchroniser(object):
             return fut
 
         for method in expected_methods:
-            self._futures[method].append((fut, expected_methods))
+            self._futures[method].append(fut)
         return fut
 
     def notify(self, method, result=None):
-        try:
-            fut, bound_methods = self._futures[method].popleft()
-        except IndexError:
-            # XXX: we can't just ignore this.
-            log.error("Got an unexpected method notification %s", method)
-        else:
-            # Cleanup futures, that were awaited together, like
-            # (spec.BasicGetOK, spec.BasicGetEmpty)
-            for other_method in bound_methods:
-                if other_method != method:
-                    self._futures[other_method].remove((fut, bound_methods))
-            fut.set_result(result)
+        while True:
+            try:
+                fut = self._futures[method].popleft()
+            except IndexError:
+                # XXX: we can't just ignore this.
+                log.error("Got an unexpected method notification %s", method)
+                return
+            # We can have done futures if they were awaited together, like
+            # (spec.BasicGetOK, spec.BasicGetEmpty).
+            if not fut.done():
+                break
+
+        fut.set_result(result)
 
     def killall(self, exc):
         self.connection_exc = exc
         # Set an exception for all others
         for method, futs in self._futures.items():
-            for fut, _ in futs:
+            for fut in futs:
+                if fut.done():
+                    continue
                 fut.set_exception(exc)
         self._futures.clear()
 

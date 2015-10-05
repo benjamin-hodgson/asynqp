@@ -178,6 +178,19 @@ class WhenBasicGetOKArrives(QueueContext):
         assert self.task.result().routing_key == 'routing.key'
 
 
+class WhenConnectionClosedOnGet(QueueContext):
+    def given_I_asked_for_a_message(self):
+        self.task = asyncio.async(self.queue.get(no_ack=False))
+        self.tick()
+
+    def when_connection_is_closed(self):
+        self.server.protocol.connection_lost(None)
+        self.tick()
+
+    def it_should_raise_exception(self):
+        assert self.task.exception() is not None
+
+
 class WhenISubscribeToAQueue(QueueContext):
     def when_I_start_a_consumer(self):
         self.async_partial(self.queue.consume(lambda msg: None, no_local=False, no_ack=False, exclusive=False, arguments={'x-priority': 1}))
