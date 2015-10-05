@@ -285,7 +285,7 @@ class MessageReceiver(object):
         self.consumers = consumers
         self.reader = reader
         self.message_builder = None
-        self.message_callback = None
+        self.is_getok_message = None
 
     def receive_getOK(self, frame):
         payload = frame.payload
@@ -296,9 +296,8 @@ class MessageReceiver(object):
             payload.exchange,
             payload.routing_key
         )
-        # Send result=(msg, tag) when full message is returned
-        self.message_callback = partial(
-            self.synchroniser.notify, spec.BasicGetOK)
+        # Send message to synchroniser when done
+        self.is_getok_message = True
         self.reader.ready()
 
     def receive_deliver(self, frame):
@@ -312,11 +311,8 @@ class MessageReceiver(object):
             payload.consumer_tag
         )
 
-        # Deliver the message to consumers when done
-        def callback(tag_msg):
-            self.consumers.deliver(*tag_msg)
-            self.reader.ready()
-        self.message_callback = callback
+        # Delivers message to consumers when done
+        self.is_getok_message = False
         self.reader.ready()
 
     def receive_return(self, frame):
@@ -330,11 +326,8 @@ class MessageReceiver(object):
             BasicReturnConsumer.tag
         )
 
-        # Deliver the message to BasicReturnConsumer when done
-        def callback(tag_msg):
-            self.consumers.deliver(*tag_msg)
-            self.reader.ready()
-        self.message_callback = callback
+        # Delivers message to BasicReturnConsumer when done
+        self.is_getok_message = False
         self.reader.ready()
 
     def receive_header(self, frame):
@@ -348,11 +341,15 @@ class MessageReceiver(object):
         if self.message_builder.done():
             msg = self.message_builder.build()
             tag = self.message_builder.consumer_tag
-            self.message_callback((tag, msg))
+            if self.is_getok_message:
+                self.synchroniser.notify(spec.BasicGetOK, (tag, msg))
+                # Dont call ready() if message arrive after GetOk. It's the
+                # ``Queue.get`` method's responsibility
+            else:
+                self.consumers.deliver(tag, msg)
+                self.reader.ready()
+
             self.message_builder = None
-            self.message_callback = None
-            # Dont call ready() if full message arrive. It's the original
-            # caller's responsibility
             return
         # If message is not done yet we still need more frames. Wait for them
         self.reader.ready()
