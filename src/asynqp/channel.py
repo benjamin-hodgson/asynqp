@@ -1,5 +1,6 @@
 import asyncio
 import re
+
 from . import frames
 from . import spec
 from . import queue
@@ -232,29 +233,14 @@ class ChannelActor(routing.Actor):
         self.synchroniser.notify(spec.QueueDeleteOK)
 
     def handle_BasicGetEmpty(self, frame):
-        self.synchroniser.notify(spec.BasicGetEmpty, False)
-
-    def handle_BasicGetOK(self, frame):
-        assert self.message_receiver is not None, "message_receiver not set"
-        asyncio.async(self.message_receiver.receive_getOK(frame), loop=self._loop)
+        # Send result=None to notify Empty message
+        self.synchroniser.notify(spec.BasicGetEmpty, None)
 
     def handle_BasicConsumeOK(self, frame):
         self.synchroniser.notify(spec.BasicConsumeOK, frame.payload.consumer_tag)
 
     def handle_BasicCancelOK(self, frame):
         self.synchroniser.notify(spec.BasicCancelOK)
-
-    def handle_BasicDeliver(self, frame):
-        assert self.message_receiver is not None, "message_receiver not set"
-        asyncio.async(self.message_receiver.receive_deliver(frame), loop=self._loop)
-
-    def handle_ContentHeaderFrame(self, frame):
-        assert self.message_receiver is not None, "message_receiver not set"
-        asyncio.async(self.message_receiver.receive_header(frame), loop=self._loop)
-
-    def handle_ContentBodyFrame(self, frame):
-        assert self.message_receiver is not None, "message_receiver not set"
-        asyncio.async(self.message_receiver.receive_body(frame), loop=self._loop)
 
     def handle_ChannelClose(self, frame):
         self.sender.send_CloseOK()
@@ -267,9 +253,28 @@ class ChannelActor(routing.Actor):
     def handle_BasicQosOK(self, frame):
         self.synchroniser.notify(spec.BasicQosOK)
 
+    # Message receiving hanlers
+
+    def handle_BasicGetOK(self, frame):
+        assert self.message_receiver is not None, "message_receiver not set"
+        # Syncronizer will be notified after full msg is consumed
+        self.message_receiver.receive_getOK(frame)
+
+    def handle_BasicDeliver(self, frame):
+        assert self.message_receiver is not None, "message_receiver not set"
+        self.message_receiver.receive_deliver(frame)
+
+    def handle_ContentHeaderFrame(self, frame):
+        assert self.message_receiver is not None, "message_receiver not set"
+        self.message_receiver.receive_header(frame)
+
+    def handle_ContentBodyFrame(self, frame):
+        assert self.message_receiver is not None, "message_receiver not set"
+        self.message_receiver.receive_body(frame)
+
     def handle_BasicReturn(self, frame):
         assert self.message_receiver is not None, "message_receiver not set"
-        asyncio.async(self.message_receiver.receive_return(frame), loop=self._loop)
+        self.message_receiver.receive_return(frame)
 
 
 class MessageReceiver(object):
@@ -279,10 +284,9 @@ class MessageReceiver(object):
         self.consumers = consumers
         self.reader = reader
         self.message_builder = None
+        self.is_getok_message = None
 
-    @asyncio.coroutine
     def receive_getOK(self, frame):
-        self.synchroniser.notify(spec.BasicGetOK, True)
         payload = frame.payload
         self.message_builder = message.MessageBuilder(
             self.sender,
@@ -291,9 +295,10 @@ class MessageReceiver(object):
             payload.exchange,
             payload.routing_key
         )
+        # Send message to synchroniser when done
+        self.is_getok_message = True
         self.reader.ready()
 
-    @asyncio.coroutine
     def receive_deliver(self, frame):
         payload = frame.payload
         self.message_builder = message.MessageBuilder(
@@ -304,11 +309,11 @@ class MessageReceiver(object):
             payload.routing_key,
             payload.consumer_tag
         )
+
+        # Delivers message to consumers when done
+        self.is_getok_message = False
         self.reader.ready()
 
-        yield from self.async_receive()
-
-    @asyncio.coroutine
     def receive_return(self, frame):
         payload = frame.payload
         self.message_builder = message.MessageBuilder(
@@ -319,36 +324,33 @@ class MessageReceiver(object):
             payload.routing_key,
             BasicReturnConsumer.tag
         )
+
+        # Delivers message to BasicReturnConsumer when done
+        self.is_getok_message = False
         self.reader.ready()
 
-        yield from self.async_receive()
-
-    @asyncio.coroutine
-    def async_receive(self):
-        yield from self.synchroniser.await(frames.ContentHeaderFrame)
-        tag, msg = yield from self.synchroniser.await(frames.ContentBodyFrame)
-
-        self.consumers.deliver(tag, msg)
-        self.reader.ready()
-
-    @asyncio.coroutine
     def receive_header(self, frame):
-        self.synchroniser.notify(frames.ContentHeaderFrame)
+        assert self.message_builder is not None, "Received unexpected header"
         self.message_builder.set_header(frame.payload)
         self.reader.ready()
 
-    @asyncio.coroutine
     def receive_body(self, frame):
+        assert self.message_builder is not None, "Received unexpected body"
         self.message_builder.add_body_chunk(frame.payload)
         if self.message_builder.done():
             msg = self.message_builder.build()
             tag = self.message_builder.consumer_tag
-            self.synchroniser.notify(frames.ContentBodyFrame, (tag, msg))
+            if self.is_getok_message:
+                self.synchroniser.notify(spec.BasicGetOK, (tag, msg))
+                # Dont call ready() if message arrive after GetOk. It's the
+                # ``Queue.get`` method's responsibility
+            else:
+                self.consumers.deliver(tag, msg)
+                self.reader.ready()
+
             self.message_builder = None
-            # don't call self.reader.ready() if the message is all here -
-            # get() or async_receive() will call
-            # it when they have finished processing the completed msg
             return
+        # If message is not done yet we still need more frames. Wait for them
         self.reader.ready()
 
 
