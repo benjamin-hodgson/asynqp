@@ -168,7 +168,7 @@ class ChannelFactory(object):
         consumers.add_consumer(basic_return_consumer)
 
         actor = ChannelActor(consumers, synchroniser, sender, loop=self.loop)
-        reader, writer = routing.create_reader_and_writer(actor, loop=self.loop)
+        reader = routing.QueuedReader(actor, loop=self.loop)
         actor.message_receiver = MessageReceiver(synchroniser, sender, consumers, reader)
 
         queue_factory = queue.QueueFactory(
@@ -178,7 +178,7 @@ class ChannelFactory(object):
             queue_factory, reader, loop=self.loop)
         channel._closing = actor.closing
 
-        self.dispatcher.add_writer(channel_id, writer)
+        self.dispatcher.add_handler(channel_id, reader.feed)
         try:
             sender.send_ChannelOpen()
             reader.ready()
@@ -191,7 +191,7 @@ class ChannelFactory(object):
             # If we leave self.next_channel_id incremented, the worst
             # that happens is we end up with non-sequential channel numbers.
             # Small price to pay to keep this method re-entrant.
-            self.dispatcher.remove_writer(channel_id)
+            self.dispatcher.remove_handler(channel_id)
             raise
 
         reader.ready()
