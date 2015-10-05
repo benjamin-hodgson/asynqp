@@ -9,23 +9,23 @@ _TEST = False
 
 class Dispatcher(object):
     def __init__(self):
-        self.queue_writers = {}
+        self.handlers = {}
 
-    def add_writer(self, channel_id, writer):
-        self.queue_writers[channel_id] = writer
+    def add_handler(self, channel_id, handler):
+        self.handlers[channel_id] = handler
 
-    def remove_writer(self, channel_id):
-        del self.queue_writers[channel_id]
+    def remove_handler(self, channel_id):
+        del self.handlers[channel_id]
 
     def dispatch(self, frame):
         if isinstance(frame, frames.HeartbeatFrame):
             return
-        writer = self.queue_writers[frame.channel_id]
-        writer.enqueue(frame)
+        handler = self.handlers[frame.channel_id]
+        handler(frame)
 
     def dispatch_all(self, frame):
-        for writer in self.queue_writers.values():
-            writer.enqueue(frame)
+        for handler in self.handlers.values():
+            handler(frame)
 
 
 class Sender(object):
@@ -106,16 +106,10 @@ class Synchroniser(object):
                     self._futures.remove_item(fut)
 
 
-def create_reader_and_writer(handler, *, loop):
-    reader = QueueReader(handler, loop=loop)
-    writer = QueueWriter(reader)
-    return reader, writer
-
-
 # When ready() is called, wait for a frame to arrive on the queue.
 # When the frame does arrive, dispatch it to the handler and do nothing
 # until someone calls ready() again.
-class QueueReader(object):
+class QueuedReader(object):
     def __init__(self, handler, *, loop):
         self.handler = handler
         self.is_waiting = False
@@ -140,14 +134,6 @@ class QueueReader(object):
             self._loop.call_soon(self.handler.handle, frame)
         else:
             self.pending_frames.append(frame)
-
-
-class QueueWriter(object):
-    def __init__(self, reader):
-        self.reader = reader
-
-    def enqueue(self, frame):
-        self.reader.feed(frame)
 
 
 class OrderedManyToManyMap(object):

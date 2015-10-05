@@ -85,11 +85,10 @@ def open_connection(loop, transport, protocol, dispatcher, connection_info):
     connection = Connection(loop, transport, protocol, synchroniser, sender, dispatcher, connection_info)
     actor = ConnectionActor(synchroniser, sender, protocol, connection, loop=loop)
     connection._closing = actor.closing  # bit ugly
-
-    reader, writer = routing.create_reader_and_writer(actor, loop=loop)
+    reader = routing.QueuedReader(actor, loop=loop)
 
     try:
-        dispatcher.add_writer(0, writer)
+        dispatcher.add_handler(0, reader.feed)
         protocol.send_protocol_header()
         reader.ready()
 
@@ -117,7 +116,7 @@ def open_connection(loop, transport, protocol, dispatcher, connection_info):
         yield from synchroniser.await(spec.ConnectionOpenOK)
         reader.ready()
     except:
-        dispatcher.remove_writer(0)
+        dispatcher.remove_handler(0)
         raise
     return connection
 
