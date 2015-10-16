@@ -4,6 +4,7 @@ import sys
 from . import channel
 from . import spec
 from . import routing
+from .exceptions import AlreadyClosed
 
 log = logging.getLogger(__name__)
 
@@ -66,7 +67,10 @@ class Connection(object):
         if not self.closed.done():
             self._closing.set_result(True)
             self.sender.send_Close(0, 'Connection closed by application', 0, 0)
-            yield from self.synchroniser.await(spec.ConnectionCloseOK)
+            try:
+                yield from self.synchroniser.await(spec.ConnectionCloseOK)
+            except AlreadyClosed:
+                pass
             # Close heartbeat
             # TODO: We really need a better solution for finalization of parts
             #       in the library.

@@ -8,7 +8,7 @@ from . import exceptions
 from . import exchange
 from . import message
 from . import routing
-from .exceptions import UndeliverableMessage
+from .exceptions import UndeliverableMessage, AlreadyClosed
 
 
 VALID_QUEUE_NAME_RE = re.compile(r'^(?!amq\.)(\w|[-.:])*$', flags=re.A)
@@ -101,7 +101,10 @@ class Channel(object):
         """
         self._closing.set_result(True)
         self.sender.send_Close(0, 'Channel closed by application', 0, 0)
-        yield from self.synchroniser.await(spec.ChannelCloseOK)
+        try:
+            yield from self.synchroniser.await(spec.ChannelCloseOK)
+        except AlreadyClosed:
+            pass
         # don't call self.reader.ready - stop reading frames from the q
 
     @asyncio.coroutine

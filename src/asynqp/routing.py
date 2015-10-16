@@ -2,6 +2,7 @@ import asyncio
 import collections
 from . import frames
 from . import spec
+from .log import log
 
 
 _TEST = False
@@ -56,54 +57,51 @@ class Actor(object):
         meth(frame)
 
     def handle_PoisonPillFrame(self, frame):
-        self.synchroniser.killall(ConnectionError)
+        self.synchroniser.killall(frame.exception)
 
 
 class Synchroniser(object):
-    _blocking_methods = set((spec.BasicCancelOK,  # Consumer.cancel
-                             spec.ChannelCloseOK,  # Channel.close
-                             spec.ConnectionCloseOK))  # Connection.close
 
     def __init__(self, *, loop):
         self._loop = loop
-        self._futures = OrderedManyToManyMap()
-        self.connection_closed = False
+        self._futures = collections.defaultdict(collections.deque)
+        self.connection_exc = None
 
     def await(self, *expected_methods):
         fut = asyncio.Future(loop=self._loop)
 
-        if self.connection_closed:
-            for method in expected_methods:
-                if method in self._blocking_methods and not fut.done():
-                    fut.set_result(None)
-            if not fut.done():
-                fut.set_exception(ConnectionError)
+        if self.connection_exc is not None:
+            fut.set_exception(self.connection_exc)
             return fut
 
-        self._futures.add_item(expected_methods, fut)
+        for method in expected_methods:
+            self._futures[method].append(fut)
         return fut
 
     def notify(self, method, result=None):
-        fut = self._futures.get_leftmost(method)
+        while True:
+            try:
+                fut = self._futures[method].popleft()
+            except IndexError:
+                # XXX: we can't just ignore this.
+                log.error("Got an unexpected method notification %s", method)
+                return
+            # We can have done futures if they were awaited together, like
+            # (spec.BasicGetOK, spec.BasicGetEmpty).
+            if not fut.done():
+                break
+
         fut.set_result(result)
-        self._futures.remove_item(fut)
 
     def killall(self, exc):
-        self.connection_closed = True
-        # Give a proper notification to methods which are waiting for closure
-        for method in self._blocking_methods:
-            while True:
-                try:
-                    self.notify(method)
-                except StopIteration:
-                    break
-
+        self.connection_exc = exc
         # Set an exception for all others
-        for method in self._futures.keys():
-            if method not in self._blocking_methods:
-                for fut in self._futures.get_all(method):
-                    fut.set_exception(exc)
-                    self._futures.remove_item(fut)
+        for method, futs in self._futures.items():
+            for fut in futs:
+                if fut.done():
+                    continue
+                fut.set_exception(exc)
+        self._futures.clear()
 
 
 # When ready() is called, wait for a frame to arrive on the queue.
@@ -134,54 +132,3 @@ class QueuedReader(object):
             self._loop.call_soon(self.handler.handle, frame)
         else:
             self.pending_frames.append(frame)
-
-
-class OrderedManyToManyMap(object):
-    def __init__(self):
-        self._items = collections.defaultdict(OrderedSet)
-
-    def add_item(self, keys, item):
-        for key in keys:
-            self._items[key].add(item)
-
-    def remove_item(self, item):
-        for ordered_set in self._items.values():
-            ordered_set.discard(item)
-
-    def get_leftmost(self, key):
-        return self._items[key].first()
-
-    def get_all(self, key):
-        return list(self._items[key])
-
-    def keys(self):
-        return (k for k, v in self._items.items() if v)
-
-
-class OrderedSet(collections.MutableSet):
-    def __init__(self):
-        self._map = collections.OrderedDict()
-
-    def __contains__(self, item):
-        return item in self._map
-
-    def __iter__(self):
-        return iter(self._map.keys())
-
-    def __getitem__(self, ix):
-        return
-
-    def __len__(self):
-        return len(self._map)
-
-    def add(self, item):
-        self._map[item] = None
-
-    def discard(self, item):
-        try:
-            del self._map[item]
-        except KeyError:
-            pass
-
-    def first(self):
-        return next(iter(self))

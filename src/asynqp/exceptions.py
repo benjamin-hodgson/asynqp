@@ -11,7 +11,12 @@ __all__ = [
 __all__.extend(EXCEPTIONS.keys())
 
 
-class ConnectionLostError(ConnectionError):
+class AlreadyClosed(Exception):
+    """ Raised when issuing commands on closed Channel/Connection.
+    """
+
+
+class ConnectionLostError(AlreadyClosed, ConnectionError):
     '''
     Connection was closed unexpectedly
     '''

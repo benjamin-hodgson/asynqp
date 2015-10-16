@@ -46,7 +46,12 @@ class AMQP(asyncio.Protocol):
         self.heartbeat_monitor.start(heartbeat_interval)
 
     def connection_lost(self, exc):
-        self.dispatcher.dispatch_all(frames.PoisonPillFrame(exc))
+        if exc is None:
+            poison_exc = ConnectionLostError(
+                'The connection was unexpectedly lost')
+        else:
+            poison_exc = exc
+        self.dispatcher.dispatch_all(frames.PoisonPillFrame(poison_exc))
         if exc is not None:
             raise ConnectionLostError('The connection was unexpectedly lost') from exc
 
