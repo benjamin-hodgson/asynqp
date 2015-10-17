@@ -20,7 +20,10 @@ class ConnectionLostError(AlreadyClosed, ConnectionError):
     '''
     Connection was closed unexpectedly
     '''
-    pass
+
+    def __init__(self, message, exc=None):
+        super().__init__(message)
+        self.original_exc = exc
 
 
 class UndeliverableMessage(ValueError):

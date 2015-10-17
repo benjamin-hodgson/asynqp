@@ -3,6 +3,7 @@ import asynqp
 import socket
 import contexts
 from asyncio import test_utils
+from unittest import mock
 
 
 class ConnectionContext:
@@ -225,66 +226,6 @@ class WhenBasicCancelIsInterleavedWithAnotherMethod(BoundQueueContext):
         assert self.exception is None
 
 
-class WhenAConnectionIsClosedCloseConnection:
-    def given_a_connection(self):
-        self.loop = asyncio.get_event_loop()
-        self.connection = self.loop.run_until_complete(asynqp.connect())
-
-    def when_connection_is_closed(self):
-        self.connection.transport.close()
-
-    def it_should_not_hang(self):
-        self.loop.run_until_complete(asyncio.wait_for(self.connection.close(), 0.2))
-
-
-class WhenAConnectionIsClosedCloseChannel:
-    def given_a_channel(self):
-        self.loop = asyncio.get_event_loop()
-        self.connection = self.loop.run_until_complete(asynqp.connect())
-        self.channel = self.loop.run_until_complete(self.connection.open_channel())
-
-    def when_connection_is_closed(self):
-        self.connection.transport.close()
-
-    def it_should_not_hang(self):
-        self.loop.run_until_complete(asyncio.wait_for(self.channel.close(), 0.2))
-
-
-class WhenAConnectionIsClosedCancelConsuming:
-    def given_a_consumer(self):
-        asynqp.routing._TEST = True
-        self.loop = asyncio.get_event_loop()
-        self.connection = self.loop.run_until_complete(asynqp.connect())
-        self.channel = self.loop.run_until_complete(self.connection.open_channel())
-        self.exchange = self.loop.run_until_complete(
-            self.channel.declare_exchange(name='name',
-                                          type='direct',
-                                          durable=False,
-                                          auto_delete=True))
-
-        self.queue = self.loop.run_until_complete(
-            self.channel.declare_queue(name='',
-                                       durable=False,
-                                       exclusive=True,
-                                       auto_delete=True))
-
-        self.loop.run_until_complete(self.queue.bind(self.exchange,
-                                                     'name'))
-
-        self.consumer = self.loop.run_until_complete(
-            self.queue.consume(lambda x: x, exclusive=True)
-        )
-
-    def when_connection_is_closed(self):
-        self.connection.transport.close()
-
-    def it_should_not_hang(self):
-        self.loop.run_until_complete(asyncio.wait_for(self.consumer.cancel(), 0.2))
-
-    def cleanup(self):
-        asynqp.routing._TEST = False
-
-
 class WhenPublishingWithUnsetLoop:
 
     def given_I_have_a_queue(self):
@@ -363,3 +304,13 @@ class WhenConsumingWithUnsetLoop:
             yield from self.connection.close()
         self.loop.run_until_complete(tear_down())
         asyncio.set_event_loop(self.loop)
+
+
+class WhenAConnectionClosedByHandshakeProtocolShouldNotDispatchPoisonPill(ConnectionContext):
+    def when_we_close_connection(self):
+        with mock.patch("asynqp.routing.Dispatcher.dispatch_all") as mocked:
+            self.loop.run_until_complete(self.connection.close())
+        self.mocked = mocked
+
+    def it_should_not_dispatch_poison(self):
+        assert not self.mocked.called

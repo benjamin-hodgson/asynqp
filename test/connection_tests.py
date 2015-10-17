@@ -105,3 +105,14 @@ class WhenAConnectionThatWasClosedByTheServerReceivesAMethod(OpenConnectionConte
 
     def it_MUST_be_discarded(self):
         self.server.should_not_have_received_any()
+
+
+class WhenAConnectionIsLostCloseConnection(OpenConnectionContext):
+    def when_connection_is_closed(self):
+        try:
+            self.connection.protocol.connection_lost(Exception())
+        except Exception:
+            pass
+
+    def it_should_not_hang(self):
+        self.loop.run_until_complete(asyncio.wait_for(self.connection.close(), 0.2))
