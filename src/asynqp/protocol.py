@@ -3,6 +3,7 @@ import struct
 from . import spec
 from . import frames
 from .exceptions import AMQPError, ConnectionLostError
+from .log import log
 
 
 class AMQP(asyncio.Protocol):
@@ -46,14 +47,23 @@ class AMQP(asyncio.Protocol):
         self.heartbeat_monitor.start(heartbeat_interval)
 
     def connection_lost(self, exc):
-        if exc is None:
-            poison_exc = ConnectionLostError(
-                'The connection was unexpectedly lost')
-        else:
-            poison_exc = exc
-        self.dispatcher.dispatch_all(frames.PoisonPillFrame(poison_exc))
+        # If we exc is None - we closed the transport ourselves. No need to
+        # dispatch PoisonPillFrame, as we should have closed everything already
         if exc is not None:
-            raise ConnectionLostError('The connection was unexpectedly lost') from exc
+            poison_exc = ConnectionLostError(
+                'The connection was unexpectedly lost', exc)
+            self.dispatcher.dispatch_all(frames.PoisonPillFrame(poison_exc))
+            # XXX: Really do we even need to raise this??? It's super bad API
+            raise poison_exc from exc
+
+    def heartbeat_timeout(self):
+        """ Called by heartbeat_monitor on timeout """
+        log.error("Heartbeat time out")
+        poison_exc = ConnectionLostError('Heartbeat timed out')
+        poison_frame = frames.PoisonPillFrame(poison_exc)
+        self.dispatcher.dispatch_all(poison_frame)
+        # Spec says to just close socket without ConnectionClose handshake.
+        self.transport.close()
 
 
 class FrameReader(object):
@@ -131,21 +141,15 @@ class HeartbeatMonitor(object):
         self._last_received = self.loop.time()
         no_beat_for = 0
         while True:
-            # We use interval roundtrip so 2x
+            # As spec states:
+            # If a peer detects no incoming traffic (i.e. received octets) for
+            # two heartbeat intervals or longer, it should close the connection
             yield from asyncio.sleep(
                 interval * 2 - no_beat_for, loop=self.loop)
 
             no_beat_for = self.loop.time() - self._last_received
             if no_beat_for > interval * 2:
-                self.protocol.send_method(
-                    0, spec.ConnectionClose(501, 'Heartbeat timed out', 0, 0))
-                # It's raised for backward compatibility
-                try:
-                    self.protocol.connection_lost(
-                        ConnectionLostError('Heartbeat timed out'))
-                except ConnectionLostError:
-                    pass
-                break
+                self.protocol.heartbeat_timeout()
 
     def heartbeat_received(self):
         self._last_received = self.loop.time()

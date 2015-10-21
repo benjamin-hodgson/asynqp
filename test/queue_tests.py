@@ -184,7 +184,11 @@ class WhenConnectionClosedOnGet(QueueContext):
         self.tick()
 
     def when_connection_is_closed(self):
-        self.server.protocol.connection_lost(None)
+        # XXX: remove if we change behaviour to not raise
+        try:
+            self.server.protocol.connection_lost(Exception())
+        except Exception:
+            pass
         self.tick()
 
     def it_should_raise_exception(self):
@@ -322,7 +326,7 @@ class WhenAConsumerWithAnOnCancelMethodIsKilledDueToAnError(QueueContext):
         self.tick()
 
     def it_should_call_on_error(self):
-        assert self.consumer.exc is self.exception
+        assert self.consumer.exc.original_exc is self.exception
 
     class ConsumerWithOnError:
         def __init__(self):
@@ -388,3 +392,23 @@ class WhenITryToUseADeletedQueue(QueueContext):
 
     def it_should_throw_Deleted(self):
         assert isinstance(self.task.exception(), asynqp.Deleted)
+
+
+class WhenAConnectionIsClosedCancelConsuming(QueueContext, ExchangeContext):
+    def given_a_consumer(self):
+        task = asyncio.async(self.queue.consume(
+            lambda x: None, no_local=False, no_ack=False,
+            exclusive=False, arguments={'x-priority': 1}))
+        self.tick()
+        self.server.send_method(self.channel.id, spec.BasicConsumeOK('made.up.tag'))
+        self.tick()
+        self.consumer = task.result()
+
+    def when_connection_is_closed(self):
+        try:
+            self.connection.protocol.connection_lost(Exception())
+        except Exception:
+            pass
+
+    def it_should_not_hang(self):
+        self.loop.run_until_complete(asyncio.wait_for(self.consumer.cancel(), 0.2))

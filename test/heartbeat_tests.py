@@ -1,6 +1,7 @@
 import asyncio
-from asynqp import spec
+from unittest import mock
 from asynqp.frames import HeartbeatFrame
+from asynqp.exceptions import ConnectionLostError
 from .base_contexts import MockServerContext
 
 
@@ -43,10 +44,14 @@ class WhenServerDoesNotRespondToHeartbeat(MockServerContext):
         self.protocol.start_heartbeat(0.01)
 
     def when_the_server_dies(self):
-        self.loop.run_until_complete(asyncio.sleep(0.021))
+        with mock.patch("asynqp.routing.Dispatcher.dispatch_all") as mocked:
+            self.loop.run_until_complete(asyncio.sleep(0.021))
+            self.mocked = mocked
 
-    def it_should_close_the_connection(self):
-        self.server.should_have_received_method(0, spec.ConnectionClose(501, 'Heartbeat timed out', 0, 0))
+    def it_should_dispatch_a_poison_pill(self):
+        assert self.mocked.called
+        assert isinstance(
+            self.mocked.call_args[0][0].exception, ConnectionLostError)
 
     def cleanup_tasks(self):
         self.protocol.heartbeat_monitor.stop()

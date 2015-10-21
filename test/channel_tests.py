@@ -231,3 +231,14 @@ class WhenTheHandlerIsNotCallable(OpenChannelContext):
 
     def it_should_throw_a_TypeError(self):
         assert isinstance(self.exception, TypeError)
+
+
+class WhenAConnectionIsLostCloseChannel(OpenChannelContext):
+    def when_connection_is_closed(self):
+        try:
+            self.connection.protocol.connection_lost(Exception())
+        except Exception:
+            pass
+
+    def it_should_not_hang(self):
+        self.loop.run_until_complete(asyncio.wait_for(self.channel.close(), 0.2))
