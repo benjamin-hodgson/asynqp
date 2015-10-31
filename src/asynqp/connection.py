@@ -143,11 +143,11 @@ class ConnectionActor(routing.Actor):
     def handle_ConnectionClose(self, frame):
         self.closing.set_result(True)
         self.sender.send_CloseOK()
-        self.protocol.transport.close()
+        self.protocol.close()
         self.connection.closed.set_result(True)
 
     def handle_ConnectionCloseOK(self, frame):
-        self.protocol.transport.close()
+        self.protocol.close()
         self.synchroniser.notify(spec.ConnectionCloseOK)
 
 

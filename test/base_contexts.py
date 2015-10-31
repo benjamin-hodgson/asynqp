@@ -40,6 +40,10 @@ class LoopContext:
         self.tick()
         return t
 
+    def wait_for(self, coro):
+        return self.loop.run_until_complete(
+            asyncio.wait_for(coro, timeout=0.2, loop=self.loop))
+
 
 class MockServerContext(LoopContext):
     def given_a_mock_server_on_the_other_end_of_the_transport(self):
