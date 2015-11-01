@@ -1,6 +1,5 @@
 import asyncio
 import re
-from operator import delitem
 from . import spec
 from .exceptions import Deleted, AMQPError
 

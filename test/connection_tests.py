@@ -18,7 +18,7 @@ class WhenRespondingToConnectionStart(MockServerContext):
         expected_method = spec.ConnectionStartOK(
             {"product": "asynqp", "version": "0.1", "platform": sys.version,
              "capabilities": {
-                "consumer_cancel_notify": True
+                 "consumer_cancel_notify": True
              }},
             'AMQPLAIN',
             {'LOGIN': 'guest', 'PASSWORD': 'guest'},
