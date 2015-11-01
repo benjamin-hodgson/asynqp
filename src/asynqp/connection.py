@@ -111,7 +111,10 @@ def open_connection(loop, transport, protocol, dispatcher, connection_info):
         sender.send_StartOK(
             {"product": "asynqp",
              "version": "0.1",  # todo: use pkg_resources to inspect the package
-             "platform": sys.version},
+             "platform": sys.version,
+             "capabilities": {
+                "consumer_cancel_notify": True
+             }},
             'AMQPLAIN',
             {'LOGIN': connection_info['username'], 'PASSWORD': connection_info['password']},
             'en_US'

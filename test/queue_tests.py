@@ -468,3 +468,19 @@ class WhenIDeclareQueueWithNoWait(OpenChannelContext):
         self.server.should_have_received_method(
             self.channel.id, spec.QueueDeclare(
                 0, '123', False, True, True, False, True, {}))
+
+
+class WhenConsumerIsClosedServerSide(QueueContext, ExchangeContext):
+    def given_a_consumer(self):
+        task = asyncio.async(self.queue.consume(lambda x: None))
+        self.tick()
+        self.server.send_method(self.channel.id, spec.BasicConsumeOK('made.up.tag'))
+        self.tick()
+        self.consumer = task.result()
+
+    def when_consumer_is_closed_server_side(self):
+        self.server.send_method(self.channel.id, spec.BasicCancel('made.up.tag', False))
+        self.tick()
+
+    def it_should_close_consumer(self):
+        assert 'made.up.tag' not in self.channel.queue_factory.consumers.consumers
