@@ -72,7 +72,8 @@ class Channel(object):
         return ex
 
     @asyncio.coroutine
-    def declare_queue(self, name='', *, durable=True, exclusive=False, auto_delete=False, arguments=None):
+    def declare_queue(self, name='', *, durable=True, exclusive=False,
+                      auto_delete=False, passive=False, arguments=None):
         """
         Declare a queue on the broker. If the queue does not exist, it will be created.
 
@@ -89,7 +90,9 @@ class Channel(object):
 
         :return: The new :class:`Queue` object.
         """
-        q = yield from self.queue_factory.declare(name, durable, exclusive, auto_delete, arguments if arguments is not None else {})
+        q = yield from self.queue_factory.declare(
+            name, durable, exclusive, auto_delete, passive,
+            arguments if arguments is not None else {})
         return q
 
     @asyncio.coroutine
@@ -371,8 +374,8 @@ class ChannelMethodSender(routing.Sender):
     def send_ExchangeDelete(self, name, if_unused):
         self.send_method(spec.ExchangeDelete(0, name, if_unused, False))
 
-    def send_QueueDeclare(self, name, durable, exclusive, auto_delete, arguments):
-        self.send_method(spec.QueueDeclare(0, name, False, durable, exclusive, auto_delete, False, arguments))
+    def send_QueueDeclare(self, name, durable, exclusive, auto_delete, passive, arguments):
+        self.send_method(spec.QueueDeclare(0, name, passive, durable, exclusive, auto_delete, False, arguments))
 
     def send_QueueBind(self, queue_name, exchange_name, routing_key, arguments):
         self.send_method(spec.QueueBind(0, queue_name, exchange_name, routing_key, False, arguments))
