@@ -49,12 +49,18 @@ class Channel(object):
         :param str name: the name of the exchange.
         :param str type: the type of the exchange
             (usually one of ``'fanout'``, ``'direct'``, ``'topic'``, or ``'headers'``)
-        :keyword bool durable: If true, the exchange will be re-created when the server restarts.
+        :keyword bool durable: If true, the exchange will be re-created when
+            the server restarts.
         :keyword bool auto_delete: If true, the exchange will be
             deleted when the last queue is un-bound from it.
-        :keyword bool internal: If true, the exchange cannot be published to directly;
-            it can only be bound to other exchanges.
-        :keyword dict arguments: Table of optional parameters for extensions to the AMQP protocol. See :ref:`extensions`.
+        :keyword bool passive: If `true` and exchange with such a name does
+            not exist it will raise a :class:`exceptions.NotFound`. If `false`
+            server will create it. Arguments ``durable``, ``auto_delete`` and
+            ``internal`` are ignored if `passive=True`.
+        :keyword bool internal: If true, the exchange cannot be published to
+            directly; it can only be bound to other exchanges.
+        :keyword dict arguments: Table of optional parameters for extensions to
+            the AMQP protocol. See :ref:`extensions`.
 
         :return: the new :class:`Exchange` object.
         """
@@ -92,6 +98,10 @@ class Channel(object):
             and will be deleted when the connection is closed.
         :keyword bool auto_delete: If true, the queue will be deleted when the last consumer is cancelled.
             If there were never any conusmers, the queue won't be deleted.
+        :keyword bool passive: If true and queue with such a name does not
+            exist it will raise a :class:`exceptions.NotFound` instead of
+            creating it. Arguments ``durable``, ``auto_delete`` and
+            ``exclusive`` are ignored if ``passive=True``.
         :keyword dict arguments: Table of optional parameters for extensions to the AMQP protocol. See :ref:`extensions`.
 
         :return: The new :class:`Queue` object.
