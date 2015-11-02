@@ -39,7 +39,8 @@ class Channel(object):
         self.reader = reader
 
     @asyncio.coroutine
-    def declare_exchange(self, name, type, *, durable=True, auto_delete=False, internal=False, arguments=None):
+    def declare_exchange(self, name, type, *, durable=True, auto_delete=False,
+                         passive=False, internal=False, arguments=None):
         """
         Declare an :class:`Exchange` on the broker. If the exchange does not exist, it will be created.
 
@@ -61,13 +62,18 @@ class Channel(object):
             return exchange.Exchange(self.reader, self.synchroniser, self.sender, name, 'direct', True, False, False)
 
         if not VALID_EXCHANGE_NAME_RE.match(name):
-            raise ValueError("Invalid exchange name.\n"
-                             "Valid names consist of letters, digits, hyphen, underscore, period, or colon, "
-                             "and do not begin with 'amq.'")
+            raise ValueError(
+                "Invalid exchange name.\n"
+                "Valid names consist of letters, digits, hyphen, underscore, "
+                "period, or colon, and do not begin with 'amq.'")
 
-        self.sender.send_ExchangeDeclare(name, type, durable, auto_delete, internal, arguments or {})
+        self.sender.send_ExchangeDeclare(
+            name, type, passive, durable, auto_delete, internal,
+            arguments or {})
         yield from self.synchroniser.await(spec.ExchangeDeclareOK)
-        ex = exchange.Exchange(self.reader, self.synchroniser, self.sender, name, type, durable, auto_delete, internal)
+        ex = exchange.Exchange(
+            self.reader, self.synchroniser, self.sender, name, type, durable,
+            auto_delete, internal)
         self.reader.ready()
         return ex
 
@@ -368,8 +374,8 @@ class ChannelMethodSender(routing.Sender):
     def send_ChannelOpen(self):
         self.send_method(spec.ChannelOpen(''))
 
-    def send_ExchangeDeclare(self, name, type, durable, auto_delete, internal, arguments):
-        self.send_method(spec.ExchangeDeclare(0, name, type, False, durable, auto_delete, internal, False, arguments))
+    def send_ExchangeDeclare(self, name, type, passive, durable, auto_delete, internal, arguments):
+        self.send_method(spec.ExchangeDeclare(0, name, type, passive, durable, auto_delete, internal, False, arguments))
 
     def send_ExchangeDelete(self, name, if_unused):
         self.send_method(spec.ExchangeDelete(0, name, if_unused, False))

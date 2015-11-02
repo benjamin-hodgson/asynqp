@@ -418,7 +418,7 @@ class WhenAConnectionIsClosedCancelConsuming(QueueContext, ExchangeContext):
 class WhenIDeclareQueueWithPassiveAndOKArrives(OpenChannelContext):
     def given_I_declared_a_queue_with_passive(self):
         self.task = asyncio.async(self.channel.declare_queue(
-            '123', durable=True, exclusive=True, auto_delete=True,
+            '123', durable=True, exclusive=True, auto_delete=False,
             passive=True), loop=self.loop)
         self.tick()
 
@@ -431,6 +431,11 @@ class WhenIDeclareQueueWithPassiveAndOKArrives(OpenChannelContext):
         assert result
         assert result.name == '123'
 
+    def it_should_have_sent_passive_in_frame(self):
+        self.server.should_have_received_method(
+            self.channel.id, spec.QueueDeclare(
+                0, '123', True, True, True, False, False, {}))
+
 
 class WhenIDeclareQueueWithPassiveAndErrorArrives(OpenChannelContext):
     def given_I_declared_a_queue_with_passive(self):
@@ -439,7 +444,7 @@ class WhenIDeclareQueueWithPassiveAndErrorArrives(OpenChannelContext):
             passive=True), loop=self.loop)
         self.tick()
 
-    def when_QueueDeclareOK_arrives(self):
+    def when_error_arrives(self):
         self.server.send_method(
             self.channel.id, spec.ChannelClose(404, 'Bad queue', 40, 50))
 
