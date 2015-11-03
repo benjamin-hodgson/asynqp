@@ -1,5 +1,6 @@
 import asyncio
 import sys
+import contexts
 from asynqp import spec, exceptions
 from asynqp.connection import open_connection
 from .base_contexts import MockServerContext, OpenConnectionContext
@@ -139,3 +140,16 @@ class WhenServerClosesTransportWithoutConnectionClose(OpenConnectionContext):
             assert type(err) == exceptions.ConnectionLostError
         else:
             assert False, "ConnectionLostError not raised"
+
+
+class WhenOpeningAChannelOnAClosedConnection(OpenConnectionContext):
+    def when_client_closes_connection(self):
+        task = asyncio.async(self.connection.close())
+        self.tick()
+        self.server.send_method(0, spec.ConnectionCloseOK())
+        self.tick()
+        task.result()
+
+    def it_should_raise_error_in_connection_methods(self):
+        exc = contexts.catch(self.wait_for, self.connection.open_channel())
+        assert isinstance(exc, exceptions.AlreadyClosed)

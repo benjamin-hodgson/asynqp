@@ -41,8 +41,7 @@ class LoopContext:
         return t
 
     def wait_for(self, coro):
-        return self.loop.run_until_complete(
-            asyncio.wait_for(coro, timeout=0.2, loop=self.loop))
+        return self.loop.run_until_complete(asyncio.wait_for(coro, timeout=0.2, loop=self.loop))
 
 
 class MockServerContext(LoopContext):

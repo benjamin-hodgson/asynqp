@@ -54,6 +54,8 @@ class Connection(object):
 
         :return: The new :class:`Channel` object.
         """
+        if self.closed.done():
+            raise AlreadyClosed()
         channel = yield from self.channel_factory.open()
         return channel
 
