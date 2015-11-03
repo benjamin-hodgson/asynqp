@@ -257,13 +257,13 @@ class Consumer(object):
 
         This method is a :ref:`coroutine <coroutine>`.
         """
+        self.sender.send_BasicCancel(self.tag)
         try:
-            self.sender.send_BasicCancel(self.tag)
             yield from self.synchroniser.await(spec.BasicCancelOK)
         except AMQPError:
             pass
         else:
-            # No need to call ready if connection closed.
+            # No need to call ready if channel closed.
             self.reader.ready()
         self.cancelled = True
         self.cancelled_future.set_result(self)

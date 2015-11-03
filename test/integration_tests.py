@@ -304,13 +304,3 @@ class WhenConsumingWithUnsetLoop:
             yield from self.connection.close()
         self.loop.run_until_complete(tear_down())
         asyncio.set_event_loop(self.loop)
-
-
-class WhenAConnectionClosedByHandshakeProtocolShouldNotDispatchPoisonPill(ConnectionContext):
-    def when_we_close_connection(self):
-        with mock.patch("asynqp.routing.Dispatcher.dispatch_all") as mocked:
-            self.loop.run_until_complete(self.connection.close())
-        self.mocked = mocked
-
-    def it_should_not_dispatch_poison(self):
-        assert not self.mocked.called

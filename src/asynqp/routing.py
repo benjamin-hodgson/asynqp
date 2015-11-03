@@ -1,7 +1,6 @@
 import asyncio
 import collections
 from . import frames
-from . import spec
 from .log import log
 
 
@@ -18,15 +17,8 @@ class Dispatcher(object):
     def dispatch(self, frame):
         if isinstance(frame, frames.HeartbeatFrame):
             return
-        # XXX: Could not find a better way to close channels...
-        elif isinstance(frame.payload, (spec.ConnectionCloseOK,
-                                        spec.ConnectionClose)):
-            # Notify all connection channels about it
-            for handler in self.handlers.values():
-                handler(frame)
-        else:
-            handler = self.handlers[frame.channel_id]
-            handler(frame)
+        handler = self.handlers[frame.channel_id]
+        handler(frame)
 
     def dispatch_all(self, frame):
         for handler in self.handlers.values():
@@ -37,18 +29,9 @@ class Sender(object):
     def __init__(self, channel_id, protocol):
         self.channel_id = channel_id
         self.protocol = protocol
-        self.connection_exc = None
 
     def send_method(self, method):
-        if self.connection_exc is not None:
-            raise self.connection_exc
         self.protocol.send_method(self.channel_id, method)
-
-    def killall(self, exc):
-        """ Connection/Channel was closed. All subsequent requests should
-            raise an error
-        """
-        self._connection_exc = exc
 
 
 class Actor(object):

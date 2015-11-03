@@ -2,6 +2,7 @@ import asyncio
 import sys
 from . import spec
 from . import routing
+from . import frames
 from .channel import ChannelFactory
 from .exceptions import (
     AMQPConnectionError, ClientConnectionClosed, ServerConnectionClosed)
@@ -35,7 +36,6 @@ class Connection(object):
         The :class:`~asyncio.Protocol` which is paired with the transport
     """
     def __init__(self, loop, transport, protocol, synchroniser, sender, dispatcher, connection_info):
-        self._loop = loop
         self.synchroniser = synchroniser
         self.sender = sender
         self.channel_factory = ChannelFactory(loop, protocol, dispatcher, connection_info)
@@ -45,8 +45,7 @@ class Connection(object):
         self.protocol = protocol
         # Indicates, that close was initiated by client
         self._closing = False
-        # List of created channels
-        self._close_waiters = []
+        self._closed_with = None
 
     @asyncio.coroutine
     def open_channel(self):
@@ -59,8 +58,14 @@ class Connection(object):
         """
         if self._closing:
             raise ClientConnectionClosed()
+        if self._closed_with:
+            raise self._closed_with
+
         channel = yield from self.channel_factory.open()
         return channel
+
+    def is_closed(self):
+        return self._closing or self._closed_with is not None
 
     @asyncio.coroutine
     def close(self):
@@ -69,23 +74,23 @@ class Connection(object):
 
         This method is a :ref:`coroutine <coroutine>`.
         """
-        if not self._closing:
+        if not self.is_closed():
             self._closing = True
             # Let the ConnectionActor do the actual close operations.
             # It will do the work on CloseOK
+            self.sender.send_Close(
+                0, 'Connection closed by application', 0, 0)
             try:
-                self.sender.send_Close(
-                    0, 'Connection closed by application', 0, 0)
                 yield from self.synchroniser.await(spec.ConnectionCloseOK)
             except AMQPConnectionError:
                 # For example if both sides want to close or the connection
                 # is closed.
                 pass
         else:
-            log.warn("Called `close` on already closed connection...")
-        # Wait for all components to close
-        if self._close_waiters:
-            yield from asyncio.gather(*self._close_waiters, loop=self._loop)
+            if self._closing:
+                log.warn("Called `close` on already closing connection...")
+        # finish all pending tasks
+        yield from self.protocol.heartbeat_monitor.wait_closed()
 
 
 @asyncio.coroutine
@@ -94,7 +99,7 @@ def open_connection(loop, transport, protocol, dispatcher, connection_info):
 
     sender = ConnectionMethodSender(protocol)
     connection = Connection(loop, transport, protocol, synchroniser, sender, dispatcher, connection_info)
-    actor = ConnectionActor(synchroniser, sender, protocol, connection, loop=loop)
+    actor = ConnectionActor(synchroniser, sender, protocol, connection, dispatcher, loop=loop)
     reader = routing.QueuedReader(actor, loop=loop)
 
     try:
@@ -132,10 +137,25 @@ def open_connection(loop, transport, protocol, dispatcher, connection_info):
 
 
 class ConnectionActor(routing.Actor):
-    def __init__(self, synchroniser, sender, protocol, connection, *, loop=None):
+    def __init__(self, synchroniser, sender, protocol, connection, dispatcher, *, loop=None):
         super().__init__(synchroniser, sender, loop=loop)
         self.protocol = protocol
         self.connection = connection
+        self.dispatcher = dispatcher
+
+    def handle(self, frame):
+        # From docs on `close`:
+        # After sending this method, any received methods except Close and
+        # Close-OK MUST be discarded.
+        # So we will only process ConnectionClose, ConnectionCloseOK,
+        # PoisonPillFrame if channel is closed
+        if self.connection.is_closed():
+            close_methods = (spec.ConnectionClose, spec.ConnectionCloseOK)
+            if isinstance(frame.payload, close_methods) or isinstance(frame, frames.PoisonPillFrame):
+                return super().handle(frame)
+            else:
+                return
+        return super().handle(frame)
 
     def handle_ConnectionStart(self, frame):
         self.synchroniser.notify(spec.ConnectionStart)
@@ -146,26 +166,29 @@ class ConnectionActor(routing.Actor):
     def handle_ConnectionOpenOK(self, frame):
         self.synchroniser.notify(spec.ConnectionOpenOK)
 
+    # Close handlers
+
     def handle_PoisonPillFrame(self, frame):
         """ Is sent in case protocol lost connection to server."""
-        # Make sure all `close` calls don't deadlock
-        self.connection._closing = True
-        exc = frame.exception
-        # Transport is already closed
-        self._close_all(exc)
+        # Will be delivered after Close or CloseOK handlers. It's for channels,
+        # so ignore it.
+        if self.connection._closed_with is not None:
+            return
+        # If connection was not closed already - we lost connection.
+        # Protocol should already be closed
+        self._close_all(frame.exception)
 
     def handle_ConnectionClose(self, frame):
         """ AMQP server closed the channel with an error """
         # Notify server we are OK to close.
         self.sender.send_CloseOK()
-        self.connection._closing = True
-        exc = ServerConnectionClosed()
-        self._close_all(exc)
 
-        # Don't close transport right away, as CloseOK might not get to server
-        # yet. At least give the loop a spin before we do so.
-        # TODO: After FlowControl is implemented change this to drain and close
-        self._loop.call_soon(self.protocol.close)
+        exc = ServerConnectionClosed(frame.payload.reply_text,
+                                     frame.payload.reply_code)
+        self._close_all(exc)
+        # This will not abort transport, it will try to flush remaining data
+        # asynchronously, as stated in `asyncio` docs.
+        self.protocol.close()
 
     def handle_ConnectionCloseOK(self, frame):
         self.synchroniser.notify(spec.ConnectionCloseOK)
@@ -175,14 +198,16 @@ class ConnectionActor(routing.Actor):
         self.protocol.close()
 
     def _close_all(self, exc):
+        # Make sure all `close` calls don't deadlock
+        self.connection._closed_with = exc
         # Close heartbeat
         self.protocol.heartbeat_monitor.stop()
-        self.connection._close_waiters.append(
-            self.protocol.heartbeat_monitor.wait_closed())
         # If there were anyone who expected an `*-OK` kill them, as no data
         # will follow after close
         self.synchroniser.killall(exc)
-        self.sender.killall(exc)
+        # Notify all channels about error
+        poison_frame = frames.PoisonPillFrame(exc)
+        self.dispatcher.dispatch_all(poison_frame)
 
 
 class ConnectionMethodSender(routing.Sender):

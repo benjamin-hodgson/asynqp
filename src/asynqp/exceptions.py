@@ -39,6 +39,11 @@ class ClientChannelClosed(AMQPChannelError):
 class ServerConnectionClosed(AMQPConnectionError):
     """ Connection was closed by server """
 
+    def __init__(self, reply_text, reply_code):
+        super().__init__(reply_text)
+        self.reply_text = reply_text
+        self.reply_code = reply_code
+
 
 class UndeliverableMessage(ValueError):
     pass
