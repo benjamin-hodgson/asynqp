@@ -5,7 +5,7 @@ from . import routing
 from . import frames
 from .channel import ChannelFactory
 from .exceptions import (
-    AMQPConnectionError, ClientConnectionClosed, ServerConnectionClosed)
+    AMQPConnectionError, ConnectionClosed)
 from .log import log
 
 
@@ -57,7 +57,7 @@ class Connection(object):
         :return: The new :class:`Channel` object.
         """
         if self._closing:
-            raise ClientConnectionClosed()
+            raise ConnectionClosed("Closed by application")
         if self._closed_with:
             raise self._closed_with
 
@@ -183,8 +183,8 @@ class ConnectionActor(routing.Actor):
         # Notify server we are OK to close.
         self.sender.send_CloseOK()
 
-        exc = ServerConnectionClosed(frame.payload.reply_text,
-                                     frame.payload.reply_code)
+        exc = ConnectionClosed(frame.payload.reply_text,
+                               frame.payload.reply_code)
         self._close_all(exc)
         # This will not abort transport, it will try to flush remaining data
         # asynchronously, as stated in `asyncio` docs.
@@ -192,7 +192,7 @@ class ConnectionActor(routing.Actor):
 
     def handle_ConnectionCloseOK(self, frame):
         self.synchroniser.notify(spec.ConnectionCloseOK)
-        exc = ClientConnectionClosed()
+        exc = ConnectionClosed("Closed by application")
         self._close_all(exc)
         # We already agread with server on closing, so lets do it right away
         self.protocol.close()

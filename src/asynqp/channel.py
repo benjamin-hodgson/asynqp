@@ -9,8 +9,7 @@ from . import exchange
 from . import message
 from . import routing
 from .exceptions import (
-    UndeliverableMessage, ClientChannelClosed,
-    ServerConnectionClosed, ClientConnectionClosed, AMQPError)
+    UndeliverableMessage, AMQPError, ChannelClosed)
 from .log import log
 
 
@@ -42,7 +41,7 @@ class Channel(object):
         self.queue_factory = queue_factory
         self.reader = reader
         self._closed = False
-        # Indicates, that channel is closed or started closing
+        # Indicates, that channel is closing by client(!) call
         self._closing = False
 
     @asyncio.coroutine
@@ -330,7 +329,7 @@ class ChannelActor(routing.Actor):
         # Release the `close` method's future
         self.synchroniser.notify(spec.ChannelCloseOK)
 
-        exc = ClientChannelClosed()
+        exc = ChannelClosed()
         self._close_all(exc)
 
     def _close_all(self, exc):

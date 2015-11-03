@@ -3,7 +3,6 @@ import asynqp
 import socket
 import contexts
 from asyncio import test_utils
-from unittest import mock
 
 
 class ConnectionContext:

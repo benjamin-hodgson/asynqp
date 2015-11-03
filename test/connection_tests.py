@@ -147,7 +147,7 @@ class WhenOpeningAChannelOnAClosedConnection(OpenConnectionContext):
 
     def it_should_raise_error_in_connection_methods(self):
         exc = contexts.catch(self.wait_for, self.connection.open_channel())
-        assert isinstance(exc, exceptions.ClientConnectionClosed)
+        assert isinstance(exc, exceptions.ConnectionClosed)
 
 
 class WhenServerAndClientCloseConnectionAtATime(OpenConnectionContext):
@@ -168,4 +168,5 @@ class WhenServerAndClientCloseConnectionAtATime(OpenConnectionContext):
     def it_should_have_killed_synchroniser_with_server_error(self):
         assert isinstance(
             self.connection.synchroniser.connection_exc,
-            exceptions.ServerConnectionClosed)
+            exceptions.ConnectionClosed)
+        assert self.connection.synchroniser.connection_exc.reply_code == 123

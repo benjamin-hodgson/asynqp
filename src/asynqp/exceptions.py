@@ -5,9 +5,8 @@ from .spec import EXCEPTIONS, CONSTANTS_INVERSE
 __all__ = [
     "AMQPError",
     "ConnectionLostError",
-    "ServerConnectionClosed",
-    "ClientChannelClosed",
-    "ClientConnectionClosed",
+    "ChannelClosed",
+    "ConnectionClosed",
     "AMQPChannelError",
     "AMQPConnectionError",
     "UndeliverableMessage",
@@ -28,21 +27,17 @@ class ConnectionLostError(AMQPConnectionError, ConnectionError):
         self.original_exc = exc
 
 
-class ClientConnectionClosed(AMQPConnectionError):
+class ConnectionClosed(AMQPConnectionError):
     """ Connection was closed by client """
 
-
-class ClientChannelClosed(AMQPChannelError):
-    """ Channel was closed by client """
-
-
-class ServerConnectionClosed(AMQPConnectionError):
-    """ Connection was closed by server """
-
-    def __init__(self, reply_text, reply_code):
+    def __init__(self, reply_text, reply_code=None):
         super().__init__(reply_text)
         self.reply_text = reply_text
         self.reply_code = reply_code
+
+
+class ChannelClosed(AMQPChannelError):
+    """ Channel was closed by client """
 
 
 class UndeliverableMessage(ValueError):
