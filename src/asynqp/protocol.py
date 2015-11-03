@@ -12,6 +12,7 @@ class AMQP(asyncio.Protocol):
         self.partial_frame = b''
         self.frame_reader = FrameReader()
         self.heartbeat_monitor = HeartbeatMonitor(self, loop)
+        self._closed = False
 
     def connection_made(self, transport):
         self.transport = transport
@@ -23,7 +24,7 @@ class AMQP(asyncio.Protocol):
             try:
                 result = self.frame_reader.read_frame(data)
             except AMQPError:
-                self.transport.close()
+                self.close()
                 raise
 
             if result is None:  # incomplete frame, wait for the rest
@@ -47,9 +48,9 @@ class AMQP(asyncio.Protocol):
         self.heartbeat_monitor.start(heartbeat_interval)
 
     def connection_lost(self, exc):
-        # If we exc is None - we closed the transport ourselves. No need to
+        # If self._closed=True - we closed the transport ourselves. No need to
         # dispatch PoisonPillFrame, as we should have closed everything already
-        if exc is not None:
+        if not self._closed:
             poison_exc = ConnectionLostError(
                 'The connection was unexpectedly lost', exc)
             self.dispatcher.dispatch_all(frames.PoisonPillFrame(poison_exc))
@@ -58,11 +59,17 @@ class AMQP(asyncio.Protocol):
 
     def heartbeat_timeout(self):
         """ Called by heartbeat_monitor on timeout """
+        assert not self._closed, "Did we not stop heartbeat_monitor on close?"
         log.error("Heartbeat time out")
         poison_exc = ConnectionLostError('Heartbeat timed out')
         poison_frame = frames.PoisonPillFrame(poison_exc)
         self.dispatcher.dispatch_all(poison_frame)
         # Spec says to just close socket without ConnectionClose handshake.
+        self.close()
+
+    def close(self):
+        assert not self._closed, "Why do we close it 2-ce?"
+        self._closed = True
         self.transport.close()
 
 
@@ -150,6 +157,8 @@ class HeartbeatMonitor(object):
             no_beat_for = self.loop.time() - self._last_received
             if no_beat_for > interval * 2:
                 self.protocol.heartbeat_timeout()
+                self.send_hb_task.cancel()
+                return
 
     def heartbeat_received(self):
         self._last_received = self.loop.time()

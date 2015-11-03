@@ -1,6 +1,6 @@
 import asyncio
 import sys
-from asynqp import spec
+from asynqp import spec, exceptions
 from asynqp.connection import open_connection
 from .base_contexts import MockServerContext, OpenConnectionContext
 
@@ -116,3 +116,26 @@ class WhenAConnectionIsLostCloseConnection(OpenConnectionContext):
 
     def it_should_not_hang(self):
         self.loop.run_until_complete(asyncio.wait_for(self.connection.close(), 0.2))
+
+
+class WhenServerClosesTransportWithoutConnectionClose(OpenConnectionContext):
+
+    def given_a_channel(self):
+        task = self.loop.create_task(self.connection.open_channel())
+        self.tick()
+        self.server.send_method(1, spec.ChannelOpenOK(''))
+        self.channel = self.wait_for(task)
+
+    def when_server_closes_transport(self):
+        try:
+            self.protocol.connection_lost(None)
+        except exceptions.ConnectionLostError:
+            pass
+
+    def it_should_raise_error_in_connection_methods(self):
+        try:
+            self.wait_for(self.channel.declare_queue("some.queue"))
+        except exceptions.ConnectionLostError as err:
+            assert type(err) == exceptions.ConnectionLostError
+        else:
+            assert False, "ConnectionLostError not raised"
