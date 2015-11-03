@@ -449,9 +449,4 @@ class WhenIDeclareQueueWithPassiveAndErrorArrives(OpenChannelContext):
             self.channel.id, spec.ChannelClose(404, 'Bad queue', 40, 50))
 
     def it_should_raise_exception(self):
-        try:
-            self.task.result()
-        except exceptions.NotFound:
-            pass
-        else:
-            assert False, "NotFound exception not raised"
+        assert isinstance(self.task.exception(), exceptions.NotFound)
