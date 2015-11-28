@@ -1,11 +1,7 @@
 import asyncio
 import collections
 from . import frames
-from . import spec
 from .log import log
-
-
-_TEST = False
 
 
 class Dispatcher(object):
@@ -43,21 +39,14 @@ class Actor(object):
         self._loop = loop
         self.synchroniser = synchroniser
         self.sender = sender
-        self.closing = asyncio.Future(loop=self._loop)
 
     def handle(self, frame):
-        close_methods = (spec.ConnectionClose, spec.ConnectionCloseOK, spec.ChannelClose, spec.ChannelCloseOK)
-        if self.closing.done() and not isinstance(frame.payload, close_methods):
-            return
         try:
             meth = getattr(self, 'handle_' + type(frame).__name__)
         except AttributeError:
             meth = getattr(self, 'handle_' + type(frame.payload).__name__)
 
         meth(frame)
-
-    def handle_PoisonPillFrame(self, frame):
-        self.synchroniser.killall(frame.exception)
 
 
 class Synchroniser(object):
@@ -94,6 +83,9 @@ class Synchroniser(object):
         fut.set_result(result)
 
     def killall(self, exc):
+        """ Connection/Channel was closed. All subsequent and ongoing requests
+            should raise an error
+        """
         self.connection_exc = exc
         # Set an exception for all others
         for method, futs in self._futures.items():

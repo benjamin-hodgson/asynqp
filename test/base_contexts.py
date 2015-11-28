@@ -14,15 +14,9 @@ class LoopContext:
         self.exceptions = []
         self.loop = asyncio.get_event_loop()
         self.loop.set_debug(True)
-        self.loop.set_exception_handler(self.exception_handler)
-        asynqp.routing._TEST = True
 
     def cleanup_test_hack(self):
         self.loop.set_debug(False)
-        self.loop.set_exception_handler(None)
-        asynqp.routing._TEST = False
-        if self.exceptions:
-            raise self.exceptions[0]
 
     def exception_handler(self, loop, context):
         self.exceptions.append(context['exception'])
@@ -84,7 +78,7 @@ class OpenChannelContext(OpenConnectionContext):
         task = asyncio.async(self.connection.open_channel(), loop=self.loop)
         self.tick()
         self.server.send_method(channel_id, spec.ChannelOpenOK(''))
-        return task.result()
+        return self.loop.run_until_complete(task)
 
 
 class QueueContext(OpenChannelContext):

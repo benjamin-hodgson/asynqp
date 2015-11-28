@@ -139,6 +139,8 @@ class HeartbeatMonitor(object):
 
     @asyncio.coroutine
     def send_heartbeat(self, interval):
+        # XXX: Add `last_sent` frame monitoring to not send heartbeats
+        #      if traffic was going through socket
         while True:
             self.protocol.send_frame(frames.HeartbeatFrame())
             yield from asyncio.sleep(interval, loop=self.loop)
