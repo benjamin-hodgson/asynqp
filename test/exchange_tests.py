@@ -5,6 +5,7 @@ import asynqp
 from asynqp import spec
 from asynqp import frames
 from asynqp import message
+from asynqp import exceptions
 from .base_contexts import OpenChannelContext, ExchangeContext
 
 
@@ -174,3 +175,41 @@ class WhenExchangeDeleteOKArrives(ExchangeContext):
 
     def it_should_not_throw(self):
         pass
+
+
+class WhenExchangeDeclareWithPassiveAndOKArrives(OpenChannelContext):
+    def given_I_declared_an_exchange(self):
+        self.task = asyncio.async(
+            self.channel.declare_exchange(
+                'name_1', 'fanout', passive=True,
+                durable=True, auto_delete=False, internal=False))
+        self.tick()
+
+    def when_the_exchange_declare_ok_arrives(self):
+        self.server.send_method(self.channel.id, spec.ExchangeDeclareOK())
+
+    def it_should_return_an_exchange_object(self):
+        result = self.task.result()
+        assert result.name == 'name_1'
+        assert result.type == 'fanout'
+
+    def it_should_have_sent_passive_in_frame(self):
+        self.server.should_have_received_method(
+            self.channel.id, spec.ExchangeDeclare(
+                0, 'name_1', 'fanout', True, True, False, False, False, {}))
+
+
+class WhenExchangeDeclareWithPassiveAndErrorArrives(OpenChannelContext):
+    def given_I_declared_an_exchange(self):
+        self.task = asyncio.async(
+            self.channel.declare_exchange(
+                'name_1', 'fanout', passive=True,
+                durable=True, auto_delete=False, internal=False))
+        self.tick()
+
+    def when_error_arrives(self):
+        self.server.send_method(
+            self.channel.id, spec.ChannelClose(404, 'Bad exchange', 40, 50))
+
+    def it_should_raise_not_found_error(self):
+        assert isinstance(self.task.exception(), exceptions.NotFound)

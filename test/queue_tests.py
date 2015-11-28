@@ -5,6 +5,7 @@ import asynqp
 from asynqp import message
 from asynqp import frames
 from asynqp import spec
+from asynqp import exceptions
 from .base_contexts import OpenChannelContext, QueueContext, ExchangeContext, BoundQueueContext, ConsumerContext
 from .util import testing_exception_handler
 
@@ -412,3 +413,40 @@ class WhenAConnectionIsClosedCancelConsuming(QueueContext, ExchangeContext):
 
     def it_should_not_hang(self):
         self.loop.run_until_complete(asyncio.wait_for(self.consumer.cancel(), 0.2))
+
+
+class WhenIDeclareQueueWithPassiveAndOKArrives(OpenChannelContext):
+    def given_I_declared_a_queue_with_passive(self):
+        self.task = asyncio.async(self.channel.declare_queue(
+            '123', durable=True, exclusive=True, auto_delete=False,
+            passive=True), loop=self.loop)
+        self.tick()
+
+    def when_QueueDeclareOK_arrives(self):
+        self.server.send_method(
+            self.channel.id, spec.QueueDeclareOK('123', 123, 456))
+
+    def it_should_return_queue_object(self):
+        result = self.task.result()
+        assert result
+        assert result.name == '123'
+
+    def it_should_have_sent_passive_in_frame(self):
+        self.server.should_have_received_method(
+            self.channel.id, spec.QueueDeclare(
+                0, '123', True, True, True, False, False, {}))
+
+
+class WhenIDeclareQueueWithPassiveAndErrorArrives(OpenChannelContext):
+    def given_I_declared_a_queue_with_passive(self):
+        self.task = asyncio.async(self.channel.declare_queue(
+            '123', durable=True, exclusive=True, auto_delete=True,
+            passive=True), loop=self.loop)
+        self.tick()
+
+    def when_error_arrives(self):
+        self.server.send_method(
+            self.channel.id, spec.ChannelClose(404, 'Bad queue', 40, 50))
+
+    def it_should_raise_exception(self):
+        assert isinstance(self.task.exception(), exceptions.NotFound)

@@ -45,7 +45,8 @@ class Channel(object):
         self._closing = False
 
     @asyncio.coroutine
-    def declare_exchange(self, name, type, *, durable=True, auto_delete=False, internal=False, arguments=None):
+    def declare_exchange(self, name, type, *, durable=True, auto_delete=False,
+                         passive=False, internal=False, arguments=None):
         """
         Declare an :class:`Exchange` on the broker. If the exchange does not exist, it will be created.
 
@@ -54,12 +55,18 @@ class Channel(object):
         :param str name: the name of the exchange.
         :param str type: the type of the exchange
             (usually one of ``'fanout'``, ``'direct'``, ``'topic'``, or ``'headers'``)
-        :keyword bool durable: If true, the exchange will be re-created when the server restarts.
+        :keyword bool durable: If true, the exchange will be re-created when
+            the server restarts.
         :keyword bool auto_delete: If true, the exchange will be
             deleted when the last queue is un-bound from it.
-        :keyword bool internal: If true, the exchange cannot be published to directly;
-            it can only be bound to other exchanges.
-        :keyword dict arguments: Table of optional parameters for extensions to the AMQP protocol. See :ref:`extensions`.
+        :keyword bool passive: If `true` and exchange with such a name does
+            not exist it will raise a :class:`exceptions.NotFound`. If `false`
+            server will create it. Arguments ``durable``, ``auto_delete`` and
+            ``internal`` are ignored if `passive=True`.
+        :keyword bool internal: If true, the exchange cannot be published to
+            directly; it can only be bound to other exchanges.
+        :keyword dict arguments: Table of optional parameters for extensions to
+            the AMQP protocol. See :ref:`extensions`.
 
         :return: the new :class:`Exchange` object.
         """
@@ -67,18 +74,24 @@ class Channel(object):
             return exchange.Exchange(self.reader, self.synchroniser, self.sender, name, 'direct', True, False, False)
 
         if not VALID_EXCHANGE_NAME_RE.match(name):
-            raise ValueError("Invalid exchange name.\n"
-                             "Valid names consist of letters, digits, hyphen, underscore, period, or colon, "
-                             "and do not begin with 'amq.'")
+            raise ValueError(
+                "Invalid exchange name.\n"
+                "Valid names consist of letters, digits, hyphen, underscore, "
+                "period, or colon, and do not begin with 'amq.'")
 
-        self.sender.send_ExchangeDeclare(name, type, durable, auto_delete, internal, arguments or {})
+        self.sender.send_ExchangeDeclare(
+            name, type, passive, durable, auto_delete, internal,
+            arguments or {})
         yield from self.synchroniser.await(spec.ExchangeDeclareOK)
-        ex = exchange.Exchange(self.reader, self.synchroniser, self.sender, name, type, durable, auto_delete, internal)
+        ex = exchange.Exchange(
+            self.reader, self.synchroniser, self.sender, name, type, durable,
+            auto_delete, internal)
         self.reader.ready()
         return ex
 
     @asyncio.coroutine
-    def declare_queue(self, name='', *, durable=True, exclusive=False, auto_delete=False, arguments=None):
+    def declare_queue(self, name='', *, durable=True, exclusive=False,
+                      auto_delete=False, passive=False, arguments=None):
         """
         Declare a queue on the broker. If the queue does not exist, it will be created.
 
@@ -91,11 +104,17 @@ class Channel(object):
             and will be deleted when the connection is closed.
         :keyword bool auto_delete: If true, the queue will be deleted when the last consumer is cancelled.
             If there were never any conusmers, the queue won't be deleted.
+        :keyword bool passive: If true and queue with such a name does not
+            exist it will raise a :class:`exceptions.NotFound` instead of
+            creating it. Arguments ``durable``, ``auto_delete`` and
+            ``exclusive`` are ignored if ``passive=True``.
         :keyword dict arguments: Table of optional parameters for extensions to the AMQP protocol. See :ref:`extensions`.
 
         :return: The new :class:`Queue` object.
         """
-        q = yield from self.queue_factory.declare(name, durable, exclusive, auto_delete, arguments if arguments is not None else {})
+        q = yield from self.queue_factory.declare(
+            name, durable, exclusive, auto_delete, passive,
+            arguments if arguments is not None else {})
         return q
 
     @asyncio.coroutine
@@ -427,14 +446,14 @@ class ChannelMethodSender(routing.Sender):
     def send_ChannelOpen(self):
         self.send_method(spec.ChannelOpen(''))
 
-    def send_ExchangeDeclare(self, name, type, durable, auto_delete, internal, arguments):
-        self.send_method(spec.ExchangeDeclare(0, name, type, False, durable, auto_delete, internal, False, arguments))
+    def send_ExchangeDeclare(self, name, type, passive, durable, auto_delete, internal, arguments):
+        self.send_method(spec.ExchangeDeclare(0, name, type, passive, durable, auto_delete, internal, False, arguments))
 
     def send_ExchangeDelete(self, name, if_unused):
         self.send_method(spec.ExchangeDelete(0, name, if_unused, False))
 
-    def send_QueueDeclare(self, name, durable, exclusive, auto_delete, arguments):
-        self.send_method(spec.QueueDeclare(0, name, False, durable, exclusive, auto_delete, False, arguments))
+    def send_QueueDeclare(self, name, durable, exclusive, auto_delete, passive, arguments):
+        self.send_method(spec.QueueDeclare(0, name, passive, durable, exclusive, auto_delete, False, arguments))
 
     def send_QueueBind(self, queue_name, exchange_name, routing_key, arguments):
         self.send_method(spec.QueueBind(0, queue_name, exchange_name, routing_key, False, arguments))
