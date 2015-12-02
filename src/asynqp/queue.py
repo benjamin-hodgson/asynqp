@@ -280,21 +280,25 @@ class QueueFactory(object):
         self.consumers = consumers
 
     @asyncio.coroutine
-    def declare(self, name, durable, exclusive, auto_delete, passive,
+    def declare(self, name, durable, exclusive, auto_delete, passive, nowait,
                 arguments):
         if not VALID_QUEUE_NAME_RE.match(name):
             raise ValueError(
                 "Not a valid queue name.\n"
                 "Valid names consist of letters, digits, hyphen, underscore, "
                 "period, or colon, and do not begin with 'amq.'")
+        if not name and nowait:
+            raise ValueError("Declaring the queue without `name` and with "
+                             "`nowait` is forbidden")
 
         self.sender.send_QueueDeclare(
-            name, durable, exclusive, auto_delete, passive, arguments)
-        name = yield from self.synchroniser.await(spec.QueueDeclareOK)
+            name, durable, exclusive, auto_delete, passive, nowait, arguments)
+        if not nowait:
+            name = yield from self.synchroniser.await(spec.QueueDeclareOK)
+            self.reader.ready()
         q = Queue(self.reader, self.consumers, self.synchroniser, self.sender,
                   name, durable, exclusive, auto_delete, arguments,
                   loop=self._loop)
-        self.reader.ready()
         return q
 
 

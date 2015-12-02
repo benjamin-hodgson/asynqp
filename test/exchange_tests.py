@@ -213,3 +213,23 @@ class WhenExchangeDeclareWithPassiveAndErrorArrives(OpenChannelContext):
 
     def it_should_raise_not_found_error(self):
         assert isinstance(self.task.exception(), exceptions.NotFound)
+
+
+class WhenIDeclareExchangeWithNoWait(OpenChannelContext):
+    def given_I_declared_a_queue_with_passive(self):
+        self.task = asyncio.async(self.channel.declare_exchange(
+            'my.nice.exchange', 'fanout', durable=True, auto_delete=False,
+            internal=False, nowait=True), loop=self.loop)
+        self.tick()
+
+    def it_should_return_exchange_object_without_wait(self):
+        result = self.task.result()
+        assert result
+        assert result.name == 'my.nice.exchange'
+        assert result.type == 'fanout'
+
+    def it_should_have_sent_nowait_in_frame(self):
+        self.server.should_have_received_method(
+            self.channel.id, spec.ExchangeDeclare(
+                0, 'my.nice.exchange', 'fanout', False, True, False, False,
+                True, {}))

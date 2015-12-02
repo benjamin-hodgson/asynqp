@@ -46,7 +46,8 @@ class Channel(object):
 
     @asyncio.coroutine
     def declare_exchange(self, name, type, *, durable=True, auto_delete=False,
-                         passive=False, internal=False, arguments=None):
+                         passive=False, internal=False, nowait=False,
+                         arguments=None):
         """
         Declare an :class:`Exchange` on the broker. If the exchange does not exist, it will be created.
 
@@ -65,6 +66,8 @@ class Channel(object):
             ``internal`` are ignored if `passive=True`.
         :keyword bool internal: If true, the exchange cannot be published to
             directly; it can only be bound to other exchanges.
+        :keyword bool nowait: If true, the method will not wait for declare-ok
+            to arrive and return right away.
         :keyword dict arguments: Table of optional parameters for extensions to
             the AMQP protocol. See :ref:`extensions`.
 
@@ -80,18 +83,20 @@ class Channel(object):
                 "period, or colon, and do not begin with 'amq.'")
 
         self.sender.send_ExchangeDeclare(
-            name, type, passive, durable, auto_delete, internal,
+            name, type, passive, durable, auto_delete, internal, nowait,
             arguments or {})
-        yield from self.synchroniser.await(spec.ExchangeDeclareOK)
+        if not nowait:
+            yield from self.synchroniser.await(spec.ExchangeDeclareOK)
+            self.reader.ready()
         ex = exchange.Exchange(
             self.reader, self.synchroniser, self.sender, name, type, durable,
             auto_delete, internal)
-        self.reader.ready()
         return ex
 
     @asyncio.coroutine
     def declare_queue(self, name='', *, durable=True, exclusive=False,
-                      auto_delete=False, passive=False, arguments=None):
+                      auto_delete=False, passive=False,
+                      nowait=False, arguments=None):
         """
         Declare a queue on the broker. If the queue does not exist, it will be created.
 
@@ -108,12 +113,13 @@ class Channel(object):
             exist it will raise a :class:`exceptions.NotFound` instead of
             creating it. Arguments ``durable``, ``auto_delete`` and
             ``exclusive`` are ignored if ``passive=True``.
+        :keyword bool nowait: If true, will not wait for a declare-ok to arrive.
         :keyword dict arguments: Table of optional parameters for extensions to the AMQP protocol. See :ref:`extensions`.
 
         :return: The new :class:`Queue` object.
         """
         q = yield from self.queue_factory.declare(
-            name, durable, exclusive, auto_delete, passive,
+            name, durable, exclusive, auto_delete, passive, nowait,
             arguments if arguments is not None else {})
         return q
 
@@ -446,14 +452,14 @@ class ChannelMethodSender(routing.Sender):
     def send_ChannelOpen(self):
         self.send_method(spec.ChannelOpen(''))
 
-    def send_ExchangeDeclare(self, name, type, passive, durable, auto_delete, internal, arguments):
-        self.send_method(spec.ExchangeDeclare(0, name, type, passive, durable, auto_delete, internal, False, arguments))
+    def send_ExchangeDeclare(self, name, type, passive, durable, auto_delete, internal, nowait, arguments):
+        self.send_method(spec.ExchangeDeclare(0, name, type, passive, durable, auto_delete, internal, nowait, arguments))
 
     def send_ExchangeDelete(self, name, if_unused):
         self.send_method(spec.ExchangeDelete(0, name, if_unused, False))
 
-    def send_QueueDeclare(self, name, durable, exclusive, auto_delete, passive, arguments):
-        self.send_method(spec.QueueDeclare(0, name, passive, durable, exclusive, auto_delete, False, arguments))
+    def send_QueueDeclare(self, name, durable, exclusive, auto_delete, passive, nowait, arguments):
+        self.send_method(spec.QueueDeclare(0, name, passive, durable, exclusive, auto_delete, nowait, arguments))
 
     def send_QueueBind(self, queue_name, exchange_name, routing_key, arguments):
         self.send_method(spec.QueueBind(0, queue_name, exchange_name, routing_key, False, arguments))
