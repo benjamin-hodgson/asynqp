@@ -450,3 +450,21 @@ class WhenIDeclareQueueWithPassiveAndErrorArrives(OpenChannelContext):
 
     def it_should_raise_exception(self):
         assert isinstance(self.task.exception(), exceptions.NotFound)
+
+
+class WhenIDeclareQueueWithNoWait(OpenChannelContext):
+    def given_I_declared_a_queue_with_passive(self):
+        self.task = asyncio.async(self.channel.declare_queue(
+            '123', durable=True, exclusive=True, auto_delete=False,
+            nowait=True), loop=self.loop)
+        self.tick()
+
+    def it_should_return_queue_object_without_wait(self):
+        result = self.task.result()
+        assert result
+        assert result.name == '123'
+
+    def it_should_have_sent_nowait_in_frame(self):
+        self.server.should_have_received_method(
+            self.channel.id, spec.QueueDeclare(
+                0, '123', False, True, True, False, True, {}))
