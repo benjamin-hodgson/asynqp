@@ -218,6 +218,10 @@ class ContentHeaderPayload(object):
 
         return cls(class_id, body_length, properties)
 
+    def __repr__(self):
+        return "<ContentHeaderPayload {} {} {}>".format(
+            self.class_id, self.body_length, self.properties)
+
 
 class MessageBuilder(object):
     def __init__(self, sender, delivery_tag, redelivered, exchange_name, routing_key, consumer_tag=None):

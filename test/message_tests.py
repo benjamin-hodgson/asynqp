@@ -220,3 +220,19 @@ class WhenSettingAnAttributeThatIsNotAProperty:
 
     def it_should_not_attempt_to_cast_it(self):
         assert self.msg.foo == 123
+
+
+class WhenIReadAContentHeaderWithoutAllProperties:
+
+    def given_headers_wit_only_content_encoding(self):
+        self.data = (
+            b'\x00<\x00\x00\x00\x00\x00\x00\x00\x00\x00\x08p\x00'
+            b'\x05utf-8\x00\x00\x00\x00\x01')
+
+    def when_I_read_properties(self):
+        self.payload = message.ContentHeaderPayload.read(self.data)
+
+    def it_should_have_only_content_encoding(self):
+        assert self.payload == message.ContentHeaderPayload(
+            60, 8, [None, 'utf-8', {}, 1, None, None,
+                    None, None, None, None, None, None, None])
