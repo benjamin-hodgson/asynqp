@@ -24,10 +24,10 @@ class ChannelContext(ConnectionContext):
 
 class BoundQueueContext(ChannelContext):
     def given_a_queue_bound_to_an_exchange(self):
-        self.loop.run_until_complete(asyncio.wait_for(self.setup(), 0.4))
+        self.loop.run_until_complete(asyncio.wait_for(self.setup(), 0.5))
 
     def cleanup_the_queue_and_exchange(self):
-        self.loop.run_until_complete(asyncio.wait_for(self.teardown(), 0.2))
+        self.loop.run_until_complete(asyncio.wait_for(self.teardown(), 0.3))
 
     @asyncio.coroutine
     def setup(self):
