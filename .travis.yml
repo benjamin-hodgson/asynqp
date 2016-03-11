@@ -13,7 +13,7 @@ install:
   - python setup.py develop
 
 script:
-  - flake8 src test --ignore=E501
+  - flake8 src test --ignore=E501,W503
   - coverage run --source=src -m contexts -v
   - pushd doc && make html && popd
 
