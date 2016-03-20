@@ -422,26 +422,33 @@ class MessageReceiver(object):
     def receive_header(self, frame):
         assert self.message_builder is not None, "Received unexpected header"
         self.message_builder.set_header(frame.payload)
+        if self.message_builder.done():
+            self.message_done()
+            return
         self.reader.ready()
 
     def receive_body(self, frame):
         assert self.message_builder is not None, "Received unexpected body"
         self.message_builder.add_body_chunk(frame.payload)
-        if self.message_builder.done():
-            msg = self.message_builder.build()
-            tag = self.message_builder.consumer_tag
-            if self.is_getok_message:
-                self.synchroniser.notify(spec.BasicGetOK, (tag, msg))
-                # Dont call ready() if message arrive after GetOk. It's the
-                # ``Queue.get`` method's responsibility
-            else:
-                self.consumers.deliver(tag, msg)
-                self.reader.ready()
 
-            self.message_builder = None
+        if self.message_builder.done():
+            self.message_done()
             return
         # If message is not done yet we still need more frames. Wait for them
         self.reader.ready()
+
+    def message_done(self):
+        msg = self.message_builder.build()
+        tag = self.message_builder.consumer_tag
+        if self.is_getok_message:
+            self.synchroniser.notify(spec.BasicGetOK, (tag, msg))
+            # Dont call ready() if message arrive after GetOk. It's the
+            # ``Queue.get`` method's responsibility
+        else:
+            self.consumers.deliver(tag, msg)
+            self.reader.ready()
+
+        self.message_builder = None
 
 
 class ChannelMethodSender(routing.Sender):
