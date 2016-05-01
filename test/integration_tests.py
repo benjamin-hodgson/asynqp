@@ -303,3 +303,21 @@ class WhenConsumingWithUnsetLoop:
             yield from self.connection.close()
         self.loop.run_until_complete(tear_down())
         asyncio.set_event_loop(self.loop)
+
+
+class WhenISendZeroMessage(BoundQueueContext):
+    def given_an_empty_message(self):
+        self.message = asynqp.Message('')
+        self.exchange.publish(self.message, 'routingkey')
+
+    def when_I_start_a_consumer(self):
+        self.message_received = asyncio.Future()
+        self.loop.run_until_complete(asyncio.wait_for(self.start_consumer(), 0.2))
+
+    def it_should_deliver_the_message_to_the_consumer(self):
+        assert self.message_received.result() == self.message
+
+    @asyncio.coroutine
+    def start_consumer(self):
+        yield from self.queue.consume(self.message_received.set_result)
+        yield from self.message_received
