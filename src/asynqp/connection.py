@@ -23,10 +23,6 @@ class Connection(object):
 
     Connections are created using :func:`asynqp.connect() <connect>`.
 
-    .. attribute:: closed
-
-        a :class:`~asyncio.Future` which is done when the handshake to close the connection has finished
-
     .. attribute:: transport
 
         The :class:`~asyncio.BaseTransport` over which the connection is communicating with the server
@@ -44,8 +40,11 @@ class Connection(object):
         self.transport = transport
         self.protocol = protocol
         # Indicates, that close was initiated by client
+        self.closed = asyncio.Future(loop=loop)
+        # This future is a backport, so we don't need to log pending errors
+        self.closed.add_done_callback(lambda fut: fut.exception())
+
         self._closing = False
-        self._closed_with = None
 
     @asyncio.coroutine
     def open_channel(self):
@@ -58,14 +57,15 @@ class Connection(object):
         """
         if self._closing:
             raise ConnectionClosed("Closed by application")
-        if self._closed_with:
-            raise self._closed_with
+        if self.closed.done():
+            raise self.closed.exception()
 
         channel = yield from self.channel_factory.open()
         return channel
 
     def is_closed(self):
-        return self._closing or self._closed_with is not None
+        " Returns True if connection was closed "
+        return self._closing or self.closed.done()
 
     @asyncio.coroutine
     def close(self):
@@ -175,7 +175,7 @@ class ConnectionActor(routing.Actor):
         """ Is sent in case protocol lost connection to server."""
         # Will be delivered after Close or CloseOK handlers. It's for channels,
         # so ignore it.
-        if self.connection._closed_with is not None:
+        if self.connection.closed.done():
             return
         # If connection was not closed already - we lost connection.
         # Protocol should already be closed
@@ -202,7 +202,7 @@ class ConnectionActor(routing.Actor):
 
     def _close_all(self, exc):
         # Make sure all `close` calls don't deadlock
-        self.connection._closed_with = exc
+        self.connection.closed.set_exception(exc)
         # Close heartbeat
         self.protocol.heartbeat_monitor.stop()
         # If there were anyone who expected an `*-OK` kill them, as no data
