@@ -208,13 +208,19 @@ class ContentHeaderPayload(object):
         property_flags_short = serialisation.read_unsigned_short(bytesio)
 
         properties = []
-        for amqptype, flag in zip(Message.property_types.values(), bin(property_flags_short)[2:]):
-            if flag == '1':
+
+        for i, amqptype in enumerate(Message.property_types.values()):
+            pos = 15 - i  # We started from `content_type` witch has pos==15
+            if property_flags_short & (1 << pos):
                 properties.append(amqptype.read(bytesio))
             else:
                 properties.append(None)
 
         return cls(class_id, body_length, properties)
+
+    def __repr__(self):
+        return "<ContentHeaderPayload {} {} {}>".format(
+            self.class_id, self.body_length, self.properties)
 
 
 class MessageBuilder(object):
