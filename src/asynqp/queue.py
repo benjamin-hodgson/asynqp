@@ -1,6 +1,5 @@
 import asyncio
 import re
-from operator import delitem
 from . import spec
 from .exceptions import Deleted, AMQPError
 
@@ -310,12 +309,18 @@ class Consumers(object):
     def add_consumer(self, consumer):
         self.consumers[consumer.tag] = consumer
         # so the consumer gets garbage collected when it is cancelled
-        consumer.cancelled_future.add_done_callback(lambda fut: delitem(self.consumers, fut.result().tag))
+        consumer.cancelled_future.add_done_callback(lambda fut: self.consumers.pop(fut.result().tag, None))
 
     def deliver(self, tag, msg):
         assert tag in self.consumers, "Message got delivered to a non existent consumer"
         consumer = self.consumers[tag]
         self.loop.call_soon(consumer.callback, msg)
+
+    def server_cancel(self, tag):
+        consumer = self.consumers.pop(tag, None)
+        if consumer:
+            if hasattr(consumer.callback, 'on_cancel'):
+                consumer.callback.on_cancel()
 
     def error(self, exc):
         for consumer in self.consumers.values():

@@ -227,6 +227,7 @@ class ChannelFactory(object):
         actor.message_receiver = MessageReceiver(synchroniser, sender, consumers, reader)
         actor.consumers = consumers
         actor.channel = channel
+        actor.reader = reader
 
         self.dispatcher.add_handler(channel_id, reader.feed)
         try:
@@ -255,6 +256,7 @@ class ChannelActor(routing.Actor):
         self.channel = None
         self.consumers = None
         self.message_receiver = None
+        self.reader = None
 
     def handle(self, frame):
         # From docs on `close`:
@@ -306,6 +308,11 @@ class ChannelActor(routing.Actor):
 
     def handle_BasicQosOK(self, frame):
         self.synchroniser.notify(spec.BasicQosOK)
+
+    def handle_BasicCancel(self, frame):
+        # Cancel consumer server-side
+        self.consumers.server_cancel(frame.payload.consumer_tag)
+        self.reader.ready()
 
     # Message receiving hanlers
 
