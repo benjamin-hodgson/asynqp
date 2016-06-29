@@ -1,3 +1,5 @@
+# flake8: noqa
+
 import socket
 import asyncio
 from .exceptions import *  # noqa
