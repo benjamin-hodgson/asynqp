@@ -9,7 +9,7 @@ except ImportError:
 
 setup(
     name='asynqp',
-    version='0.5',
+    version='0.5.1',
     author="Benjamin Hodgson",
     author_email="benjamin.hodgson@huddle.net",
     url="https://github.com/benjamin-hodgson/asynqp",
