@@ -1,7 +1,7 @@
 import asyncio
 import re
 from . import spec
-from .exceptions import Deleted, AMQPError
+from .exceptions import Deleted, AMQPError, InvalidExchangeName
 
 
 VALID_QUEUE_NAME_RE = re.compile(r'^(?!amq\.)(\w|[-.:])*$', flags=re.A)
@@ -68,6 +68,8 @@ class Queue(object):
         """
         if self.deleted:
             raise Deleted("Queue {} was deleted".format(self.name))
+        if not exchange:
+            raise InvalidExchangeName("Can't bind queue {} to the default exchange".format(self.name))
 
         self.sender.send_QueueBind(self.name, exchange.name, routing_key, arguments or {})
         yield from self.synchroniser.await(spec.QueueBindOK)

@@ -81,6 +81,14 @@ class WhenBindingAQueueToAnExchange(QueueContext, ExchangeContext):
         self.server.should_have_received_method(self.channel.id, expected_method)
 
 
+class WhenBindingAQueueToTheDefaultExchange(QueueContext):
+    def when_I_bind_the_queue(self):
+        self.task = self.async_partial(self.queue.bind('', 'routing.key', arguments={'x-ignore': ''}))
+
+    def it_should_throw_InvalidExchangeName(self):
+        assert isinstance(self.task.exception(), exceptions.InvalidExchangeName)
+
+
 class WhenQueueBindOKArrives(QueueContext, ExchangeContext):
     def given_I_sent_QueueBind(self):
         self.task = asyncio.async(self.queue.bind(self.exchange, 'routing.key'))

@@ -48,6 +48,10 @@ class Deleted(ValueError):
     pass
 
 
+class InvalidExchangeName(ValueError):
+    pass
+
+
 globals().update(EXCEPTIONS)
 
 
