@@ -1,5 +1,6 @@
 import asyncio
 import sys
+from contextlib import suppress
 import contexts
 from asynqp import spec, exceptions
 from asynqp.connection import open_connection
@@ -107,10 +108,8 @@ class WhenAConnectionThatWasClosedByTheServerReceivesAMethod(OpenConnectionConte
 
 class WhenAConnectionIsLostCloseConnection(OpenConnectionContext):
     def when_connection_is_closed(self):
-        try:
+        with suppress(Exception):
             self.connection.protocol.connection_lost(Exception())
-        except Exception:
-            pass
 
     def it_should_not_hang(self):
         self.loop.run_until_complete(asyncio.wait_for(self.connection.close(), 0.2))
@@ -125,10 +124,8 @@ class WhenServerClosesTransportWithoutConnectionClose(OpenConnectionContext):
         self.channel = self.wait_for(task)
 
     def when_server_closes_transport(self):
-        try:
+        with suppress(exceptions.ConnectionLostError):
             self.protocol.connection_lost(None)
-        except exceptions.ConnectionLostError:
-            pass
 
     def it_should_raise_error_in_connection_methods(self):
         try:

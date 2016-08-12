@@ -1,6 +1,7 @@
 import asyncio
 import contexts
 import asynqp
+from contextlib import suppress
 from unittest import mock
 from asynqp import spec, frames, exceptions
 from asynqp import message
@@ -235,10 +236,8 @@ class WhenTheHandlerIsNotCallable(OpenChannelContext):
 
 class WhenAConnectionIsLostCloseChannel(OpenChannelContext):
     def when_connection_is_closed(self):
-        try:
+        with suppress(Exception):
             self.connection.protocol.connection_lost(Exception())
-        except Exception:
-            pass
         self.tick()
         self.was_closed = self.channel.is_closed()
 

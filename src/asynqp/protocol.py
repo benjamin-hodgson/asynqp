@@ -1,5 +1,6 @@
 import asyncio
 import struct
+from contextlib import suppress
 from . import spec
 from . import frames
 from .exceptions import AMQPError, ConnectionLostError
@@ -127,15 +128,11 @@ class HeartbeatMonitor(object):
     @asyncio.coroutine
     def wait_closed(self):
         if self.send_hb_task is not None:
-            try:
+            with suppress(asyncio.CancelledError):
                 yield from self.send_hb_task
-            except asyncio.CancelledError:
-                pass
         if self.monitor_task is not None:
-            try:
+            with suppress(asyncio.CancelledError):
                 yield from self.monitor_task
-            except asyncio.CancelledError:
-                pass
 
     @asyncio.coroutine
     def send_heartbeat(self, interval):

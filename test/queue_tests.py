@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime
+from contextlib import suppress
 import contexts
 import asynqp
 from asynqp import message
@@ -194,10 +195,8 @@ class WhenConnectionClosedOnGet(QueueContext):
 
     def when_connection_is_closed(self):
         # XXX: remove if we change behaviour to not raise
-        try:
+        with suppress(Exception):
             self.server.protocol.connection_lost(Exception())
-        except Exception:
-            pass
         self.tick()
 
     def it_should_raise_exception(self):
@@ -414,10 +413,8 @@ class WhenAConnectionIsClosedCancelConsuming(QueueContext, ExchangeContext):
         self.consumer = task.result()
 
     def when_connection_is_closed(self):
-        try:
+        with suppress(Exception):
             self.connection.protocol.connection_lost(Exception())
-        except Exception:
-            pass
 
     def it_should_not_hang(self):
         self.loop.run_until_complete(asyncio.wait_for(self.consumer.cancel(), 0.2))
