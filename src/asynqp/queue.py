@@ -283,7 +283,7 @@ class QueueFactory(object):
     @asyncio.coroutine
     def declare(self, name, durable, exclusive, auto_delete, passive, nowait,
                 arguments):
-        if not VALID_QUEUE_NAME_RE.match(name):
+        if not (name == 'amq.rabbitmq.reply-to' or VALID_QUEUE_NAME_RE.match(name)):
             raise ValueError(
                 "Not a valid queue name.\n"
                 "Valid names consist of letters, digits, hyphen, underscore, "
