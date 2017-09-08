@@ -30,7 +30,7 @@ class WhenOpeningMultipleChannelsConcurrently(OpenConnectionContext):
 
 class WhenChannelOpenOKArrives(OpenConnectionContext):
     def given_the_user_has_called_open_channel(self):
-        self.task = asyncio.async(self.connection.open_channel())
+        self.task = asyncio.ensure_future(self.connection.open_channel())
         self.tick()
 
     def when_channel_open_ok_arrives(self):
@@ -109,7 +109,7 @@ class WhenAnAsyncMethodArrivesWhileWeAwaitASynchronousOne(OpenChannelContext):
 
 class WhenAnUnexpectedChannelCloseArrives(OpenChannelContext):
     def given_we_are_awaiting_QueueDeclareOK(self):
-        self.task = asyncio.async(self.channel.declare_queue('my.nice.queue', durable=True, exclusive=True, auto_delete=True))
+        self.task = asyncio.ensure_future(self.channel.declare_queue('my.nice.queue', durable=True, exclusive=True, auto_delete=True))
         self.tick()
 
     def when_ChannelClose_arrives(self):
@@ -133,7 +133,7 @@ class WhenSettingQOS(OpenChannelContext):
 
 class WhenBasicQOSOkArrives(OpenChannelContext):
     def given_we_are_setting_qos_settings(self):
-        self.task = asyncio.async(self.channel.set_qos(prefetch_size=1000, prefetch_count=100, apply_globally=True))
+        self.task = asyncio.ensure_future(self.channel.set_qos(prefetch_size=1000, prefetch_count=100, apply_globally=True))
         self.tick()
 
     def when_BasicQosOk_arrives(self):
@@ -250,7 +250,7 @@ class WhenAConnectionIsLostCloseChannel(OpenChannelContext):
 
 class WhenWeCloseConnectionChannelShouldAlsoClose(OpenChannelContext):
     def when_connection_is_closed(self):
-        self.task = asyncio.async(self.connection.close(), loop=self.loop)
+        self.task = asyncio.ensure_future(self.connection.close(), loop=self.loop)
         self.server.send_method(0, spec.ConnectionCloseOK())
         self.tick()
         self.was_closed = self.channel.is_closed()
@@ -280,7 +280,7 @@ class WhenServerClosesConnectionChannelShouldAlsoClose(OpenChannelContext):
 class WhenServerAndClientCloseChannelAtATime(OpenChannelContext):
     def when_both_sides_close_channel(self):
         # Client tries to close connection
-        self.task = asyncio.async(self.channel.close(), loop=self.loop)
+        self.task = asyncio.ensure_future(self.channel.close(), loop=self.loop)
         self.tick()
         # Before OK arrives server closes connection
         self.server.send_method(

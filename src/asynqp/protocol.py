@@ -54,7 +54,7 @@ class AMQP(asyncio.Protocol):
         # dispatch PoisonPillFrame, as we should have closed everything already
         if self._close_callback:
             # _close_callback now only accepts coroutines
-            asyncio.async(self._close_callback(exc))
+            asyncio.ensure_future(self._close_callback(exc))
 
         if not self._closed:
             poison_exc = ConnectionLostError(
@@ -121,8 +121,8 @@ class HeartbeatMonitor(object):
     def start(self, interval):
         if interval <= 0:
             return
-        self.send_hb_task = asyncio.async(self.send_heartbeat(interval), loop=self.loop)
-        self.monitor_task = asyncio.async(self.monitor_heartbeat(interval), loop=self.loop)
+        self.send_hb_task = asyncio.ensure_future(self.send_heartbeat(interval), loop=self.loop)
+        self.monitor_task = asyncio.ensure_future(self.monitor_heartbeat(interval), loop=self.loop)
 
     def stop(self):
         if self.send_hb_task is not None:

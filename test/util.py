@@ -110,7 +110,7 @@ def any(cls):
 
 @contextmanager
 def silence_expected_destroy_pending_log(expected_coro_name=''):
-    real_async = asyncio.async
+    real_async = asyncio.ensure_future
 
     def async(*args, **kwargs):
         t = real_async(*args, **kwargs)

@@ -29,7 +29,7 @@ class LoopContext:
         Schedule a coroutine which you are not expecting to complete before the end of the test.
         Disables the error log when the task is destroyed before completing.
         """
-        t = asyncio.async(coro)
+        t = asyncio.ensure_future(coro)
         t._log_destroy_pending = False
         self.tick()
         return t
@@ -50,7 +50,7 @@ class MockServerContext(LoopContext):
 class OpenConnectionContext(MockServerContext):
     def given_an_open_connection(self):
         connection_info = {'username': 'guest', 'password': 'guest', 'virtual_host': '/'}
-        task = asyncio.async(open_connection(self.loop, self.transport, self.protocol, self.dispatcher, connection_info))
+        task = asyncio.ensure_future(open_connection(self.loop, self.transport, self.protocol, self.dispatcher, connection_info))
         self.tick()
 
         start_method = spec.ConnectionStart(0, 9, {}, 'PLAIN AMQPLAIN', 'en_US')
@@ -75,7 +75,7 @@ class OpenChannelContext(OpenConnectionContext):
         self.channel = self.open_channel()
 
     def open_channel(self, channel_id=1):
-        task = asyncio.async(self.connection.open_channel(), loop=self.loop)
+        task = asyncio.ensure_future(self.connection.open_channel(), loop=self.loop)
         self.tick()
         self.server.send_method(channel_id, spec.ChannelOpenOK(''))
         return self.loop.run_until_complete(task)
@@ -84,7 +84,7 @@ class OpenChannelContext(OpenConnectionContext):
 class QueueContext(OpenChannelContext):
     def given_a_queue(self):
         queue_name = 'my.nice.queue'
-        task = asyncio.async(self.channel.declare_queue(queue_name, durable=True, exclusive=True, auto_delete=True), loop=self.loop)
+        task = asyncio.ensure_future(self.channel.declare_queue(queue_name, durable=True, exclusive=True, auto_delete=True), loop=self.loop)
         self.tick()
         self.server.send_method(self.channel.id, spec.QueueDeclareOK(queue_name, 123, 456))
         self.queue = task.result()
@@ -95,8 +95,8 @@ class ExchangeContext(OpenChannelContext):
         self.exchange = self.make_exchange('my.nice.exchange')
 
     def make_exchange(self, name):
-        task = asyncio.async(self.channel.declare_exchange(name, 'fanout', durable=True, auto_delete=False, internal=False),
-                             loop=self.loop)
+        task = asyncio.ensure_future(self.channel.declare_exchange(name, 'fanout', durable=True, auto_delete=False, internal=False),
+                                     loop=self.loop)
         self.tick()
         self.server.send_method(self.channel.id, spec.ExchangeDeclareOK())
         return task.result()
@@ -104,7 +104,7 @@ class ExchangeContext(OpenChannelContext):
 
 class BoundQueueContext(QueueContext, ExchangeContext):
     def given_a_bound_queue(self):
-        task = asyncio.async(self.queue.bind(self.exchange, 'routing.key'))
+        task = asyncio.ensure_future(self.queue.bind(self.exchange, 'routing.key'))
         self.tick()
         self.server.send_method(self.channel.id, spec.QueueBindOK())
         self.binding = task.result()
@@ -115,7 +115,7 @@ class ConsumerContext(QueueContext):
         self.callback = mock.Mock()
         del self.callback._is_coroutine  # :(
 
-        task = asyncio.async(self.queue.consume(self.callback, no_local=False, no_ack=False, exclusive=False))
+        task = asyncio.ensure_future(self.queue.consume(self.callback, no_local=False, no_ack=False, exclusive=False))
         self.tick()
         self.server.send_method(self.channel.id, spec.BasicConsumeOK('made.up.tag'))
         self.consumer = task.result()

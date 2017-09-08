@@ -23,7 +23,7 @@ class WhenDeclaringAQueue(OpenChannelContext):
 class WhenQueueDeclareOKArrives(OpenChannelContext):
     def given_I_declared_a_queue(self):
         self.queue_name = 'my.nice.queue'
-        self.task = asyncio.async(self.channel.declare_queue(self.queue_name, durable=True, exclusive=True, auto_delete=True, arguments={'x-expires': 300, 'x-message-ttl': 1000}))
+        self.task = asyncio.ensure_future(self.channel.declare_queue(self.queue_name, durable=True, exclusive=True, auto_delete=True, arguments={'x-expires': 300, 'x-message-ttl': 1000}))
         self.tick()
 
     def when_QueueDeclareOK_arrives(self):
@@ -45,7 +45,7 @@ class WhenQueueDeclareOKArrives(OpenChannelContext):
 
 class WhenILetTheServerPickTheQueueName(OpenChannelContext):
     def given_I_declared_a_queue(self):
-        self.task = asyncio.async(self.channel.declare_queue('', durable=True, exclusive=True, auto_delete=True), loop=self.loop)
+        self.task = asyncio.ensure_future(self.channel.declare_queue('', durable=True, exclusive=True, auto_delete=True), loop=self.loop)
         self.tick()
 
         self.queue_name = 'randomly.generated.name'
@@ -65,8 +65,8 @@ class WhenIUseAnIllegalNameForAQueue(OpenChannelContext):
         yield 'contains~illegal/symbols'
 
     def when_I_declare_the_queue(self, queue_name):
-        self.task = asyncio.async(self.channel.declare_queue(queue_name, durable=True, exclusive=True, auto_delete=True),
-                                  loop=self.loop)
+        self.task = asyncio.ensure_future(self.channel.declare_queue(queue_name, durable=True, exclusive=True, auto_delete=True),
+                                          loop=self.loop)
         self.tick()
 
     def it_should_throw_ValueError(self):
@@ -92,7 +92,7 @@ class WhenBindingAQueueToTheDefaultExchange(QueueContext):
 
 class WhenQueueBindOKArrives(QueueContext, ExchangeContext):
     def given_I_sent_QueueBind(self):
-        self.task = asyncio.async(self.queue.bind(self.exchange, 'routing.key'))
+        self.task = asyncio.ensure_future(self.queue.bind(self.exchange, 'routing.key'))
         self.tick()
 
     def when_QueueBindOK_arrives(self):
@@ -117,7 +117,7 @@ class WhenUnbindingAQueue(BoundQueueContext):
 
 class WhenQueueUnbindOKArrives(BoundQueueContext):
     def given_I_unbound_the_queue(self):
-        self.task = asyncio.async(self.binding.unbind())
+        self.task = asyncio.ensure_future(self.binding.unbind())
         self.tick()
 
     def when_QueueUnbindOK_arrives(self):
@@ -129,12 +129,12 @@ class WhenQueueUnbindOKArrives(BoundQueueContext):
 
 class WhenIUnbindAQueueTwice(BoundQueueContext):
     def given_an_unbound_queue(self):
-        asyncio.async(self.binding.unbind())
+        asyncio.ensure_future(self.binding.unbind())
         self.tick()
         self.server.send_method(self.channel.id, spec.QueueUnbindOK())
 
     def when_I_unbind_the_queue_again(self):
-        self.task = asyncio.async(self.binding.unbind())
+        self.task = asyncio.ensure_future(self.binding.unbind())
         self.tick()
 
     def it_should_throw_Deleted(self):
@@ -151,7 +151,7 @@ class WhenIAskForAMessage(QueueContext):
 
 class WhenBasicGetEmptyArrives(QueueContext):
     def given_I_asked_for_a_message(self):
-        self.task = asyncio.async(self.queue.get(no_ack=False))
+        self.task = asyncio.ensure_future(self.queue.get(no_ack=False))
         self.tick()
 
     def when_BasicGetEmpty_arrives(self):
@@ -164,7 +164,7 @@ class WhenBasicGetEmptyArrives(QueueContext):
 class WhenBasicGetOKArrives(QueueContext):
     def given_I_asked_for_a_message(self):
         self.expected_message = asynqp.Message('body', timestamp=datetime(2014, 5, 5))
-        self.task = asyncio.async(self.queue.get(no_ack=False))
+        self.task = asyncio.ensure_future(self.queue.get(no_ack=False))
         self.tick()
 
     def when_BasicGetOK_arrives_with_content(self):
@@ -190,7 +190,7 @@ class WhenBasicGetOKArrives(QueueContext):
 
 class WhenConnectionClosedOnGet(QueueContext):
     def given_I_asked_for_a_message(self):
-        self.task = asyncio.async(self.queue.get(no_ack=False))
+        self.task = asyncio.ensure_future(self.queue.get(no_ack=False))
         self.tick()
 
     def when_connection_is_closed(self):
@@ -213,7 +213,7 @@ class WhenISubscribeToAQueue(QueueContext):
 
 class WhenConsumeOKArrives(QueueContext):
     def given_I_started_a_consumer(self):
-        self.task = asyncio.async(self.queue.consume(lambda msg: None, no_local=False, no_ack=False, exclusive=False, arguments={'x-priority': 1}))
+        self.task = asyncio.ensure_future(self.queue.consume(lambda msg: None, no_local=False, no_ack=False, exclusive=False, arguments={'x-priority': 1}))
         self.tick()
 
     def when_BasicConsumeOK_arrives(self):
@@ -283,7 +283,7 @@ class WhenICancelAConsumer(ConsumerContext):
 
 class WhenCancelOKArrives(ConsumerContext):
     def given_I_cancelled_a_consumer(self):
-        asyncio.async(self.consumer.cancel())
+        asyncio.ensure_future(self.consumer.cancel())
         self.tick()
 
     def when_BasicCancelOK_arrives(self):
@@ -296,11 +296,11 @@ class WhenCancelOKArrives(ConsumerContext):
 class WhenCancelOKArrivesForAConsumerWithAnOnCancelMethod(QueueContext):
     def given_I_started_and_cancelled_a_consumer(self):
         self.consumer = self.ConsumerWithOnCancel()
-        task = asyncio.async(self.queue.consume(self.consumer, no_local=False, no_ack=False, exclusive=False, arguments={'x-priority': 1}))
+        task = asyncio.ensure_future(self.queue.consume(self.consumer, no_local=False, no_ack=False, exclusive=False, arguments={'x-priority': 1}))
         self.tick()
         self.server.send_method(self.channel.id, spec.BasicConsumeOK('made.up.tag'))
         self.tick()
-        asyncio.async(task.result().cancel())
+        asyncio.ensure_future(task.result().cancel())
         self.tick()
 
     def when_BasicCancelOK_arrives(self):
@@ -323,7 +323,7 @@ class WhenCancelOKArrivesForAConsumerWithAnOnCancelMethod(QueueContext):
 class WhenAConsumerWithAnOnCancelMethodIsKilledDueToAnError(QueueContext):
     def given_I_started_a_consumer(self):
         self.consumer = self.ConsumerWithOnError()
-        asyncio.async(self.queue.consume(self.consumer, no_local=False, no_ack=False, exclusive=False, arguments={'x-priority': 1}))
+        asyncio.ensure_future(self.queue.consume(self.consumer, no_local=False, no_ack=False, exclusive=False, arguments={'x-priority': 1}))
         self.tick()
         self.server.send_method(self.channel.id, spec.BasicConsumeOK('made.up.tag'))
         self.tick()
@@ -357,7 +357,7 @@ class WhenIPurgeAQueue(QueueContext):
 
 class WhenQueuePurgeOKArrives(QueueContext):
     def given_I_called_queue_purge(self):
-        self.task = asyncio.async(self.queue.purge())
+        self.task = asyncio.ensure_future(self.queue.purge())
         self.tick()
 
     def when_QueuePurgeOK_arrives(self):
@@ -377,7 +377,7 @@ class WhenDeletingAQueue(QueueContext):
 
 class WhenQueueDeleteOKArrives(QueueContext):
     def given_I_deleted_a_queue(self):
-        asyncio.async(self.queue.delete(if_unused=False, if_empty=False), loop=self.loop)
+        asyncio.ensure_future(self.queue.delete(if_unused=False, if_empty=False), loop=self.loop)
         self.tick()
 
     def when_QueueDeleteOK_arrives(self):
@@ -390,12 +390,12 @@ class WhenQueueDeleteOKArrives(QueueContext):
 
 class WhenITryToUseADeletedQueue(QueueContext):
     def given_a_deleted_queue(self):
-        asyncio.async(self.queue.delete(if_unused=False, if_empty=False), loop=self.loop)
+        asyncio.ensure_future(self.queue.delete(if_unused=False, if_empty=False), loop=self.loop)
         self.tick()
         self.server.send_method(self.channel.id, spec.QueueDeleteOK(123))
 
     def when_I_try_to_use_the_queue(self):
-        self.task = asyncio.async(self.queue.get())
+        self.task = asyncio.ensure_future(self.queue.get())
         self.tick()
 
     def it_should_throw_Deleted(self):
@@ -404,7 +404,7 @@ class WhenITryToUseADeletedQueue(QueueContext):
 
 class WhenAConnectionIsClosedCancelConsuming(QueueContext, ExchangeContext):
     def given_a_consumer(self):
-        task = asyncio.async(self.queue.consume(
+        task = asyncio.ensure_future(self.queue.consume(
             lambda x: None, no_local=False, no_ack=False,
             exclusive=False, arguments={'x-priority': 1}))
         self.tick()
@@ -422,7 +422,7 @@ class WhenAConnectionIsClosedCancelConsuming(QueueContext, ExchangeContext):
 
 class WhenIDeclareQueueWithPassiveAndOKArrives(OpenChannelContext):
     def given_I_declared_a_queue_with_passive(self):
-        self.task = asyncio.async(self.channel.declare_queue(
+        self.task = asyncio.ensure_future(self.channel.declare_queue(
             '123', durable=True, exclusive=True, auto_delete=False,
             passive=True), loop=self.loop)
         self.tick()
@@ -444,7 +444,7 @@ class WhenIDeclareQueueWithPassiveAndOKArrives(OpenChannelContext):
 
 class WhenIDeclareQueueWithPassiveAndErrorArrives(OpenChannelContext):
     def given_I_declared_a_queue_with_passive(self):
-        self.task = asyncio.async(self.channel.declare_queue(
+        self.task = asyncio.ensure_future(self.channel.declare_queue(
             '123', durable=True, exclusive=True, auto_delete=True,
             passive=True), loop=self.loop)
         self.tick()
@@ -459,7 +459,7 @@ class WhenIDeclareQueueWithPassiveAndErrorArrives(OpenChannelContext):
 
 class WhenIDeclareQueueWithNoWait(OpenChannelContext):
     def given_I_declared_a_queue_with_passive(self):
-        self.task = asyncio.async(self.channel.declare_queue(
+        self.task = asyncio.ensure_future(self.channel.declare_queue(
             '123', durable=True, exclusive=True, auto_delete=False,
             nowait=True), loop=self.loop)
         self.tick()
@@ -477,7 +477,7 @@ class WhenIDeclareQueueWithNoWait(OpenChannelContext):
 
 class WhenConsumerIsClosedServerSide(QueueContext, ExchangeContext):
     def given_a_consumer(self):
-        task = asyncio.async(self.queue.consume(lambda x: None))
+        task = asyncio.ensure_future(self.queue.consume(lambda x: None))
         self.tick()
         self.server.send_method(self.channel.id, spec.BasicConsumeOK('made.up.tag'))
         self.tick()

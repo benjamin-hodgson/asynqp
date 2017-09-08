@@ -128,7 +128,7 @@ class WhenIAcknowledgeADeliveredMessage(QueueContext):
         self.delivery_tag = 12487
 
         msg = asynqp.Message('body', timestamp=datetime(2014, 5, 5))
-        task = asyncio.async(self.queue.get())
+        task = asyncio.ensure_future(self.queue.get())
         self.tick()
         method = spec.BasicGetOK(self.delivery_tag, False, 'my.exchange', 'routing.key', 0)
         self.server.send_method(self.channel.id, method)
@@ -154,7 +154,7 @@ class WhenIRejectADeliveredMessage(QueueContext):
         self.delivery_tag = 12487
 
         msg = asynqp.Message('body', timestamp=datetime(2014, 5, 5))
-        task = asyncio.async(self.queue.get())
+        task = asyncio.ensure_future(self.queue.get())
         self.tick()
         method = spec.BasicGetOK(self.delivery_tag, False, 'my.exchange', 'routing.key', 0)
         self.server.send_method(self.channel.id, method)

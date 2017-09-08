@@ -66,7 +66,7 @@ class WhenTheApplicationClosesTheConnection(OpenConnectionContext):
 
 class WhenRecievingConnectionCloseOK(OpenConnectionContext):
     def given_a_connection_that_I_closed(self):
-        asyncio.async(self.connection.close())
+        asyncio.ensure_future(self.connection.close())
         self.tick()
 
     def when_connection_close_ok_arrives(self):
@@ -79,7 +79,7 @@ class WhenRecievingConnectionCloseOK(OpenConnectionContext):
 
 class WhenAConnectionThatIsClosingReceivesAMethod(OpenConnectionContext):
     def given_a_closed_connection(self):
-        t = asyncio.async(self.connection.close())
+        t = asyncio.ensure_future(self.connection.close())
         t._log_destroy_pending = False
         self.tick()
         self.server.reset()
@@ -138,7 +138,7 @@ class WhenServerClosesTransportWithoutConnectionClose(OpenConnectionContext):
 
 class WhenOpeningAChannelOnAClosedConnection(OpenConnectionContext):
     def when_client_closes_connection(self):
-        task = asyncio.async(self.connection.close())
+        task = asyncio.ensure_future(self.connection.close())
         self.tick()
         self.server.send_method(0, spec.ConnectionCloseOK())
         self.tick()
@@ -153,7 +153,7 @@ class WhenOpeningAChannelOnAClosedConnection(OpenConnectionContext):
 class WhenServerAndClientCloseConnectionAtATime(OpenConnectionContext):
     def when_both_sides_close_channel(self):
         # Client tries to close connection
-        self.task = asyncio.async(self.connection.close(), loop=self.loop)
+        self.task = asyncio.ensure_future(self.connection.close(), loop=self.loop)
         self.tick()
         # Before OK arrives server closes connection
         self.server.send_method(

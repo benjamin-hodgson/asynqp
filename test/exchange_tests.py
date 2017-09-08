@@ -20,7 +20,7 @@ class WhenDeclaringAnExchange(OpenChannelContext):
 
 class WhenExchangeDeclareOKArrives(OpenChannelContext):
     def given_I_declared_an_exchange(self):
-        self.task = asyncio.async(self.channel.declare_exchange('my.nice.exchange', 'fanout', durable=True, auto_delete=False, internal=False))
+        self.task = asyncio.ensure_future(self.channel.declare_exchange('my.nice.exchange', 'fanout', durable=True, auto_delete=False, internal=False))
         self.tick()
 
     def when_the_reply_arrives(self):
@@ -49,7 +49,7 @@ class WhenExchangeDeclareOKArrives(OpenChannelContext):
 class WhenIDeclareTheDefaultExchange(OpenChannelContext):
     def when_I_declare_an_exchange_with_an_empty_name(self):
         self.server.reset()
-        task = asyncio.async(self.channel.declare_exchange('', 'direct', durable=True, auto_delete=False, internal=False))
+        task = asyncio.ensure_future(self.channel.declare_exchange('', 'direct', durable=True, auto_delete=False, internal=False))
         self.tick()
         self.exchange = task.result()
 
@@ -79,7 +79,7 @@ class WhenIUseAnIllegalExchangeName(OpenChannelContext):
         yield "contains'illegal$ymbols"
 
     def because_I_try_to_declare_the_exchange(self, name):
-        task = asyncio.async(self.channel.declare_exchange(name, 'direct'))
+        task = asyncio.ensure_future(self.channel.declare_exchange(name, 'direct'))
         self.tick()
         self.exception = task.exception()
 
@@ -167,7 +167,7 @@ class WhenDeletingAnExchange(ExchangeContext):
 
 class WhenExchangeDeleteOKArrives(ExchangeContext):
     def given_I_deleted_the_exchange(self):
-        asyncio.async(self.exchange.delete(if_unused=True), loop=self.loop)
+        asyncio.ensure_future(self.exchange.delete(if_unused=True), loop=self.loop)
         self.tick()
 
     def when_confirmation_arrives(self):
@@ -179,7 +179,7 @@ class WhenExchangeDeleteOKArrives(ExchangeContext):
 
 class WhenExchangeDeclareWithPassiveAndOKArrives(OpenChannelContext):
     def given_I_declared_an_exchange(self):
-        self.task = asyncio.async(
+        self.task = asyncio.ensure_future(
             self.channel.declare_exchange(
                 'name_1', 'fanout', passive=True,
                 durable=True, auto_delete=False, internal=False))
@@ -201,7 +201,7 @@ class WhenExchangeDeclareWithPassiveAndOKArrives(OpenChannelContext):
 
 class WhenExchangeDeclareWithPassiveAndErrorArrives(OpenChannelContext):
     def given_I_declared_an_exchange(self):
-        self.task = asyncio.async(
+        self.task = asyncio.ensure_future(
             self.channel.declare_exchange(
                 'name_1', 'fanout', passive=True,
                 durable=True, auto_delete=False, internal=False))
@@ -217,7 +217,7 @@ class WhenExchangeDeclareWithPassiveAndErrorArrives(OpenChannelContext):
 
 class WhenIDeclareExchangeWithNoWait(OpenChannelContext):
     def given_I_declared_a_queue_with_passive(self):
-        self.task = asyncio.async(self.channel.declare_exchange(
+        self.task = asyncio.ensure_future(self.channel.declare_exchange(
             'my.nice.exchange', 'fanout', durable=True, auto_delete=False,
             internal=False, nowait=True), loop=self.loop)
         self.tick()
