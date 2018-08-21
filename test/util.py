@@ -112,11 +112,26 @@ def any(cls):
 def silence_expected_destroy_pending_log(expected_coro_name=''):
     real_async = asyncio.ensure_future
 
-    def async(*args, **kwargs):
+    def async_wrapper(*args, **kwargs):
         t = real_async(*args, **kwargs)
         if expected_coro_name in repr(t):
             t._log_destroy_pending = False
         return t
 
-    with mock.patch.object(asyncio, 'async', async):
+    with mock.patch.object(asyncio, 'ensure_future', async_wrapper):
         yield
+
+
+def run_briefly(loop):
+    @asyncio.coroutine
+    def once():
+        pass
+    gen = once()
+    t = loop.create_task(gen)
+    # Don't log a warning if the task is not done after run_until_complete().
+    # It occurs if the loop is stopped or if a task raises a BaseException.
+    t._log_destroy_pending = False
+    try:
+        loop.run_until_complete(t)
+    finally:
+        gen.close()

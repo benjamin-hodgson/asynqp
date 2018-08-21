@@ -1,12 +1,11 @@
 import asyncio
 import asynqp
 import asynqp.routing
-from asyncio import test_utils
 from asynqp import spec
 from asynqp import protocol
 from asynqp.connection import open_connection
 from unittest import mock
-from .util import MockServer, FakeTransport
+from .util import MockServer, FakeTransport, run_briefly
 
 
 class LoopContext:
@@ -22,7 +21,7 @@ class LoopContext:
         self.exceptions.append(context['exception'])
 
     def tick(self):
-        test_utils.run_briefly(self.loop)
+        run_briefly(self.loop)
 
     def async_partial(self, coro):
         """

@@ -85,7 +85,7 @@ class Channel(object):
             name, type, passive, durable, auto_delete, internal, nowait,
             arguments or {})
         if not nowait:
-            yield from self.synchroniser.await(spec.ExchangeDeclareOK)
+            yield from self.synchroniser.wait(spec.ExchangeDeclareOK)
             self.reader.ready()
         ex = exchange.Exchange(
             self.reader, self.synchroniser, self.sender, name, type, durable,
@@ -149,7 +149,7 @@ class Channel(object):
                 global=true to mean that the QoS settings should apply per-channel.
         """
         self.sender.send_BasicQos(prefetch_size, prefetch_count, apply_globally)
-        yield from self.synchroniser.await(spec.BasicQosOK)
+        yield from self.synchroniser.wait(spec.BasicQosOK)
         self.reader.ready()
 
     def set_return_handler(self, handler):
@@ -184,7 +184,7 @@ class Channel(object):
             self.sender.send_Close(
                 0, 'Channel closed by application', 0, 0)
             try:
-                yield from self.synchroniser.await(spec.ChannelCloseOK)
+                yield from self.synchroniser.wait(spec.ChannelCloseOK)
             except AMQPError:
                 # For example if both sides want to close or the connection
                 # is closed.
@@ -232,7 +232,7 @@ class ChannelFactory(object):
         try:
             sender.send_ChannelOpen()
             reader.ready()
-            yield from synchroniser.await(spec.ChannelOpenOK)
+            yield from synchroniser.wait(spec.ChannelOpenOK)
         except:
             # don't rollback self.next_channel_id;
             # another call may have entered this method

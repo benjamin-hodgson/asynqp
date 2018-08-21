@@ -53,5 +53,5 @@ class Exchange(object):
             it has no queues bound to it.
         """
         self.sender.send_ExchangeDelete(self.name, if_unused)
-        yield from self.synchroniser.await(spec.ExchangeDeleteOK)
+        yield from self.synchroniser.wait(spec.ExchangeDeleteOK)
         self.reader.ready()

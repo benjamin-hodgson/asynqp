@@ -72,7 +72,7 @@ class Queue(object):
             raise InvalidExchangeName("Can't bind queue {} to the default exchange".format(self.name))
 
         self.sender.send_QueueBind(self.name, exchange.name, routing_key, arguments or {})
-        yield from self.synchroniser.await(spec.QueueBindOK)
+        yield from self.synchroniser.wait(spec.QueueBindOK)
         b = QueueBinding(self.reader, self.sender, self.synchroniser, self, exchange, routing_key)
         self.reader.ready()
         return b
@@ -107,7 +107,7 @@ class Queue(object):
             raise Deleted("Queue {} was deleted".format(self.name))
 
         self.sender.send_BasicConsume(self.name, no_local, no_ack, exclusive, arguments or {})
-        tag = yield from self.synchroniser.await(spec.BasicConsumeOK)
+        tag = yield from self.synchroniser.wait(spec.BasicConsumeOK)
         consumer = Consumer(
             tag, callback, self.sender, self.synchroniser, self.reader,
             loop=self._loop)
@@ -131,7 +131,7 @@ class Queue(object):
             raise Deleted("Queue {} was deleted".format(self.name))
 
         self.sender.send_BasicGet(self.name, no_ack)
-        tag_msg = yield from self.synchroniser.await(spec.BasicGetOK, spec.BasicGetEmpty)
+        tag_msg = yield from self.synchroniser.wait(spec.BasicGetOK, spec.BasicGetEmpty)
 
         if tag_msg is not None:
             consumer_tag, msg = tag_msg
@@ -149,7 +149,7 @@ class Queue(object):
         This method is a :ref:`coroutine <coroutine>`.
         """
         self.sender.send_QueuePurge(self.name)
-        yield from self.synchroniser.await(spec.QueuePurgeOK)
+        yield from self.synchroniser.wait(spec.QueuePurgeOK)
         self.reader.ready()
 
     @asyncio.coroutine
@@ -168,7 +168,7 @@ class Queue(object):
             raise Deleted("Queue {} was already deleted".format(self.name))
 
         self.sender.send_QueueDelete(self.name, if_unused, if_empty)
-        yield from self.synchroniser.await(spec.QueueDeleteOK)
+        yield from self.synchroniser.wait(spec.QueueDeleteOK)
         self.deleted = True
         self.reader.ready()
 
@@ -216,7 +216,7 @@ class QueueBinding(object):
             raise Deleted("Queue {} was already unbound from exchange {}".format(self.queue.name, self.exchange.name))
 
         self.sender.send_QueueUnbind(self.queue.name, self.exchange.name, self.routing_key, arguments or {})
-        yield from self.synchroniser.await(spec.QueueUnbindOK)
+        yield from self.synchroniser.wait(spec.QueueUnbindOK)
         self.deleted = True
         self.reader.ready()
 
@@ -260,7 +260,7 @@ class Consumer(object):
         """
         self.sender.send_BasicCancel(self.tag)
         try:
-            yield from self.synchroniser.await(spec.BasicCancelOK)
+            yield from self.synchroniser.wait(spec.BasicCancelOK)
         except AMQPError:
             pass
         else:
@@ -295,7 +295,7 @@ class QueueFactory(object):
         self.sender.send_QueueDeclare(
             name, durable, exclusive, auto_delete, passive, nowait, arguments)
         if not nowait:
-            name = yield from self.synchroniser.await(spec.QueueDeclareOK)
+            name = yield from self.synchroniser.wait(spec.QueueDeclareOK)
             self.reader.ready()
         q = Queue(self.reader, self.consumers, self.synchroniser, self.sender,
                   name, durable, exclusive, auto_delete, arguments,

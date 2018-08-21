@@ -2,7 +2,7 @@ import asyncio
 import asynqp
 import socket
 import contexts
-from asyncio import test_utils
+from .util import run_briefly
 
 
 class ConnectionContext:
@@ -287,7 +287,7 @@ class WhenConsumingWithUnsetLoop:
         consumer = self.loop.run_until_complete(
             self.queue.consume(self.result.append, exclusive=True))
         for retry in range(10):
-            test_utils.run_briefly(self.loop)
+            run_briefly(self.loop)
             if self.result:
                 break
         consumer.cancel()

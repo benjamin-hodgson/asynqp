@@ -81,7 +81,7 @@ class Connection(object):
             self.sender.send_Close(
                 0, 'Connection closed by application', 0, 0)
             try:
-                yield from self.synchroniser.await(spec.ConnectionCloseOK)
+                yield from self.synchroniser.wait(spec.ConnectionCloseOK)
             except AMQPConnectionError:
                 # For example if both sides want to close or the connection
                 # is closed.
@@ -107,7 +107,7 @@ def open_connection(loop, transport, protocol, dispatcher, connection_info):
         protocol.send_protocol_header()
         reader.ready()
 
-        yield from synchroniser.await(spec.ConnectionStart)
+        yield from synchroniser.wait(spec.ConnectionStart)
         sender.send_StartOK(
             {"product": "asynqp",
              "version": "0.1",  # todo: use pkg_resources to inspect the package
@@ -121,7 +121,7 @@ def open_connection(loop, transport, protocol, dispatcher, connection_info):
         )
         reader.ready()
 
-        frame = yield from synchroniser.await(spec.ConnectionTune)
+        frame = yield from synchroniser.wait(spec.ConnectionTune)
         # just agree with whatever the server wants. Make this configurable in future
         connection_info['frame_max'] = frame.payload.frame_max
         heartbeat_interval = frame.payload.heartbeat
@@ -131,7 +131,7 @@ def open_connection(loop, transport, protocol, dispatcher, connection_info):
         protocol.start_heartbeat(heartbeat_interval)
         reader.ready()
 
-        yield from synchroniser.await(spec.ConnectionOpenOK)
+        yield from synchroniser.wait(spec.ConnectionOpenOK)
         reader.ready()
     except:
         dispatcher.remove_handler(0)

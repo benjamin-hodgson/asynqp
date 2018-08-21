@@ -56,7 +56,7 @@ class Synchroniser(object):
         self._futures = collections.defaultdict(collections.deque)
         self.connection_exc = None
 
-    def await(self, *expected_methods):
+    def wait(self, *expected_methods):
         fut = asyncio.Future(loop=self._loop)
 
         if self.connection_exc is not None:
